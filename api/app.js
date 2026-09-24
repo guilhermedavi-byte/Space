@@ -182,6 +182,11 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script>
       window.__SPACE_SESSION__ = ${sessionJson};
       window.__SPACE_ADMIN_PERMISSION_REGISTRY__ = ${registryJson};
+      window.__SPACE_PHONE_BOOTSTRAP__ = {
+        enabled: ${process.env.SPACE_PHONE_ENABLED === "true" ? "true" : "false"},
+        tokenEndpoint: "/api/voice/telnyx/token",
+        callEndpoint: "/api/voice/calls"
+      };
     </script>
     ${platformVisible}
     ${modalHtml}
@@ -192,6 +197,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="finance-customer-link.js?v=1"></script>
     <script src="finance-v1.js?v=31"></script>
     <script src="script.js"></script>
+    <script src="/assets/space-phone.bundle.js?v=1"></script>
     <script src="admin-sdr.js?v=4"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>

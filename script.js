@@ -13337,6 +13337,10 @@ const fetchWithAuth = async (input, init = {}) => {
   return response;
 };
 
+if (typeof window !== "undefined") {
+  window.fetchWithAuth = fetchWithAuth;
+}
+
 const refreshSessionPermissions = async () => {
   if (permissionRefreshPromise) return permissionRefreshPromise;
   permissionRefreshPromise = fetch("/api/me", { credentials: "include", cache: "no-store" })
@@ -14393,7 +14397,7 @@ const nativeCrmCardHtml = (opportunity) => {
       </div>
       <div class="native-crm-card-footer">
         <div class="native-crm-card-actions">
-          ${contact.phone ? `<span title="Telefone disponível">${nativeCrmIcon("phone")}</span>` : ""}
+          ${contact.phone ? `<button type="button" class="native-crm-card-call" title="Ligar" data-space-phone-call="${escapeHtml(contact.phone)}" data-space-phone-lead-id="${escapeHtml(contact.id || '')}" data-space-phone-opportunity-id="${escapeHtml(opportunity.id)}" data-space-phone-lead-name="${escapeHtml(primaryTitle)}" data-space-phone-source="crm">${nativeCrmIcon("phone")}<span>Ligar</span></button>` : ""}
           ${contact.email ? `<span title="E-mail disponível">${nativeCrmIcon("mail")}</span>` : ""}
         </div>
         <span class="native-crm-next-activity" data-tone="${escapeHtml(activityTone)}">${nativeCrmIcon(opportunity.nextActivityId ? crmActivityTypeIcon(opportunity.nextActivityType) : "calendar")}${escapeHtml(nativeCrmActivityCompactLabel(opportunity))}</span>

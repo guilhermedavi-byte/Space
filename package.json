@@ -5,9 +5,11 @@
     "build:automation-editor": "esbuild src/automation-editor/index.jsx --bundle --minify --format=iife --global-name=SpaceAutomationEditorBundle --outfile=assets/automation-editor.bundle.js",
     "test": "node --test tests/*.test.js",
     "check": "node --check script.js && node --check landing.js && node --check auth.js",
-    "dev": "node --env-file=.env.local scripts/dev-server.js"
+    "dev": "node --env-file=.env.local scripts/dev-server.js",
+    "build:space-phone": "esbuild src/space-phone/index.js --bundle --minify --format=iife --global-name=SpacePhoneBundle --outfile=assets/space-phone.bundle.js"
   },
   "dependencies": {
+    "@telnyx/webrtc": "^2.27.10",
     "@xyflow/react": "^12.11.6",
     "cfb": "^1.2.2",
     "file-type": "^22.0.1",
