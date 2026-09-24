@@ -11068,6 +11068,7 @@ const closeActivitiesDrawer = () => {
   const drawerEl = ensureActivitiesDrawerInBody();
   if (drawerEl instanceof HTMLElement) {
     drawerEl.classList.remove("is-open");
+    drawerEl.classList.remove("is-workspace");
     window.setTimeout(() => {
       drawerEl.hidden = true;
     }, 180);
@@ -11156,179 +11157,352 @@ const refreshOpenStudentActivities = () => {
   [adminStudentsState.history, teacherStudentsState.history].forEach(hist => { if (hist?.profileResources) delete hist.profileResources.activities; hist?.refreshActivities?.(); });
 };
 
-const openActivitiesDrawer = ({ activity = null } = {}) => {
+const activityAvatarHtml = (name, photo = "") => {
+  const safePhoto = String(photo || "").trim();
+  if (safePhoto) return `<span class="actws-avatar"><img src="${escapeHtml(safePhoto)}" alt="" loading="lazy" /></span>`;
+  return `<span class="actws-avatar">${escapeHtml(getInitials(name || "U"))}</span>`;
+};
+
+const activityUserName = (id, fallback = "") => {
+  const safeId = String(id || "").trim();
+  const users = [...(activitiesState.directoryUsers || []), ...(activitiesState.users || [])];
+  return users.find(user => String(user.id || "") === safeId)?.nome || fallback || safeId || "Sem responsável";
+};
+
+const activityStudentName = (id) => {
+  const safeId = String(id || "").trim();
+  return (activitiesState.students || []).find(student => String(student.id || "") === safeId)?.nome || safeId || "Sem aluno vinculado";
+};
+
+const activityStudentInfo = (id) => {
+  const safeId = String(id || "").trim();
+  return (activitiesState.students || []).find(student => String(student.id || "") === safeId) || null;
+};
+
+const activityTimelineEventText = (event = {}) => {
+  const type = String(event.eventType || "").trim();
+  const actor = String(event.actorNameSnapshot || event.actorName || "Sistema").trim();
+  const before = event.before == null || event.before === "" ? "" : String(event.before);
+  const after = event.after == null || event.after === "" ? "" : String(event.after);
+  const title = String(event.snapshot?.titulo || event.metadata?.title || "").trim();
+  const labels = {
+    activity_created: `${actor} criou a atividade`,
+    activity_updated: `${actor} atualizou a atividade`,
+    status_changed: `${actor} alterou status${before || after ? ` de ${before || "—"} para ${after || "—"}` : ""}`,
+    assignee_changed: `${actor} alterou responsável`,
+    due_date_changed: `${actor} alterou prazo${before || after ? ` de ${before || "—"} para ${after || "—"}` : ""}`,
+    priority_changed: `${actor} alterou prioridade${before || after ? ` de ${before || "—"} para ${after || "—"}` : ""}`,
+    student_linked: `${actor} vinculou aluno`,
+    student_unlinked: `${actor} desvinculou aluno`,
+    comment_added: `${actor} comentou`,
+    checklist_item_added: `${actor} criou item no checklist`,
+    checklist_item_completed: `${actor} concluiu item do checklist`,
+    checklist_item_reopened: `${actor} reabriu item do checklist`,
+    checklist_item_updated: `${actor} atualizou item do checklist`,
+    activity_completed: `${actor} concluiu a atividade${title ? ` ${title}` : ""}`,
+    activity_reopened: `${actor} reabriu a atividade`,
+    activity_archived: `${actor} arquivou a atividade`,
+  };
+  return labels[type] || `${actor} registrou evento`;
+};
+
+const renderActivityUserOptions = (selected = "") => {
+  const users = activitiesState.directoryUsers?.length ? activitiesState.directoryUsers : activitiesState.users || [];
+  return [`<option value="">Sem responsável</option>`].concat(users.map(user => `<option value="${escapeHtml(String(user.id || ""))}" ${String(user.id || "") === String(selected || "") ? "selected" : ""}>${escapeHtml(String(user.nome || "Usuário"))}</option>`)).join("");
+};
+
+const renderActivityStudentOptions = (selected = "") => {
+  const students = Array.isArray(activitiesState.students) ? activitiesState.students : [];
+  return [`<option value="">Sem aluno vinculado</option>`].concat(students.map(student => `<option value="${escapeHtml(String(student.id || ""))}" ${String(student.id || "") === String(selected || "") ? "selected" : ""}>${escapeHtml(String(student.nome || "Aluno"))}${student.email ? ` · ${escapeHtml(String(student.email))}` : ""}</option>`)).join("");
+};
+
+const isActivityItemOverdue = (dateKey) => {
+  const date = parseDateKey(String(dateKey || ""));
+  if (!date) return false;
+  return date < startOfDay(new Date());
+};
+
+const getDefaultActivityDraft = (activity = {}) => {
+  const canAssignOthers = Boolean(activitiesState.permissions?.canAssignOthers) || currentRole === "admin" || currentRole === "growth";
+  return {
+    id: String(activity.id || ""),
+    studentId: String(activity.studentId || ""),
+    titulo: String(activity.titulo || ""),
+    descricao: String(activity.descricao || ""),
+    status: normalizeActivityStatus(activity.status || "Pendente"),
+    responsavelId: String(activity.responsavelId || (canAssignOthers ? "" : sessionUser?.id || "")),
+    prazo: String(activity.prazo || ""),
+    prioridade: normalizeActivityPriority(activity.prioridade || "Média"),
+    tipo: String(activity.tipo || ""),
+    observacoes: String(activity.observacoes || ""),
+    criadoPor: String(activity.criadoPor || ""),
+    criadoEm: activity.criadoEm || "",
+    atualizadoEm: activity.atualizadoEm || "",
+    completedAt: activity.completedAt || "",
+  };
+};
+
+const getActivityWorkspaceDescription = (activity = {}) => {
+  const description = String(activity.descricao || "").trim();
+  const legacyNotes = String(activity.observacoes || "").trim();
+  if (!legacyNotes) return description;
+  if (description && normalizeSearchText(description).includes(normalizeSearchText(legacyNotes))) return description;
+  return [description, "Notas legadas:", legacyNotes].filter(Boolean).join("\n\n");
+};
+
+const getActivityStatusTone = (status = "") => {
+  const normalized = normalizeActivityStatus(status);
+  if (normalized === "Feito") return "success";
+  if (normalized === "Em andamento") return "info";
+  return "warning";
+};
+
+const getActivityPriorityTone = (priority = "") => {
+  const normalized = normalizeActivityPriority(priority);
+  if (normalized === "Alta") return "danger";
+  if (normalized === "Baixa") return "success";
+  return "warning";
+};
+
+const renderActivityStudentInline = (student = null) => {
+  if (!student?.nome) return `<span class="actws-student-inline is-empty"><span class="actws-mini-avatar">—</span><span>Sem aluno vinculado</span></span>`;
+  return `<span class="actws-student-inline" title="${escapeHtml(student.email || student.nome)}"><span class="actws-mini-avatar">${escapeHtml(getInitials(student.nome))}</span><span>${escapeHtml(student.nome)}</span></span>`;
+};
+
+const renderActivityChecklistAssignee = (item = {}) => {
+  const name = String(item.assigneeNameSnapshot || activityUserName(item.assigneeId, "Sem responsável") || "Sem responsável").trim();
+  if (!item.assigneeId && !item.assigneeNameSnapshot) return `<span>Sem responsável</span>`;
+  return `<span class="actws-check-assignee"><span class="actws-mini-avatar">${escapeHtml(getInitials(name))}</span>${escapeHtml(name)}</span>`;
+};
+
+const renderActivityWorkspace = (workspace = {}) => {
+  const isCreateMode = workspace.mode === "create" || !workspace.activity?.id;
+  const activity = getDefaultActivityDraft(workspace.activity || {});
+  const comments = Array.isArray(workspace.comments) ? workspace.comments : [];
+  const checklist = Array.isArray(workspace.checklist) ? workspace.checklist : [];
+  const events = Array.isArray(workspace.events) ? workspace.events : [];
+  const priorityMeta = getActivityPriorityMeta(activity.prioridade);
+  const done = checklist.filter(item => item.completed).length;
+  const total = checklist.length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const student = activityStudentInfo(activity.studentId);
+  const currentUserId = String(sessionUser?.id || "").trim();
+  const canAdminComments = currentRole === "admin" || sessionUser?.isSuperAdmin === true;
+  const visibleComments = comments.slice().sort((a, b) => (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0));
+  const visibleEvents = events.slice().sort((a, b) => (Date.parse(b.occurredAt) || 0) - (Date.parse(a.occurredAt) || 0));
+  const statusTone = getActivityStatusTone(activity.status);
+  const priorityTone = getActivityPriorityTone(activity.prioridade);
+  const propRow = (label, html, className = "") => `<label class="actws-prop ${escapeHtml(className)}"><span>${escapeHtml(label)}</span>${html}</label>`;
+  const titleValue = activity.titulo || "";
+  const titlePlaceholder = isCreateMode ? "Nova atividade" : "Atividade";
+  const descriptionValue = getActivityWorkspaceDescription(activity);
+  const linkedStudentName = student?.nome || "Sem aluno vinculado";
+  return `
+    <div class="actws" data-activity-workspace="${escapeHtml(activity.id)}" data-actws-mode="${isCreateMode ? "create" : "edit"}">
+      <header class="actws-head">
+        <div class="actws-titleblock">
+          <input class="actws-title-input" name="titulo" value="${escapeHtml(titleValue)}" placeholder="${escapeHtml(titlePlaceholder)}" form="actws-details-form" required />
+          <div class="actws-head-meta">
+            <span class="actws-head-status is-${escapeHtml(statusTone)}">${escapeHtml(normalizeActivityStatus(activity.status))}</span>
+            <span class="actws-dot"></span>
+            <span>${escapeHtml(linkedStudentName)}</span>
+          </div>
+        </div>
+        <div class="actws-actions">
+          ${isCreateMode ? `<button class="ped-btn-save" type="submit" form="actws-details-form">Criar atividade</button>` : `<button class="ped-btn-save" type="button" data-actws-toggle-done="${escapeHtml(activity.id)}">${normalizeActivityStatus(activity.status) === "Feito" ? "Reabrir" : "Concluir"}</button><button class="activities-drawer-close" type="button" data-actws-archive="${escapeHtml(activity.id)}" aria-label="Arquivar atividade">•••</button>`}
+          <button class="activities-drawer-close" type="button" data-activities-drawer-close aria-label="Fechar">×</button>
+        </div>
+      </header>
+      <div class="actws-tabs" role="tablist" aria-label="Workspace da atividade">
+        <button type="button" data-actws-tab="details" class="is-active">Detalhes</button>
+        <button type="button" data-actws-tab="timeline">Discussão</button>
+        <button type="button" data-actws-tab="checklist">Checklist</button>
+      </div>
+      <div class="actws-grid">
+        <aside class="actws-panel actws-details is-active" data-actws-panel="details">
+          <form id="actws-details-form" class="actws-details-form" data-actws-details-form>
+            <section class="actws-section">
+              <h3>Execução</h3>
+              ${propRow("Status", `<select name="status">${ACTIVITY_STATUS_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityStatus(activity.status) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>`, `is-status is-${statusTone}`)}
+              ${propRow("Responsável", `<select name="responsavelId">${renderActivityUserOptions(activity.responsavelId)}</select>`)}
+              ${propRow("Prazo", `<input type="date" name="prazo" value="${escapeHtml(activity.prazo || "")}" />`)}
+            </section>
+            <section class="actws-section">
+              <h3>Classificação</h3>
+              ${propRow("Prioridade", `<select name="prioridade">${ACTIVITY_PRIORITY_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityPriority(activity.prioridade) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>`, `is-priority is-${priorityTone}`)}
+              ${propRow("Tipo", `<input name="tipo" value="${escapeHtml(activity.tipo || "")}" placeholder="Sem tipo" />`)}
+              ${propRow("Aluno", `<span class="actws-prop-display">${renderActivityStudentInline(student)}</span><select name="studentId">${renderActivityStudentOptions(activity.studentId)}</select>${student?.email ? `<small>${escapeHtml(student.email)}</small>` : ""}`, "is-student")}
+            </section>
+            <details class="actws-details-meta">
+              <summary>Detalhes</summary>
+              <div class="actws-kv"><span>Criada por</span><strong>${escapeHtml(isCreateMode ? "—" : activityUserName(activity.criadoPor, activity.criadoPor))}</strong></div>
+              <div class="actws-kv"><span>Data de criação</span><strong>${escapeHtml(activity.criadoEm ? formatAdminHistoryStamp(activity.criadoEm) : "—")}</strong></div>
+              <div class="actws-kv"><span>Última atualização</span><strong>${escapeHtml(activity.atualizadoEm ? formatAdminHistoryStamp(activity.atualizadoEm) : "—")}</strong></div>
+              <div class="actws-kv"><span>Concluída em</span><strong>${escapeHtml(activity.completedAt ? formatAdminHistoryStamp(activity.completedAt) : "—")}</strong></div>
+            </details>
+            <button class="actws-save-subtle" type="submit">${isCreateMode ? "Criar atividade" : "Salvar alterações"}</button>
+          </form>
+        </aside>
+        <main class="actws-panel actws-timeline" data-actws-panel="timeline">
+          <div class="actws-feed" data-actws-feed>
+            <section class="actws-description">
+              <div class="actws-section-head"><h3>Descrição</h3></div>
+              <textarea name="descricao" rows="${descriptionValue ? "5" : "3"}" form="actws-details-form" placeholder="Adicione uma descrição…">${escapeHtml(descriptionValue)}</textarea>
+            </section>
+            <section class="actws-discussion">
+              <div class="actws-section-head"><h3><span class="actws-heading-mark"></span>Discussão</h3><span>${escapeHtml(String(visibleComments.length))}</span></div>
+              <div class="actws-comments" data-actws-comments>
+                ${isCreateMode ? `<div class="actws-empty actws-empty-state">Crie a atividade para iniciar a discussão.</div>` : visibleComments.length ? visibleComments.map(comment => {
+                  const canManage = !comment.legacy && !comment.deletedAt && (canAdminComments || String(comment.authorId || "") === currentUserId);
+                  return `
+              <article class="actws-comment ${comment.deletedAt ? "is-deleted" : ""}" data-actws-comment="${escapeHtml(comment.id)}">
+                ${activityAvatarHtml(comment.authorNameSnapshot, comment.authorPhotoSnapshot)}
+                <div class="actws-comment-main">
+                  <div class="actws-comment-head"><strong>${escapeHtml(comment.authorNameSnapshot || "Usuário")}</strong><time>${escapeHtml(comment.createdAt ? formatAdminHistoryStamp(comment.createdAt) : "Agora")}${comment.editedAt && !comment.deletedAt ? " · editado" : ""}</time>${canManage ? `<button type="button" class="actws-icon-action" data-actws-comment-menu="${escapeHtml(comment.id)}" aria-label="Ações do comentário">•••</button>` : ""}</div>
+                  <p data-actws-comment-body>${escapeHtml(comment.deletedAt ? "Comentário removido" : comment.body)}</p>
+                  ${canManage ? `<form class="actws-comment-edit-form" data-actws-comment-edit-form="${escapeHtml(comment.id)}" hidden><textarea name="body" rows="3">${escapeHtml(comment.body)}</textarea><div><button type="submit">Salvar</button><button type="button" data-actws-comment-cancel="${escapeHtml(comment.id)}">Cancelar</button></div></form><div class="actws-comment-menu" data-actws-comment-menu-popover="${escapeHtml(comment.id)}" hidden><button type="button" data-actws-comment-edit="${escapeHtml(comment.id)}">Editar comentário</button><button type="button" data-actws-comment-delete="${escapeHtml(comment.id)}">Excluir comentário</button></div>` : ""}
+                </div>
+              </article>
+                  `;
+                }).join("") : `<div class="actws-empty">Nenhum comentário ainda.</div>`}
+              </div>
+              ${isCreateMode ? "" : `<button type="button" class="actws-add-inline" data-actws-comment-compose-toggle>＋ Adicionar comentário</button>
+              <form class="actws-comment-form" data-actws-comment-form hidden>
+                <textarea name="comment" rows="3" placeholder="Escreva um comentário…"></textarea>
+                <div class="actws-form-actions"><span>Enter envia · Shift+Enter quebra linha</span><button type="submit">Enviar</button><button type="button" data-actws-comment-compose-cancel>Cancelar</button></div>
+              </form>`}
+            </section>
+            <details class="actws-activity-log">
+              <summary>Atividade · ${escapeHtml(String(visibleEvents.length))}</summary>
+              <div class="actws-events">
+                ${isCreateMode ? `<div class="actws-empty actws-empty-state">A atividade ainda não foi criada.</div>` : visibleEvents.length ? visibleEvents.map(event => `<div class="actws-event"><span>○</span><p>${escapeHtml(activityTimelineEventText(event))}<time>${escapeHtml(event.occurredAt ? formatAdminHistoryStamp(event.occurredAt) : "")}</time></p></div>`).join("") : `<div class="actws-empty">Nenhum evento registrado.</div>`}
+              </div>
+            </details>
+          </div>
+        </main>
+        <aside class="actws-panel actws-checklist" data-actws-panel="checklist">
+          <div class="actws-check-head"><div><h3>Checklist</h3><strong>${escapeHtml(`${done}/${total}`)}</strong></div><span><i style="width:${escapeHtml(String(pct))}%"></i></span></div>
+          <div class="actws-check-list">
+            ${isCreateMode ? `<div class="actws-empty actws-empty-state">Crie a atividade para liberar o checklist.</div>` : checklist.length ? checklist.map(item => `
+              <article class="actws-check-item ${item.completed ? "is-done" : ""} ${isActivityItemOverdue(item.dueDate) && !item.completed ? "is-overdue" : ""}" data-actws-check-item="${escapeHtml(item.id)}">
+                <input type="checkbox" data-actws-check-toggle="${escapeHtml(item.id)}" ${item.completed ? "checked" : ""} />
+                <div class="actws-check-copy">
+                  <div class="actws-check-line"><strong>${escapeHtml(item.title || "Item sem título")}</strong><button type="button" class="actws-icon-action" data-actws-check-edit="${escapeHtml(item.id)}" aria-label="Editar item">•••</button></div>
+                  <div class="actws-check-readable">${renderActivityChecklistAssignee(item)}${item.dueDate ? `<span class="${isActivityItemOverdue(item.dueDate) && !item.completed ? "is-overdue-date" : ""}">${escapeHtml(formatAdminDate(item.dueDate))}</span>` : `<span>Sem prazo</span>`}</div>
+                  <form class="actws-check-edit-form" data-actws-check-edit-form="${escapeHtml(item.id)}" hidden>
+                    <input name="title" value="${escapeHtml(item.title || "")}" />
+                    <select name="assigneeId">${renderActivityUserOptions(item.assigneeId)}</select>
+                    <input type="date" name="dueDate" value="${escapeHtml(item.dueDate || "")}" />
+                    <div><button type="submit">Salvar</button><button type="button" data-actws-check-cancel="${escapeHtml(item.id)}">Cancelar</button><button type="button" data-actws-check-delete="${escapeHtml(item.id)}">Excluir</button></div>
+                  </form>
+                  <div class="actws-check-menu" data-actws-check-menu="${escapeHtml(item.id)}" hidden>
+                    <button type="button" data-actws-check-open-edit="${escapeHtml(item.id)}">Editar item</button>
+                    <button type="button" data-actws-check-delete="${escapeHtml(item.id)}">Excluir item</button>
+                  </div>
+                </div>
+              </article>
+            `).join("") : `<div class="actws-empty actws-check-empty"><span>✓</span><strong>Nenhum item ainda</strong></div>`}
+          </div>
+          ${isCreateMode ? "" : `<button type="button" class="actws-add-inline" data-actws-check-add-toggle>＋ Adicionar item</button>
+          <form class="actws-add-check" data-actws-check-add-form hidden>
+            <input name="title" placeholder="Título do item" />
+            <div class="actws-check-meta">
+              <select name="assigneeId">${renderActivityUserOptions("")}</select>
+              <input type="date" name="dueDate" />
+            </div>
+            <div class="actws-form-actions"><button type="submit">Salvar</button><button type="button" data-actws-check-add-cancel>Cancelar</button></div>
+          </form>`}
+        </aside>
+      </div>
+    </div>
+  `;
+};
+
+const loadActivityWorkspace = async (id) => {
+  const res = await fetchWithAuth(`/api/activities?id=${encodeURIComponent(id)}`, { method: "GET" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(String(data?.error || `activity_workspace_load_failed:${res.status}`));
+  activitiesState.users = Array.isArray(data?.users) ? data.users : activitiesState.users;
+  activitiesState.directoryUsers = Array.isArray(data?.directoryUsers) ? data.directoryUsers : activitiesState.directoryUsers;
+  activitiesState.students = Array.isArray(data?.students) ? data.students : activitiesState.students;
+  return data;
+};
+
+const openActivityWorkspace = async (activity) => {
   const drawerEl = ensureActivitiesDrawerInBody();
   if (!(drawerEl instanceof HTMLElement) || !(activitiesDrawerBody instanceof HTMLElement)) return;
-  const canAssignOthers = Boolean(activitiesState.permissions?.canAssignOthers) || currentRole === "admin" || currentRole === "growth";
-  const current = activity && typeof activity === "object"
-    ? {
-        id: String(activity.id || ""),
-        studentId: String(activity.studentId || ""),
-        titulo: String(activity.titulo || ""),
-        descricao: String(activity.descricao || ""),
-        status: normalizeActivityStatus(activity.status),
-        responsavelId: String(activity.responsavelId || ""),
-        prazo: String(activity.prazo || ""),
-        prioridade: normalizeActivityPriority(activity.prioridade),
-        tipo: String(activity.tipo || ""),
-        observacoes: String(activity.observacoes || ""),
-      }
-    : {
-        id: "",
-        titulo: "",
-        descricao: "",
-        status: "Pendente",
-        responsavelId: canAssignOthers ? "" : String(sessionUser?.id || ""),
-        prazo: "",
-        prioridade: "Média",
-        tipo: "",
-        observacoes: "",
-      };
-  if (activitiesDrawerTitle instanceof HTMLElement) activitiesDrawerTitle.textContent = current.id ? "Editar atividade" : "Nova atividade";
-  if (activitiesDrawerSub instanceof HTMLElement) activitiesDrawerSub.textContent = current.id ? "Atualize os detalhes e salve." : "Preencha os dados principais da tarefa.";
-  const allUsers = Array.isArray(activitiesState.users) ? activitiesState.users : [];
-  const directoryUsers = Array.isArray(activitiesState.directoryUsers) ? activitiesState.directoryUsers : [];
-  const users = canAssignOthers
-    ? (directoryUsers.length ? directoryUsers : allUsers)
-    : allUsers.filter((user) => {
-        const userId = String(user.id || "");
-        return userId === String(sessionUser?.id || "") || userId === current.responsavelId;
-      });
-  activitiesDrawerBody.innerHTML = `
-    <form class="activities-form" data-activities-form="${escapeHtml(current.id)}">
-      <label class="activities-field"><span>Título</span><input class="admin-ped-select" type="text" name="titulo" value="${escapeHtml(current.titulo)}" required /></label>
-      <div class="activities-field"><label for="activity-student-search">Aluno vinculado</label>
-        <div class="activities-responsible-combobox" data-activity-student-combobox>
-          <input type="hidden" name="studentId" value="${escapeHtml(current.studentId || '')}" />
-          <input id="activity-student-search" class="admin-ped-select" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="activity-student-options" placeholder="Buscar por nome ou email" autocomplete="off" />
-          <div id="activity-student-options" class="activities-responsible-options" role="listbox" hidden></div>
-        </div>
-      </div>
-      <label class="activities-field"><span>Descrição</span><textarea class="admin-ped-select activities-textarea" name="descricao" rows="4">${escapeHtml(current.descricao)}</textarea></label>
-      <div class="activities-grid2">
-        <label class="activities-field"><span>Status</span><select class="admin-ped-select" name="status">${ACTIVITY_STATUS_OPTIONS.map((option) => `<option value="${escapeHtml(option)}" ${option === current.status ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>
-        <label class="activities-field"><span>Prioridade</span><select class="admin-ped-select" name="prioridade">${ACTIVITY_PRIORITY_OPTIONS.map((option) => `<option value="${escapeHtml(option)}" ${option === current.prioridade ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>
-      </div>
-      <div class="activities-grid2">
-        <label class="activities-field"><span>Responsável</span>${
-          canAssignOthers
-            ? `<div class="activities-responsible-combobox" data-activities-responsible-combobox>
-                <input type="hidden" name="responsavelId" value="${escapeHtml(current.responsavelId)}" data-activities-responsible-value />
-                <input class="admin-ped-select activities-responsible-search" type="search" data-activities-responsible-search placeholder="Buscar responsável..." autocomplete="off" />
-                <div class="activities-responsible-options" data-activities-responsible-options hidden></div>
-              </div>`
-            : `<select class="admin-ped-select" name="responsavelId" disabled><option value="">Sem responsável</option>${users.map((user) => `<option value="${escapeHtml(String(user.id || ""))}">${escapeHtml(String(user.nome || "Usuário"))}</option>`).join("")}</select>`
-        }</label>
-        <label class="activities-field"><span>Prazo</span><input class="admin-ped-select" type="date" name="prazo" value="${escapeHtml(current.prazo)}" /></label>
-      </div>
-      <label class="activities-field"><span>Tipo</span><input class="admin-ped-select" type="text" name="tipo" value="${escapeHtml(current.tipo)}" list="activities-type-options" /><datalist id="activities-type-options">${getActivityTypeOptions().map((option) => `<option value="${escapeHtml(option)}"></option>`).join("")}</datalist></label>
-      <label class="activities-field"><span>Observações</span><textarea class="admin-ped-select activities-textarea" name="observacoes" rows="5">${escapeHtml(current.observacoes)}</textarea></label>
-      <label class="activities-field"><span>Adicionar comentário</span><textarea class="admin-ped-select activities-textarea" name="comment" rows="2"></textarea></label>
-      <div class="activities-form-actions">
-        ${current.id ? `<button class="ped-btn-close" type="button" data-activities-delete="${escapeHtml(current.id)}">Excluir</button>` : `<span></span>`}
-        <button class="ped-btn-save" type="submit">${current.id ? "Salvar alterações" : "Criar atividade"}</button>
-      </div>
-    </form>
-  `;
-  const form = activitiesDrawerBody.querySelector("[data-activities-form]");
-  if (form instanceof HTMLFormElement) {
-    bindActivityStudentPicker(form, activitiesState.students || [], current.studentId || '');
-    const responsibleValue = form.querySelector("[data-activities-responsible-value]");
-    const responsibleSearch = form.querySelector("[data-activities-responsible-search]");
-    const responsibleOptions = form.querySelector("[data-activities-responsible-options]");
-    const getSelectedResponsibleId = () =>
-      responsibleValue instanceof HTMLInputElement
-        ? String(responsibleValue.value || "").trim()
-        : String(form.elements.namedItem("responsavelId")?.value || "").trim();
-    const setResponsibleSelection = (id) => {
-      const safeId = String(id || "").trim();
-      const selectedUser = users.find((user) => String(user.id || "") === safeId) || null;
-      if (responsibleValue instanceof HTMLInputElement) responsibleValue.value = safeId;
-      if (responsibleSearch instanceof HTMLInputElement) responsibleSearch.value = selectedUser ? selectedUser.nome || "Usuário" : "";
-      if (responsibleOptions instanceof HTMLElement) responsibleOptions.hidden = true;
-    };
-    const renderResponsibleOptions = (query = "") => {
-      if (!(responsibleOptions instanceof HTMLElement)) return;
-      const selectedValue = getSelectedResponsibleId();
-      const normalizedQuery = normalizeSearchText(query);
-      const filteredUsers = users.filter((user) => {
-        if (!normalizedQuery) return true;
-        const haystack = normalizeSearchText([user.nome, user.email, user.role].filter(Boolean).join(" "));
-        return haystack.includes(normalizedQuery);
-      });
-      const selectedUser = selectedValue ? users.find((user) => String(user.id || "") === selectedValue) : null;
-      const optionUsers = selectedUser && !filteredUsers.some((user) => String(user.id || "") === selectedValue)
-        ? [selectedUser, ...filteredUsers]
-        : filteredUsers;
-      responsibleOptions.innerHTML = `
-        <button class="activities-responsible-option ${selectedValue ? "" : "is-active"}" type="button" data-activities-responsible-pick="">
-          <span>Sem responsável</span>
-        </button>
-        ${
-          optionUsers.length
-            ? optionUsers
-                .map((user) => {
-                  const id = String(user.id || "");
-                  return `<button class="activities-responsible-option ${id === selectedValue ? "is-active" : ""}" type="button" data-activities-responsible-pick="${escapeHtml(id)}"><span>${escapeHtml(String(user.nome || "Usuário"))}</span><small>${escapeHtml(String(user.email || user.role || ""))}</small></button>`;
-                })
-                .join("")
-            : `<div class="activities-responsible-empty">Nenhum responsável encontrado</div>`
-        }
-      `;
-      responsibleOptions.hidden = false;
-    };
-    if (responsibleSearch instanceof HTMLInputElement) {
-      setResponsibleSelection(current.responsavelId);
-      responsibleSearch.addEventListener("focus", () => renderResponsibleOptions(responsibleSearch.value));
-      responsibleSearch.addEventListener("input", () => {
-        if (responsibleValue instanceof HTMLInputElement) responsibleValue.value = "";
-        renderResponsibleOptions(responsibleSearch.value);
-      });
-    }
-    if (responsibleOptions instanceof HTMLElement) {
-      responsibleOptions.addEventListener("mousedown", (event) => event.preventDefault());
-      responsibleOptions.addEventListener("click", (event) => {
-        const target = event.target;
-        if (!(target instanceof Element)) return;
-        const pick = target.closest("[data-activities-responsible-pick]");
-        if (!(pick instanceof HTMLElement)) return;
-        setResponsibleSelection(pick.getAttribute("data-activities-responsible-pick") || "");
-      });
-    }
-    form.addEventListener("focusout", (event) => {
-      if (!(responsibleOptions instanceof HTMLElement)) return;
-      const nextTarget = event.relatedTarget;
-      if (nextTarget instanceof Node && form.querySelector("[data-activities-responsible-combobox]")?.contains(nextTarget)) return;
-      window.setTimeout(() => {
-        if (responsibleOptions instanceof HTMLElement) responsibleOptions.hidden = true;
-      }, 120);
-    });
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      if (form.dataset.saving) return;
-      form.dataset.saving = "true";
-      const formData = new FormData(form);
-      saveActivityForm({
-        id: current.id,
-        payload: {
-          comment: String(formData.get("comment") || "").trim(),
-          studentId: String(formData.get("studentId") || ""),
-          titulo: String(formData.get("titulo") || "").trim(),
-          descricao: String(formData.get("descricao") || "").trim(),
-          status: normalizeActivityStatus(formData.get("status")),
-          responsavelId: canAssignOthers ? String(formData.get("responsavelId") || "").trim() : String(sessionUser?.id || "").trim(),
-          prazo: String(formData.get("prazo") || "").trim(),
-          prioridade: normalizeActivityPriority(formData.get("prioridade")),
-          tipo: String(formData.get("tipo") || "").trim(),
-          observacoes: String(formData.get("observacoes") || "").trim(),
-        },
-      }).finally(() => { delete form.dataset.saving; });
-    });
-  }
+  const id = String(activity?.id || "").trim();
+  if (!id) return;
+  if (activitiesDrawerTitle instanceof HTMLElement) activitiesDrawerTitle.textContent = "";
+  if (activitiesDrawerSub instanceof HTMLElement) activitiesDrawerSub.textContent = "";
+  activitiesDrawerBody.innerHTML = `<div class="actws-loading">Carregando workspace…</div>`;
   body.classList.add("is-modal-open");
   drawerEl.hidden = false;
-  activitiesState.drawer = { isOpen: true, id: current.id };
+  drawerEl.classList.add("is-workspace");
+  activitiesState.drawer = { isOpen: true, id };
   window.requestAnimationFrame(() => drawerEl.classList.add("is-open"));
+  try {
+    const workspace = await loadActivityWorkspace(id);
+    if (activitiesState.drawer.id !== id) return;
+    activitiesDrawerBody.innerHTML = renderActivityWorkspace(workspace);
+  } catch (error) {
+    console.error("[activities] workspace failed:", error);
+    activitiesDrawerBody.innerHTML = `<div class="actws-empty">Não foi possível abrir esta atividade agora.</div>`;
+  }
+};
+
+const patchActivityWorkspace = async (id, payload = {}) => {
+  const res = await fetchWithAuth(`/api/activities?id=${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, workspace: true }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(String(data?.error || `activity_workspace_patch_failed:${res.status}`));
+  await loadActivities({ force: true, silent: true });
+  refreshOpenStudentActivities();
+  return data;
+};
+
+const createActivityWorkspace = async (payload = {}) => {
+  const res = await fetchWithAuth("/api/activities", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(String(data?.error || `activity_workspace_create_failed:${res.status}`));
+  const createdId = String(data?.activity?.id || "").trim();
+  if (!createdId) throw new Error("activity_workspace_create_missing_id");
+  await loadActivities({ force: true, silent: true });
+  refreshOpenStudentActivities();
+  activitiesState.drawer = { isOpen: true, id: createdId };
+  return loadActivityWorkspace(createdId);
+};
+
+const openActivityCreateWorkspace = (activity = {}) => {
+  const drawerEl = ensureActivitiesDrawerInBody();
+  if (!(drawerEl instanceof HTMLElement) || !(activitiesDrawerBody instanceof HTMLElement)) return;
+  if (activitiesDrawerTitle instanceof HTMLElement) activitiesDrawerTitle.textContent = "";
+  if (activitiesDrawerSub instanceof HTMLElement) activitiesDrawerSub.textContent = "";
+  body.classList.add("is-modal-open");
+  drawerEl.hidden = false;
+  drawerEl.classList.add("is-workspace");
+  activitiesState.drawer = { isOpen: true, id: "", mode: "create" };
+  activitiesDrawerBody.innerHTML = renderActivityWorkspace({
+    mode: "create",
+    activity: getDefaultActivityDraft(activity),
+    comments: [],
+    checklist: [],
+    events: [],
+  });
+  window.requestAnimationFrame(() => drawerEl.classList.add("is-open"));
+  activitiesDrawerBody.querySelector(".actws-title-input")?.focus();
+};
+
+const openActivitiesDrawer = ({ activity = null } = {}) => {
+  if (activity?.id) return openActivityWorkspace(activity);
+  return openActivityCreateWorkspace(activity || {});
 };
 
 const renderActivitiesListView = (items) => {
@@ -11620,9 +11794,277 @@ const bindActivitiesUi = () => {
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest("[data-activities-drawer-close]")) return closeActivitiesDrawer();
+      const composeToggle = target.closest("[data-actws-comment-compose-toggle]");
+      if (composeToggle instanceof HTMLElement) {
+        const workspace = composeToggle.closest("[data-activity-workspace]");
+        const form = workspace?.querySelector("[data-actws-comment-form]");
+        if (form instanceof HTMLElement) {
+          form.hidden = false;
+          composeToggle.hidden = true;
+          form.querySelector("textarea")?.focus();
+        }
+        return;
+      }
+      if (target.closest("[data-actws-comment-compose-cancel]")) {
+        const workspace = target.closest("[data-activity-workspace]");
+        const form = workspace?.querySelector("[data-actws-comment-form]");
+        const trigger = workspace?.querySelector("[data-actws-comment-compose-toggle]");
+        if (form instanceof HTMLFormElement) {
+          form.reset();
+          form.hidden = true;
+        }
+        if (trigger instanceof HTMLElement) trigger.hidden = false;
+        return;
+      }
+      const commentMenuButton = target.closest("[data-actws-comment-menu]");
+      if (commentMenuButton instanceof HTMLElement) {
+        const commentId = String(commentMenuButton.getAttribute("data-actws-comment-menu") || "").trim();
+        const menu = activitiesDrawer.querySelector(`[data-actws-comment-menu-popover="${CSS.escape(commentId)}"]`);
+        if (menu instanceof HTMLElement) menu.hidden = !menu.hidden;
+        return;
+      }
+      const commentEditButton = target.closest("[data-actws-comment-edit]");
+      if (commentEditButton instanceof HTMLElement) {
+        const commentId = String(commentEditButton.getAttribute("data-actws-comment-edit") || "").trim();
+        const article = activitiesDrawer.querySelector(`[data-actws-comment="${CSS.escape(commentId)}"]`);
+        article?.classList.add("is-editing");
+        const form = article?.querySelector(`[data-actws-comment-edit-form="${CSS.escape(commentId)}"]`);
+        const menu = article?.querySelector(`[data-actws-comment-menu-popover="${CSS.escape(commentId)}"]`);
+        if (form instanceof HTMLElement) form.hidden = false;
+        if (menu instanceof HTMLElement) menu.hidden = true;
+        form?.querySelector("textarea")?.focus();
+        return;
+      }
+      const commentCancelButton = target.closest("[data-actws-comment-cancel]");
+      if (commentCancelButton instanceof HTMLElement) {
+        const commentId = String(commentCancelButton.getAttribute("data-actws-comment-cancel") || "").trim();
+        const article = activitiesDrawer.querySelector(`[data-actws-comment="${CSS.escape(commentId)}"]`);
+        article?.classList.remove("is-editing");
+        const form = article?.querySelector(`[data-actws-comment-edit-form="${CSS.escape(commentId)}"]`);
+        if (form instanceof HTMLElement) form.hidden = true;
+        return;
+      }
+      const commentDeleteButton = target.closest("[data-actws-comment-delete]");
+      if (commentDeleteButton instanceof HTMLElement) {
+        const workspace = commentDeleteButton.closest("[data-activity-workspace]");
+        const id = String(workspace?.getAttribute("data-activity-workspace") || "").trim();
+        const commentId = String(commentDeleteButton.getAttribute("data-actws-comment-delete") || "").trim();
+        const article = activitiesDrawer.querySelector(`[data-actws-comment="${CSS.escape(commentId)}"]`);
+        article?.classList.add("is-sending");
+        patchActivityWorkspace(id, { commentAction: "delete", commentId })
+          .then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); })
+          .catch(error => { console.error("[activities] comment delete failed:", error); article?.classList.remove("is-sending"); setActivitiesStatus("Não foi possível excluir o comentário.", "error"); });
+        return;
+      }
+      const checkAddToggle = target.closest("[data-actws-check-add-toggle]");
+      if (checkAddToggle instanceof HTMLElement) {
+        const workspace = checkAddToggle.closest("[data-activity-workspace]");
+        const form = workspace?.querySelector("[data-actws-check-add-form]");
+        if (form instanceof HTMLElement) {
+          form.hidden = false;
+          checkAddToggle.hidden = true;
+          form.querySelector("input")?.focus();
+        }
+        return;
+      }
+      if (target.closest("[data-actws-check-add-cancel]")) {
+        const workspace = target.closest("[data-activity-workspace]");
+        const form = workspace?.querySelector("[data-actws-check-add-form]");
+        const trigger = workspace?.querySelector("[data-actws-check-add-toggle]");
+        if (form instanceof HTMLFormElement) {
+          form.reset();
+          form.hidden = true;
+        }
+        if (trigger instanceof HTMLElement) trigger.hidden = false;
+        return;
+      }
+      const checkEditMenuButton = target.closest("[data-actws-check-edit]");
+      if (checkEditMenuButton instanceof HTMLElement) {
+        const itemId = String(checkEditMenuButton.getAttribute("data-actws-check-edit") || "").trim();
+        const menu = activitiesDrawer.querySelector(`[data-actws-check-menu="${CSS.escape(itemId)}"]`);
+        if (menu instanceof HTMLElement) menu.hidden = !menu.hidden;
+        return;
+      }
+      const checkOpenEdit = target.closest("[data-actws-check-open-edit]");
+      if (checkOpenEdit instanceof HTMLElement) {
+        const itemId = String(checkOpenEdit.getAttribute("data-actws-check-open-edit") || "").trim();
+        const item = activitiesDrawer.querySelector(`[data-actws-check-item="${CSS.escape(itemId)}"]`);
+        item?.classList.add("is-editing");
+        const form = item?.querySelector(`[data-actws-check-edit-form="${CSS.escape(itemId)}"]`);
+        const menu = item?.querySelector(`[data-actws-check-menu="${CSS.escape(itemId)}"]`);
+        if (form instanceof HTMLElement) form.hidden = false;
+        if (menu instanceof HTMLElement) menu.hidden = true;
+        return;
+      }
+      const checkCancel = target.closest("[data-actws-check-cancel]");
+      if (checkCancel instanceof HTMLElement) {
+        const itemId = String(checkCancel.getAttribute("data-actws-check-cancel") || "").trim();
+        const item = activitiesDrawer.querySelector(`[data-actws-check-item="${CSS.escape(itemId)}"]`);
+        item?.classList.remove("is-editing");
+        const form = item?.querySelector(`[data-actws-check-edit-form="${CSS.escape(itemId)}"]`);
+        if (form instanceof HTMLElement) form.hidden = true;
+        return;
+      }
+      const checkDelete = target.closest("[data-actws-check-delete]");
+      if (checkDelete instanceof HTMLElement) {
+        const workspace = checkDelete.closest("[data-activity-workspace]");
+        const id = String(workspace?.getAttribute("data-activity-workspace") || "").trim();
+        const itemId = String(checkDelete.getAttribute("data-actws-check-delete") || "").trim();
+        const item = activitiesDrawer.querySelector(`[data-actws-check-item="${CSS.escape(itemId)}"]`);
+        item?.classList.add("is-sending");
+        patchActivityWorkspace(id, { checklistAction: "delete", itemId })
+          .then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); })
+          .catch(error => { console.error("[activities] checklist delete failed:", error); item?.classList.remove("is-sending"); setActivitiesStatus("Não foi possível excluir o item.", "error"); });
+        return;
+      }
+      const tabButton = target.closest("[data-actws-tab]");
+      if (tabButton instanceof HTMLElement) {
+        const workspace = tabButton.closest("[data-activity-workspace]");
+        const key = String(tabButton.getAttribute("data-actws-tab") || "details");
+        workspace?.querySelectorAll("[data-actws-tab]").forEach(button => button.classList.toggle("is-active", button === tabButton));
+        workspace?.querySelectorAll("[data-actws-panel]").forEach(panel => panel.classList.toggle("is-active", panel.getAttribute("data-actws-panel") === key));
+        return;
+      }
+      const toggleDone = target.closest("[data-actws-toggle-done]");
+      if (toggleDone instanceof HTMLElement) {
+        const id = String(toggleDone.getAttribute("data-actws-toggle-done") || "").trim();
+        const current = (activitiesState.items || []).find(item => String(item.id || "") === id);
+        const workspaceRoot = activitiesDrawer.querySelector(`[data-activity-workspace="${CSS.escape(id)}"]`);
+        const currentStatus = workspaceRoot?.querySelector('select[name="status"]')?.value || current?.status || "Pendente";
+        toggleDone.setAttribute("disabled", "true");
+        patchActivityWorkspace(id, { status: normalizeActivityStatus(currentStatus) === "Feito" ? "Pendente" : "Feito" })
+          .then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); })
+          .catch(error => { console.error("[activities] toggle done failed:", error); setActivitiesStatus("Não foi possível atualizar o status.", "error"); })
+          .finally(() => toggleDone.removeAttribute("disabled"));
+        return;
+      }
+      const archiveButton = target.closest("[data-actws-archive]");
+      if (archiveButton instanceof HTMLElement) {
+        const id = String(archiveButton.getAttribute("data-actws-archive") || "").trim();
+        deleteActivityById(id).catch(() => {});
+        return;
+      }
       const deleteButton = target.closest("[data-activities-delete]");
       if (deleteButton instanceof HTMLElement) {
         deleteActivityById(String(deleteButton.getAttribute("data-activities-delete") || "")).catch(() => {});
+      }
+    });
+    activitiesDrawer.addEventListener("submit", (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      const workspace = form.closest("[data-activity-workspace]");
+      if (!(workspace instanceof HTMLElement)) return;
+      event.preventDefault();
+      const id = String(workspace.getAttribute("data-activity-workspace") || "").trim();
+      const isCreateMode = workspace.getAttribute("data-actws-mode") === "create";
+      if ((!id && !isCreateMode) || form.dataset.saving) return;
+      form.dataset.saving = "true";
+      const formData = new FormData(form);
+      let payload = null;
+      let optimisticEl = null;
+      if (form.matches("[data-actws-details-form]")) {
+        payload = {
+          titulo: String(formData.get("titulo") || workspace.querySelector(".actws-title-input")?.value || "").trim(),
+          status: normalizeActivityStatus(formData.get("status")),
+          studentId: String(formData.get("studentId") || "").trim(),
+          responsavelId: String(formData.get("responsavelId") || "").trim(),
+          prazo: String(formData.get("prazo") || "").trim(),
+          prioridade: normalizeActivityPriority(formData.get("prioridade")),
+          tipo: String(formData.get("tipo") || "").trim(),
+          descricao: String(formData.get("descricao") || "").trim(),
+        };
+        if (!payload.titulo) {
+          workspace.querySelector(".actws-title-input")?.focus();
+          setActivitiesStatus("Informe um título para criar a atividade.", "error");
+          delete form.dataset.saving;
+          return;
+        }
+      } else if (form.matches("[data-actws-comment-form]")) {
+        if (isCreateMode) {
+          delete form.dataset.saving;
+          return;
+        }
+        payload = { comment: String(formData.get("comment") || "").trim() };
+        if (!payload.comment) {
+          delete form.dataset.saving;
+          return;
+        }
+        const commentsEl = workspace.querySelector("[data-actws-comments]");
+        const tempId = `pending-${Date.now()}`;
+        const pending = document.createElement("article");
+        pending.className = "actws-comment is-pending";
+        pending.setAttribute("data-actws-comment", tempId);
+        pending.innerHTML = `${activityAvatarHtml(sessionUser?.name || "Você", sessionUser?.photoURL || "")}<div class="actws-comment-main"><div class="actws-comment-head"><strong>${escapeHtml(sessionUser?.name || "Você")}</strong><time>Enviando…</time></div><p>${escapeHtml(payload.comment)}</p></div>`;
+        commentsEl?.appendChild(pending);
+        optimisticEl = pending;
+        form.reset();
+      } else if (form.matches("[data-actws-check-add-form]")) {
+        if (isCreateMode) {
+          delete form.dataset.saving;
+          return;
+        }
+        payload = {
+          checklistAction: "add",
+          title: String(formData.get("title") || "").trim(),
+          assigneeId: String(formData.get("assigneeId") || "").trim(),
+          dueDate: String(formData.get("dueDate") || "").trim(),
+        };
+      } else if (form.matches("[data-actws-comment-edit-form]")) {
+        const commentId = String(form.getAttribute("data-actws-comment-edit-form") || "").trim();
+        payload = { commentAction: "edit", commentId, body: String(formData.get("body") || "").trim() };
+      } else if (form.matches("[data-actws-check-edit-form]")) {
+        const itemId = String(form.getAttribute("data-actws-check-edit-form") || "").trim();
+        payload = {
+          checklistAction: "update",
+          itemId,
+          title: String(formData.get("title") || "").trim(),
+          assigneeId: String(formData.get("assigneeId") || "").trim(),
+          dueDate: String(formData.get("dueDate") || "").trim(),
+        };
+      }
+      if (!payload) { delete form.dataset.saving; return; }
+      const request = isCreateMode && form.matches("[data-actws-details-form]")
+        ? createActivityWorkspace(payload)
+        : patchActivityWorkspace(id, payload);
+      setActivitiesStatus(isCreateMode ? "Criando atividade…" : "Salvando atividade…");
+      request
+        .then(data => {
+          if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data);
+          setActivitiesStatus(isCreateMode ? "Atividade criada ✓" : "Salvo ✓", "success");
+          window.setTimeout(() => setActivitiesStatus(""), 1800);
+        })
+        .catch(error => { console.error("[activities] workspace submit failed:", error); optimisticEl?.remove(); setActivitiesStatus("Não foi possível salvar agora.", "error"); })
+        .finally(() => { delete form.dataset.saving; });
+    });
+    activitiesDrawer.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const workspace = target.closest("[data-activity-workspace]");
+      if (!(workspace instanceof HTMLElement)) return;
+      const id = String(workspace.getAttribute("data-activity-workspace") || "").trim();
+      if (!id) return;
+      const toggle = target.closest("[data-actws-check-toggle]");
+      if (toggle instanceof HTMLInputElement) {
+        const itemId = String(toggle.getAttribute("data-actws-check-toggle") || "").trim();
+        patchActivityWorkspace(id, { checklistAction: "toggle", itemId, completed: toggle.checked })
+          .then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); })
+          .catch(error => { console.error("[activities] checklist toggle failed:", error); setActivitiesStatus("Não foi possível atualizar o checklist.", "error"); });
+        return;
+      }
+      const titleInput = target.closest("[data-actws-check-title]");
+      const assigneeInput = target.closest("[data-actws-check-assignee]");
+      const dueInput = target.closest("[data-actws-check-due]");
+      const itemId = String(titleInput?.getAttribute("data-actws-check-title") || assigneeInput?.getAttribute("data-actws-check-assignee") || dueInput?.getAttribute("data-actws-check-due") || "").trim();
+      if (itemId) {
+        const row = workspace.querySelector(`[data-actws-check-item="${CSS.escape(itemId)}"]`);
+        patchActivityWorkspace(id, {
+          checklistAction: "update",
+          itemId,
+          title: row?.querySelector("[data-actws-check-title]")?.value || "",
+          assigneeId: row?.querySelector("[data-actws-check-assignee]")?.value || "",
+          dueDate: row?.querySelector("[data-actws-check-due]")?.value || "",
+        }).then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); })
+          .catch(error => { console.error("[activities] checklist update failed:", error); setActivitiesStatus("Não foi possível atualizar o checklist.", "error"); });
       }
     });
   }
@@ -11658,6 +12100,12 @@ const bindActivitiesUi = () => {
     }
   });
   document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLTextAreaElement && target.closest("[data-actws-comment-form]") && event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      target.closest("form")?.requestSubmit();
+      return;
+    }
     if (event.key === "Escape" && activitiesState.filterPopoverEl) closeActivitiesFiltersPopover();
     if (event.key === "Escape" && activitiesState.drawer.isOpen) closeActivitiesDrawer();
   });
@@ -24792,9 +25240,8 @@ const buildRetentionMetrics = (mesReferencia, dadosPreCarregados = {}, options =
     });
   });
 
-  // Sem snapshot histórico confiável de alunos ativos no primeiro dia; aproximamos por ativos atuais + churn efetivado no mês − cadastros do mês.
-  const ativosInicioMes = Math.max(ativosAtuais, ativosAtuais + churnNoMes - novosNoMes);
-  const percent = (value) => (ativosInicioMes > 0 ? (Number(value || 0) / ativosInicioMes) * 100 : 0);
+  const ativosInicioMes = null;
+  const percent = () => null;
   const casosFechadosNoMes = revertidosNoMes + churnNoMes;
   if (options.withSeries !== false) {
     for (let i = 5; i >= 0; i -= 1) {
@@ -24821,7 +25268,7 @@ const buildRetentionMetrics = (mesReferencia, dadosPreCarregados = {}, options =
     monthKey: bounds.key,
     ativosAtuais,
     ativosInicioMes,
-    ativosInicioMesApproach: "aproximado_por_ativos_atuais_churn_e_novos",
+    ativosInicioMesApproach: "Dados insuficientes",
     novosNoMes,
     pedidosNoMes,
     churnNoMes,
@@ -27260,8 +27707,8 @@ const studentProfileRelated = (row, hist) => {
 const studentProfileMoney = value => value == null || value === "" || !Number.isFinite(Number(value)) ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value));
 const renderStudentProfileTabs = (hist, mode) => `<div class="student-profile-tabs" role="tablist" aria-label="Áreas da ficha do aluno">${STUDENT_PROFILE_TABS.map(([key, label]) => `<button type="button" role="tab" id="student-${mode}-tab-${key}" aria-controls="student-${mode}-panel-${key}" aria-selected="${(hist.activeTab || 'history') === key}" tabindex="${(hist.activeTab || 'history') === key ? '0' : '-1'}" data-student-profile-tab="${key}">${label}</button>`).join("")}</div>`;
 const studentProfilePanel = (key, html, hist, mode) => `<div class="student-profile-panel" role="tabpanel" id="student-${mode}-panel-${key}" aria-labelledby="student-${mode}-tab-${key}" tabindex="0" data-student-profile-panel="${key}" ${key === "arquivos" ? 'data-admin-student-tab-panel="arquivos"' : ''} ${(hist.activeTab || "history") === key ? "" : "hidden"}>${html}</div>`;
-const activityEventLabel = type => ({ activity_created: 'Atividade criada', activity_updated: 'Atividade atualizada', activity_completed: 'Atividade concluída', activity_reopened: 'Atividade reaberta', activity_archived: 'Atividade arquivada', student_linked: 'Aluno vinculado', student_unlinked: 'Aluno desvinculado' }[type] || 'Atividade');
-const activityProfileDetail = (row, event) => [row.descricao, row.observacoes && `Observações: ${row.observacoes}`, ...(row.comentarios || []).map(comment => typeof comment === 'string' ? comment : [comment.authorName || comment.nome || comment.autorNome, comment.text || comment.texto || comment.body || comment.comentario].filter(Boolean).join(': ')), row.responsavelId && `Responsável: ${row.responsavelNome || row.responsavelId}`, row.prioridade && `Prioridade: ${row.prioridade}`, row.tipo && `Tipo: ${row.tipo}`, row.prazo && `Prazo: ${formatAdminDate(row.prazo)}`, row.criadoEm && `Criada: ${formatAdminHistoryStamp(row.criadoEm)}`, row.completedAt && `Última conclusão: ${formatAdminHistoryStamp(row.completedAt)}`, event && `Registrado por: ${event.actorName || event.actorId}`, event?.eventType === 'activity_completed' && `Concluída por: ${event.actorName || event.actorId}`, row.isArchived && 'Arquivada'].filter(Boolean).join('\n');
+const activityEventLabel = type => ({ activity_created: 'Atividade criada', activity_updated: 'Atividade atualizada', status_changed: 'Status alterado', assignee_changed: 'Responsável alterado', due_date_changed: 'Prazo alterado', priority_changed: 'Prioridade alterada', comment_added: 'Comentário adicionado', checklist_item_added: 'Checklist criado', checklist_item_completed: 'Checklist concluído', checklist_item_reopened: 'Checklist reaberto', activity_completed: 'Atividade concluída', activity_reopened: 'Atividade reaberta', activity_archived: 'Atividade arquivada', student_linked: 'Aluno vinculado', student_unlinked: 'Aluno desvinculado' }[type] || 'Atividade');
+const activityProfileDetail = (row, event) => [row.descricao, row.observacoes && `Observações: ${row.observacoes}`, row.responsavelId && `Responsável: ${row.responsavelNome || row.responsavelId}`, row.prioridade && `Prioridade: ${row.prioridade}`, row.tipo && `Tipo: ${row.tipo}`, row.prazo && `Prazo: ${formatAdminDate(row.prazo)}`, Number(row.commentsCount) ? `${Number(row.commentsCount)} comentários` : "", Number(row.checklistTotal) ? `${Number(row.checklistDone || 0)}/${Number(row.checklistTotal)} itens` : "", row.criadoEm && `Criada: ${formatAdminHistoryStamp(row.criadoEm)}`, row.completedAt && `Última conclusão: ${formatAdminHistoryStamp(row.completedAt)}`, event && `Registrado por: ${event.actorNameSnapshot || event.actorName || event.actorId}`, event?.eventType === 'activity_completed' && `Concluída por: ${event.actorNameSnapshot || event.actorName || event.actorId}`, row.isArchived && 'Arquivada'].filter(Boolean).join('\n');
 const studentActivityEvents = hist => hist.profileResources?.activities?.events || [];
 const getStudentProfileJourney = hist => {
   const events = [];
@@ -27269,10 +27716,12 @@ const getStudentProfileJourney = hist => {
   (hist.items || []).forEach((item, i) => add("Pedagógico", item.id || i, item.createdAt || item.dateKey, item.kind === "comment" ? "Comentário pedagógico" : "Registro de aula", item.summaryText || item.observacoes || ""));
   (hist.retentionTimeline?.events || []).forEach((event, i) => add("Retenção", event.id || i, event.occurred_at, getRetentionTimelineEventLabel(event.event_type), event.summary || ""));
   const activityEvents = studentActivityEvents(hist);
-  activityEvents.forEach(event => add('Atividades', event.id, event.occurredAt, `${activityEventLabel(event.eventType)} — ${event.snapshot?.titulo || ''}`, activityProfileDetail(event.snapshot || {}, event)));
+  const milestones = new Set(["activity_created", "activity_completed", "activity_reopened", "activity_archived"]);
+  activityEvents.filter(event => milestones.has(String(event.eventType || ""))).forEach(event => add('Atividades', event.id, event.occurredAt, `${activityEventLabel(event.eventType)} — ${event.snapshot?.titulo || ''}`, activityProfileDetail(event.snapshot || {}, event)));
   (hist.profileResources?.activities?.rows || []).filter(row => !activityEvents.some(event => event.activityId === row.id)).forEach(row => add('Atividades', row.id, row.criadoEm, `Atividade — ${row.titulo}`, activityProfileDetail(row)));
 
   (hist.profileResources?.financial?.rows || []).forEach(row => add("Financeiro", row.id, row.data_pagamento || row.created_at, row.profileKind, [row.status, studentProfileMoney(row.valor)].filter(Boolean).join(" · ")));
+  (hist.healthEvents || []).forEach(event => add('Health',event.id,event.date,event.title,event.detail));
   const registered = hist.alunoMeta?.criadoEm || hist.alunoMeta?.createdAt;
   if (registered) add("Cadastro", hist.alunoId, registered, "Cadastro do aluno", "");
   return events.sort((a, b) => b.time - a.time || String(a.id).localeCompare(String(b.id)));
@@ -27289,7 +27738,13 @@ const renderStudentProfileResource = (key, hist, mode) => {
   if (state.error) return `<div class="student-profile-empty student-profile-error" role="status">${escapeHtml(state.error)} <button type="button" class="admin-student-file-btn" data-student-profile-retry="${key}">Tentar novamente</button></div>`;
   const rows = state.rows || [];
   if (!rows.length) return studentProfileEmpty(key === "financial" ? "Nenhum registro financeiro disponível." : "Nenhuma atividade registrada para este aluno.");
-  return `<div class="student-profile-records">${rows.map(row => `<article class="student-profile-record"><div class="student-profile-record-meta"><span>${escapeHtml(key === "financial" ? row.profileKind : row.status)}</span><span>${escapeHtml(key === "financial" ? row.status || "" : row.prioridade || "")}</span></div><strong>${escapeHtml(key === "financial" ? studentProfileMoney(row.valor) : row.titulo)}</strong><p>${escapeHtml(key === "financial" ? row.data_pagamento ? `Pagamento: ${formatAdminDate(row.data_pagamento)}` : row.vencimento ? `Vencimento: ${formatAdminDate(row.vencimento)}` : "" : activityProfileDetail(row))}</p>${key === "activities" && row.prazo ? `<span>Prazo: ${escapeHtml(formatAdminDate(row.prazo))}</span>` : ""}</article>`).join("")}</div>`;
+  return `<div class="student-profile-records">${rows.map(row => {
+    if (key !== "activities") return `<article class="student-profile-record"><div class="student-profile-record-meta"><span>${escapeHtml(row.profileKind)}</span><span>${escapeHtml(row.status || "")}</span></div><strong>${escapeHtml(studentProfileMoney(row.valor))}</strong><p>${escapeHtml(row.data_pagamento ? `Pagamento: ${formatAdminDate(row.data_pagamento)}` : row.vencimento ? `Vencimento: ${formatAdminDate(row.vencimento)}` : "")}</p></article>`;
+    const completed = row.completedAt ? `Concluída ${formatAdminHistoryStamp(row.completedAt)}` : row.criadoEm ? `Criada ${formatAdminHistoryStamp(row.criadoEm)}` : "";
+    const checklist = Number(row.checklistTotal) ? `${Number(row.checklistDone || 0)}/${Number(row.checklistTotal)} itens` : "0/0 itens";
+    const comments = `${Number(row.commentsCount || 0)} comentário${Number(row.commentsCount || 0) === 1 ? "" : "s"}`;
+    return `<button type="button" class="student-profile-record student-profile-activity-record" data-student-activity-open="${escapeHtml(row.id)}"><div class="student-profile-record-meta"><span>${escapeHtml(row.status)}</span><span>${escapeHtml(row.prioridade || "")}</span></div><strong>${escapeHtml(row.titulo)}</strong><p>${escapeHtml([row.responsavelNome || row.responsavelId || "Sem responsável", comments, checklist, completed].filter(Boolean).join(" · "))}</p></button>`;
+  }).join("")}</div>`;
 };
 const bindStudentProfileTabs = (sheetEl, hist, mode) => {
   let root = sheetEl.querySelector("[data-student-profile-content]");
@@ -27352,6 +27807,12 @@ const bindStudentProfileTabs = (sheetEl, hist, mode) => {
     if (tab) select(tab.dataset.studentProfileTab);
     const retry = event.target.closest("[data-student-profile-retry]");
     if (retry) load(retry.dataset.studentProfileRetry, true);
+    const activityOpen = event.target.closest("[data-student-activity-open]");
+    if (activityOpen) {
+      const activityId = String(activityOpen.getAttribute("data-student-activity-open") || "").trim();
+      const activity = (hist.profileResources?.activities?.rows || []).find(row => String(row.id || "") === activityId);
+      if (activity) openActivitiesDrawer({ activity });
+    }
   });
   root.querySelector('[role="tablist"]').addEventListener("keydown", event => {
     const tabs = [...root.querySelectorAll('[role="tab"]')];
@@ -27694,6 +28155,7 @@ const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
       </aside>
 
       <section class="admin-student-sheet-right admin-student-simple-right" aria-label="Detalhes do aluno" data-student-profile-content>
+        ${mode === "admin" ? `<div data-retention-health-student="${escapeHtml(hist.alunoId)}"></div>` : ""}
         ${renderStudentProfileTabs(hist, mode)}
         ${studentProfilePanel("history", renderStudentProfileHistory(hist), hist, mode)}
         ${studentProfilePanel("retention", `
@@ -27741,6 +28203,12 @@ const renderStudentSheetInto = ({ sheetEl, hist, mode = "admin" } = {}) => {
     </div>
   `;
   bindStudentProfileTabs(sheetEl, hist, mode);
+  if (mode === "admin") globalThis.SpaceRetentionIntelligence?.hydrateStudent(sheetEl, hist.alunoId, fetchWithAuth).then(() => {
+    if (hist !== adminStudentsState.history || !sheetEl.isConnected) return;
+    hist.healthEvents = globalThis.SpaceRetentionIntelligence.studentEvents(hist.alunoId);
+    const historyPanel = sheetEl.querySelector('[data-student-profile-panel="history"]');
+    if (historyPanel) historyPanel.innerHTML = renderStudentProfileHistory(hist);
+  });
 };
 
 const renderAdminStudentSheet = () => {
@@ -31091,7 +31559,7 @@ const renderAdminPedagogicoReposicoesPanel = () => {
   `;
 };
 
-const formatRetentionPercent = (value) => `${(Number(value || 0)).toFixed(1).replace(".", ",")}%`;
+const formatRetentionPercent = (value) => value == null ? "Dados insuficientes" : `${Number(value).toFixed(1).replace(".", ",")}%`;
 
 const renderAdminPedRetentionMetrics = (metrics) => {
   const m = metrics && typeof metrics === "object" ? metrics : buildRetentionMetrics(createDateKey(new Date()).slice(0, 7), {});
@@ -31103,7 +31571,7 @@ const renderAdminPedRetentionMetrics = (metrics) => {
       <div class="pedretain-metrics-head">
         <div>
           <h2 class="pedretain-section-title">Métricas do mês</h2>
-          <p class="pedretain-metrics-sub">Denominador: ${escapeHtml(String(m.ativosInicioMes || 0))} ativos no início do mês (${escapeHtml(m.ativosInicioMesApproach || "aproximado")}).</p>
+          <p class="pedretain-metrics-sub">${m.ativosInicioMes == null ? "Base inicial: Dados insuficientes — snapshots iniciados daqui para frente." : `Base inicial observada: ${escapeHtml(String(m.ativosInicioMes))} alunos.`}</p>
         </div>
         <label class="pedretain-month">
           <span>Mês</span>
@@ -31173,7 +31641,7 @@ const hydrateAdminPedRetentionChart = async () => {
   });
 };
 
-const renderAdminPedagogicoRetentionPanel = () => {
+const renderAdminPedagogicoRetentionOperations = () => {
   if (!(adminPedRetention instanceof HTMLElement)) return;
   const retentionState = adminPedagogicoState.retention && typeof adminPedagogicoState.retention === "object" ? adminPedagogicoState.retention : {};
   const status = String(retentionState.status || "idle").trim();
@@ -31265,6 +31733,17 @@ const renderAdminPedagogicoRetentionPanel = () => {
     </div>
   `;
   hydrateAdminPedRetentionChart().catch((error) => console.warn("[Retention] chart failed", error));
+};
+
+const renderAdminPedagogicoRetentionPanel = () => {
+  renderAdminPedagogicoRetentionOperations();
+  if (adminPedRetention instanceof HTMLElement && globalThis.SpaceRetentionIntelligence) {
+    globalThis.SpaceRetentionIntelligence.mount(adminPedRetention, {
+      fetch: fetchWithAuth,
+      openStudent: id => openStudentSimpleCard({ alunoId: id }),
+      openActivity: async draft => { await loadActivities({ force: false, silent: true }); openActivityCreateWorkspace(draft); },
+    });
+  }
 };
 
 const refreshAdminPedagogicoRetentionState = async ({ force = false } = {}) => {
