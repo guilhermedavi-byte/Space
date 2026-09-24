@@ -204,7 +204,9 @@
   const removeDrawer = () => {
     const drawer = document.getElementById('asdr-drawer');
     if (!drawer) return;
-    drawer.querySelector('audio')?.pause();
+    const audio = drawer.querySelector('audio');
+    audio?.pause();
+    if (audio?.dataset.objectUrl) URL.revokeObjectURL(audio.dataset.objectUrl);
     drawer.remove();
     if (drawerRestore) {
       document.body.style.overflow = drawerRestore.body;
@@ -260,16 +262,19 @@
       audio.addEventListener('error', () => { if (status) status.textContent = 'Gravação indisponível'; });
       try {
         if (status) status.textContent = 'Carregando gravação...';
-        const res = await fetchWithAuth(audio.dataset.audioEndpoint, { headers: { Accept: 'audio/mpeg' } });
-        if (!res.ok) throw new Error('audio_unavailable');
+        const res = await fetchWithAuth(audio.dataset.audioEndpoint, { headers: { Accept: 'audio/mpeg' }, cache: 'no-store' });
+        const contentType = String(res.headers?.get?.('content-type') || '');
+        if (!res.ok) throw new Error(`HTTP ${res.status || 0}`);
         const blob = await res.blob();
-        if (!blob.size || !audio.isConnected) throw new Error('audio_unavailable');
+        if (!blob.size || !audio.isConnected) throw new Error('resposta sem áudio');
+        if (contentType && !/^audio\//i.test(contentType)) throw new Error(`tipo inválido ${contentType.split(';')[0]}`);
         if (audio.dataset.objectUrl) URL.revokeObjectURL(audio.dataset.objectUrl);
         const objectUrl = URL.createObjectURL(blob);
         audio.dataset.objectUrl = objectUrl;
         audio.src = objectUrl;
-      } catch {
-        if (status && audio.isConnected) status.textContent = 'Gravação indisponível';
+      } catch (error) {
+        console.warn('[admin-sdr-audio-ui] failed', { message: error?.message || 'audio_unavailable', endpoint: audio.dataset.audioEndpoint });
+        if (status && audio.isConnected) status.textContent = `Gravação indisponível (${error?.message || 'falha no áudio'})`;
       }
     });
   };

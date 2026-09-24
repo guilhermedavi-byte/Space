@@ -186,7 +186,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="finance-customer-link.js?v=1"></script>
     <script src="finance-v1.js?v=31"></script>
     <script src="script.js"></script>
-    <script src="admin-sdr.js"></script>
+    <script src="admin-sdr.js?v=4"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>
     <script src="attendance-connections.js"></script>

@@ -10,7 +10,7 @@ test('SDR filters collapse and audio loads through authenticated blob request', 
   dom.window.URL.revokeObjectURL = () => {};
   dom.window.fetchWithAuth = async url => {
     requests.push(String(url));
-    if (String(url).includes('/audio')) return { ok: true, blob: async () => new dom.window.Blob(['mp3'], { type: 'audio/mpeg' }) };
+    if (String(url).includes('/audio')) return { ok: true, status: 200, headers: { get: name => String(name).toLowerCase() === 'content-type' ? 'audio/mpeg' : '' }, blob: async () => new dom.window.Blob(['mp3'], { type: 'audio/mpeg' }) };
     return { ok: true, json: async () => ({ selectedCall: { recordingId: 'rec1', sdrName: 'SDR', transcript: '' } }) };
   };
   dom.window.HTMLMediaElement.prototype.pause = function () {};
@@ -46,7 +46,11 @@ test('SDR filters collapse and audio loads through authenticated blob request', 
 const transcriptView = async (transcript, sdrName = 'Luana') => {
   const dom = new JSDOM('<div data-admin-sdr></div>', { runScripts: 'outside-only', url: 'https://space.example' });
   dom.window.HTMLMediaElement.prototype.pause = () => {};
-  dom.window.fetchWithAuth = async () => ({ ok: true, json: async () => ({ selectedCall: { recordingId: 'transcript-test', sdrName, transcript } }) });
+  dom.window.URL.createObjectURL = blob => `blob:audio-${blob.size}`;
+  dom.window.URL.revokeObjectURL = () => {};
+  dom.window.fetchWithAuth = async url => String(url).includes('/audio')
+    ? { ok: true, status: 200, headers: { get: name => String(name).toLowerCase() === 'content-type' ? 'audio/mpeg' : '' }, blob: async () => new dom.window.Blob(['mp3'], { type: 'audio/mpeg' }) }
+    : { ok: true, json: async () => ({ selectedCall: { recordingId: 'transcript-test', sdrName, transcript } }) };
   dom.window.eval(fs.readFileSync('admin-sdr.js', 'utf8'));
   await dom.window.SpaceAdminSdr.open();
   dom.window.document.querySelector('[data-asdr-detail-tab="transcript"]').click();

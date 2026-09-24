@@ -61,7 +61,7 @@ test('admin SDR route boots the dedicated panel and script', async () => {
     assert.equal(res.statusCode, 200);
     assert.match(body, /data-initial-panel="admin-sdr"/);
     assert.match(body, /data-admin-sdr/);
-    assert.match(body, /src="admin-sdr\.js"/);
+    assert.match(body, /src="admin-sdr\.js\?v=4"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
