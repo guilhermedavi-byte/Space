@@ -5,6 +5,7 @@ const { commitWritesAsAdmin } = require('./_lib/firestore-admin');
 const { PROJECT_ID, encodeFields } = require('./_lib/firestore-rest');
 const { loadAdminCommercialSdrActivity, addDaysToKey } = require('./_lib/admin-commercial-sdr-activity');
 const { supabaseFetch } = require('./_lib/supabase-rest');
+const { getCommercialPermissions } = require('./_lib/commercial-permissions');
 
 const TIME_ZONE = 'America/Sao_Paulo';
 const FAVORITES_COLLECTION = 'sdrCallFavorites';
@@ -403,10 +404,21 @@ const createHandler = ({ build = buildModel, authResolver = resolveAdminRequestA
   try {
     const auth = await authResolver(req, { logPrefix: '[admin-sdr]' });
     if (!auth.ok) return sendJson(res, auth.status, auth.body);
-    if (clean(auth.session?.role).toLowerCase() !== 'admin') return sendJson(res, 403, { error: 'admin_only' });
-    const perm = await permissionResolver(auth, 'comercial.sdrPanel.view');
-    if (!perm.ok) return sendJson(res, perm.status, perm.body);
+    const session = auth.session || {};
+    const userForPermissions = {
+      ...session,
+      commercialRoles: session.commercialRoles || auth.profile?.user?.commercialRoles || auth.profile?.commercialRoles || [],
+    };
+    const commercial = getCommercialPermissions(userForPermissions);
+    const isAdmin = commercial.platformRole === 'admin';
+    const isGrowthSdr = commercial.platformRole === 'growth' && commercial.canUseSdrWorkspace;
+    if (!isAdmin && !isGrowthSdr) return sendJson(res, 403, { error: 'sdr_access_required' });
+    if (isAdmin) {
+      const perm = await permissionResolver(auth, 'comercial.sdrPanel.view');
+      if (!perm.ok) return sendJson(res, perm.status, perm.body);
+    }
     if (req.method === 'POST') {
+      if (!isAdmin) return sendJson(res, 403, { error: 'admin_only' });
       const body = await readJsonBody(req);
       if (clean(body.action) === 'favorite_call') { const result = await handleFavorite({ body, session: auth.session }); return sendJson(res, result.status, result.body); }
       return sendJson(res, 400, { error: 'invalid_action' });

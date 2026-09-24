@@ -89,3 +89,18 @@ test('structured transcript handles explicit roles and exact SDR names with punc
   assert.equal(named.window.document.querySelectorAll('.asdr-utterance.seller').length, 1);
   named.window.close();
 });
+
+test('SDR panel supports legacy Growth root and auto-loads on Growth initial panel', async () => {
+  const dom = new JSDOM('<body data-initial-panel="growth"><div data-sdr-panel></div></body>', { runScripts: 'outside-only', url: 'https://space.example' });
+  const requests = [];
+  dom.window.HTMLMediaElement.prototype.pause = function () {};
+  dom.window.fetchWithAuth = async url => {
+    requests.push(String(url));
+    return { ok: true, json: async () => ({ source: { usesMockData: false }, kpis: {}, sdrs: [], calls: [] }) };
+  };
+  dom.window.eval(fs.readFileSync('admin-sdr.js', 'utf8'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(requests.some(url => url.startsWith('/api/admin-sdr')));
+  assert.ok(dom.window.document.querySelector('[data-sdr-panel]').textContent.includes('Painel SDR'));
+  dom.window.close();
+});

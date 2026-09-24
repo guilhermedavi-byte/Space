@@ -1060,6 +1060,15 @@ const syncRoleUI = () => {
   }
 
   if (currentRole === "growth") {
+    const commercialRoles = Array.isArray(sessionUser?.commercialRoles)
+      ? sessionUser.commercialRoles.map((role) => String(role || "").trim().toLowerCase()).filter(Boolean)
+      : String(sessionUser?.commercialRoles || "").split(/[\s,]+/).map((role) => role.trim().toLowerCase()).filter(Boolean);
+    const canUseSdrWorkspace = commercialRoles.includes("sdr");
+    const allowedGrowthPanels = new Set(["growth-dashboard", "native-crm", "growth", "activities", "notifications", "attendance-inbox", "attendance-connections"]);
+    if (canUseSdrWorkspace) {
+      allowedGrowthPanels.add("space-phone");
+      allowedGrowthPanels.add("admin-sdr");
+    }
     document.querySelectorAll("[data-panel-target]").forEach((el) => {
       if (!(el instanceof HTMLElement)) return;
       if (el.hasAttribute("data-admin-only")) {
@@ -1067,7 +1076,7 @@ const syncRoleUI = () => {
         return;
       }
       const target = String(el.getAttribute("data-panel-target") || "");
-      el.hidden = !["growth-dashboard", "native-crm", "growth", "activities", "notifications", "attendance-inbox", "attendance-connections"].includes(target);
+      el.hidden = !allowedGrowthPanels.has(target);
     });
     const dashboardTarget = document.querySelector("[data-growth-dashboard-link]");
     if (dashboardTarget instanceof HTMLElement) {

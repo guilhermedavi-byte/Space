@@ -26,10 +26,29 @@ test('admin SDR API builds real operational model without mock metrics', async (
   assert.equal(res.body.kpis.totalCalls, 2);
 });
 
-test('admin SDR API rejects non-admin users', async () => {
-  const handler = createHandler({ authResolver: async () => ({ ok: true, session: { role: 'growth', sub: 'g' } }) });
+test('admin SDR API allows Growth SDR read-only access', async () => {
+  const handler = createHandler({
+    authResolver: async () => ({ ok: true, session: { role: 'growth', sub: 'g', commercialRoles: ['sdr'] } }),
+    permissionResolver: async () => { throw new Error('admin permission resolver should not run for Growth SDR GET'); },
+    build: async () => ({ ok: true, source: { usesMockData: false }, kpis: { totalCalls: 1 }, sdrs: [], calls: [] }),
+  });
+  const res = await invoke(handler);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.kpis.totalCalls, 1);
+});
+
+test('admin SDR API rejects Growth users without SDR commercial role', async () => {
+  const handler = createHandler({ authResolver: async () => ({ ok: true, session: { role: 'growth', sub: 'g', commercialRoles: ['closer'] } }) });
   const res = await invoke(handler);
   assert.equal(res.status, 403);
+  assert.equal(res.body.error, 'sdr_access_required');
+});
+
+test('admin SDR API keeps Growth SDR mutations blocked', async () => {
+  const handler = createHandler({ authResolver: async () => ({ ok: true, session: { role: 'growth', sub: 'g', commercialRoles: ['sdr'] } }) });
+  const res = await invoke(handler, { method: 'POST', body: { action: 'favorite_call', callId: 'rec-1' } });
+  assert.equal(res.status, 403);
+  assert.equal(res.body.error, 'admin_only');
 });
 
 test('range resolver covers requested date filters', () => {
@@ -61,7 +80,7 @@ test('admin SDR route boots the dedicated panel and script', async () => {
     assert.equal(res.statusCode, 200);
     assert.match(body, /data-initial-panel="admin-sdr"/);
     assert.match(body, /data-admin-sdr/);
-    assert.match(body, /src="admin-sdr\.js\?v=4"/);
+    assert.match(body, /src="admin-sdr\.js\?v=5"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];

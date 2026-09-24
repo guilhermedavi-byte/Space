@@ -1,5 +1,5 @@
 (() => {
-  const root = () => document.querySelector('[data-admin-sdr]');
+  const root = () => document.querySelector('[data-admin-sdr], [data-sdr-panel]');
   if (!root()) return;
 
   const state = {
@@ -302,5 +302,5 @@
   document.addEventListener('change', e => { const t = e.target.closest('[data-asdr-filter]'); if (!t) return; state.filters[t.getAttribute('data-asdr-filter')] = t.value; state.page = 1; state.callId = ''; state.sdrId = ''; load(); });
 
   window.SpaceAdminSdr = { open: load, render };
-  if (document.body.dataset.initialPanel === 'admin-sdr') load();
+  if (['admin-sdr', 'growth'].includes(document.body.dataset.initialPanel)) load();
 })();
