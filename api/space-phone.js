@@ -9,6 +9,7 @@ const createHandler = ({
   authResolver = resolveAdminRequestAuth,
   permissionResolver = requireResolvedAdminPermission,
   request = supabaseFetch,
+  bridgeCommit,
 } = {}) => async (req, res) => {
   if (!["GET", "POST", "PATCH", "HEAD"].includes(req.method)) {
     res.setHeader("Allow", "GET, POST, PATCH, HEAD");
@@ -53,7 +54,7 @@ const createHandler = ({
       throw error;
     });
     const id = body.id || url.searchParams.get("id");
-    return sendJson(res, 200, await phone.updateCall({ request, id, user, isAdmin, patch: body }));
+    return sendJson(res, 200, await phone.updateCall({ request, id, user, isAdmin, patch: body, bridgeCommit }));
   } catch (error) {
     const status = Number(error?.status) || (error?.message === "forbidden" ? 403 : error?.message === "call_not_found" ? 404 : 500);
     return sendJson(res, status, { error: status >= 500 ? phone.publicError(error) : String(error?.message || "space_phone_failed") });

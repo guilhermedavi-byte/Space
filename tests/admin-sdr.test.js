@@ -80,7 +80,7 @@ test('admin SDR route boots the dedicated panel and script', async () => {
     assert.equal(res.statusCode, 200);
     assert.match(body, /data-initial-panel="admin-sdr"/);
     assert.match(body, /data-admin-sdr/);
-    assert.match(body, /src="admin-sdr\.js\?v=5"/);
+    assert.match(body, /src="admin-sdr\.js\?v=6"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
@@ -209,7 +209,7 @@ test('admin SDR loads transcript and analysis only in recording detail', async (
   assert.equal(model.selectedCall.transcript, 'Transcrição completa');
   assert.equal(model.selectedCall.analysisText, 'Análise textual completa');
   assert.equal(model.selectedCall.recording, 'https://cdn.example/detail.mp3');
-  assert.ok(calls.some(path => path.includes('select=recording_id,sdr,to_number,duration_seconds,score,started_at,created_at')));
+  assert.ok(calls.some(path => path.includes('select=recording_id,call_leg_id,call_session_id,sdr,from_number,to_number,duration_seconds,score,started_at,created_at')));
   assert.ok(calls.some(path => path.includes('select=recording_id,call_leg_id,call_session_id,connection_id,sdr,from_number,to_number,started_at,ended_at,duration_seconds,transcript,score,analysis,recording_url,created_at')));
 });
 
@@ -224,4 +224,57 @@ test('calls merge started_at and created_at fallback before paging newest first'
   } });
   assert.deepEqual(result.rows.map(row => row.recording_id), ['fallback', 'old']);
   assert.ok(urls.every(url => url.includes('limit=3')));
+});
+
+test('voice_call appears in SDR panel before AI and outcome drives operational KPIs', async () => {
+  const request = async (path) => {
+    if (path.startsWith('/voice_calls')) return { data: [{ id: 'vc-1', space_user_uid: 'sdr-1', space_user_email: 'matheus@space.test', to_number: '+14075550100', status: 'completed', started_at: '2026-09-18T12:00:00.000Z', ended_at: '2026-09-18T12:01:28.000Z', duration_seconds: 88, outcome: 'nao_atendeu' }] };
+    if (path.startsWith('/sdr_call_scores')) return { data: [] };
+    return { data: [] };
+  };
+  const model = await __private.buildModel({ period: 'today' }, {
+    activity: async () => ({ events: [], sdrs: [{ sdrUid: 'sdr-1', sdrName: 'Matheus Afonso', sdrEmail: 'matheus@space.test' }] }),
+    request,
+  });
+  assert.equal(model.calls.length, 1);
+  assert.equal(model.calls[0].id, 'vc-1');
+  assert.equal(model.calls[0].analysisStatus, 'processing');
+  assert.equal(model.calls[0].outcomeLabel, 'Não atendeu');
+  assert.equal(model.kpis.totalCalls, 1);
+  assert.equal(model.kpis.answered, 0);
+  assert.equal(model.kpis.scheduled, 0);
+});
+
+test('voice_call is enriched by later sdr_call_score without duplicate line', async () => {
+  const request = async (path) => {
+    if (path.startsWith('/voice_calls')) return { data: [{ id: 'vc-2', space_user_uid: 'sdr-1', space_user_email: 'matheus@space.test', from_number: '+16892232696', to_number: '+14075550100', telnyx_call_leg_id: 'leg-2', status: 'completed', started_at: '2026-09-18T12:00:00.000Z', duration_seconds: 88, outcome: 'agendado' }] };
+    if (path.startsWith('/sdr_call_scores')) return { data: [{ recording_id: 'rec-2', call_leg_id: 'leg-2', sdr: 'Matheus', from_number: '+16892232696', to_number: '+14075550100', duration_seconds: 88, score: 91, started_at: '2026-09-18T12:00:00.000Z', created_at: '2026-09-18T12:03:00.000Z' }] };
+    return { data: [] };
+  };
+  const model = await __private.buildModel({ period: 'today' }, {
+    activity: async () => ({ events: [], sdrs: [{ sdrUid: 'sdr-1', sdrName: 'Matheus Afonso', sdrEmail: 'matheus@space.test' }] }),
+    request,
+  });
+  assert.equal(model.calls.length, 1);
+  assert.equal(model.calls[0].id, 'vc-2');
+  assert.equal(model.calls[0].recordingId, 'rec-2');
+  assert.equal(model.calls[0].score, 91);
+  assert.equal(model.calls[0].analysisStatus, 'completed');
+  assert.equal(model.kpis.scheduled, 1);
+  assert.equal(model.kpis.analyzedCalls, 1);
+});
+
+test('voice outcomes map scheduled and answered KPIs immediately', async () => {
+  const base = { space_user_uid: 'sdr-1', space_user_email: 'ana@space.test', status: 'completed', started_at: '2026-09-18T12:00:00.000Z', duration_seconds: 40 };
+  const request = async (path) => path.startsWith('/voice_calls') ? { data: [
+    { ...base, id: 'vc-a', to_number: '+1', outcome: 'agendado' },
+    { ...base, id: 'vc-b', to_number: '+2', outcome: 'sem_interesse' },
+  ] } : { data: [] };
+  const model = await __private.buildModel({ period: 'today' }, {
+    activity: async () => ({ events: [], sdrs: [{ sdrUid: 'sdr-1', sdrName: 'Ana', sdrEmail: 'ana@space.test' }] }),
+    request,
+  });
+  assert.equal(model.kpis.totalCalls, 2);
+  assert.equal(model.kpis.answered, 2);
+  assert.equal(model.kpis.scheduled, 1);
 });

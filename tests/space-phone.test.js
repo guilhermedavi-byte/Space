@@ -157,7 +157,7 @@ test("space phone route boots the dedicated admin panel and script", async () =>
     assert.match(body, /data-initial-panel="space-phone"/);
     assert.match(body, /data-space-phone/);
     assert.match(body, /src="script\.js\?v=7"/);
-    assert.match(body, /src="space-phone\.js\?v=4"/);
+    assert.match(body, /src="space-phone\.js\?v=5"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
@@ -251,4 +251,26 @@ test("space phone does not correlate ambiguous fallback candidates", async () =>
   assert.equal(res.status, 200);
   assert.equal(res.json.calls[0].analysisStatus, "processing");
   assert.equal(patches.length, 0);
+});
+
+test('space phone outcome bridge writes deterministic SDR activity event', async () => {
+  const writes = [];
+  const handler = createHandler({
+    authResolver: async () => ({ ok: true, session: { role: 'growth', sub: 'sdr-1', email: 'sdr1@space.test', name: 'Matheus' }, profile: { user: { commercialRoles: ['sdr'] } } }),
+    bridgeCommit: async ({ writes: incoming }) => { writes.push(...incoming); return { ok: true }; },
+    request: async (path, options = {}) => {
+      if (options.method === 'PATCH') return { data: [{ id: 'call-bridge', space_user_uid: 'sdr-1', space_user_email: 'sdr1@space.test', to_number: '+16175551212', outcome: options.body.outcome, duration_seconds: 61, started_at: '2026-09-24T12:00:00Z', ended_at: '2026-09-24T12:01:01Z' }] };
+      if (path.startsWith('/voice_calls')) return { data: [{ id: 'call-bridge', space_user_uid: 'sdr-1', space_user_email: 'sdr1@space.test', to_number: '+16175551212', status: 'completed', started_at: '2026-09-24T12:00:00Z', ended_at: '2026-09-24T12:01:01Z', duration_seconds: 61 }] };
+      return { data: [] };
+    },
+  });
+  const first = await invoke(handler, { method: 'PATCH', body: { id: 'call-bridge', outcome: 'interessado' } });
+  const second = await invoke(handler, { method: 'PATCH', body: { id: 'call-bridge', outcome: 'agendado' } });
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(writes.length, 2);
+  assert.equal(writes[0].update.name.endsWith('/sdrActivityEvents/space_phone_call_call-bridge'), true);
+  assert.equal(writes[1].update.name, writes[0].update.name);
+  assert.equal(first.json.bridge.outcome, 'atendeu');
+  assert.equal(second.json.bridge.outcome, 'agendou');
 });

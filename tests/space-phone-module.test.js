@@ -213,3 +213,19 @@ test('Space Phone V2 does not show fake live AI during active call', async (t) =
   assert.equal(text.includes('Talk ratio'), false);
   assert.ok(text.includes('Análise disponível após a ligação'));
 });
+
+test('post-call wrap-up persists through core idle and skip releases new call', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  await dom.window.SpacePhoneModule.open();
+  dom.window.__spacePhoneTest.emit({ status: 'ended', context: { phoneNumber: '+16177942141' }, callRecord: { id: 'call-wrap', to_number: '+16177942141' } });
+  await tick(20);
+  assert.ok(dom.window.document.querySelector('[data-sp-outcome="agendado"]'));
+  dom.window.__spacePhoneTest.emit({ status: 'idle', context: null, callRecord: null });
+  await tick(20);
+  assert.ok(dom.window.document.querySelector('[data-sp-outcome="agendado"]'));
+  dom.window.document.querySelector('[data-sp-skip-outcome]').click();
+  await tick(20);
+  assert.ok(dom.window.document.body.textContent.includes('Pendente'));
+  assert.ok(dom.window.document.querySelector('[data-sp-reset-call]'));
+});

@@ -139,7 +139,7 @@ const normalizeScoredCall = (row = {}) => {
     nextImprovement: typeof analysis === 'object' ? clean(first(analysis, ['next_action','next_improvement','proxima_melhoria'], '')) : '',
   };
 };
-const SCORE_LIST_SELECT = 'recording_id,sdr,to_number,duration_seconds,score,started_at,created_at';
+const SCORE_LIST_SELECT = 'recording_id,call_leg_id,call_session_id,sdr,from_number,to_number,duration_seconds,score,started_at,created_at';
 const SCORE_DETAIL_SELECT = 'recording_id,call_leg_id,call_session_id,connection_id,sdr,from_number,to_number,started_at,ended_at,duration_seconds,transcript,score,analysis,recording_url,created_at';
 const scoreRangeParams = ({ fromKey = '', toKey = '' } = {}) => {
   const params = [];
@@ -184,11 +184,135 @@ const loadScoredCallDetail = async ({ request = supabaseFetch, recordingId } = {
 };
 const avg = rows => { const nums = rows.map(Number).filter(Number.isFinite); return nums.length ? nums.reduce((a,b)=>a+b,0)/nums.length : null; };
 
+const VOICE_CALL_SELECT = 'id,space_user_uid,space_user_email,lead_name,from_number,to_number,telnyx_call_leg_id,telnyx_call_session_id,status,started_at,answered_at,ended_at,duration_seconds,outcome,callback_at,created_at,updated_at';
+const voiceRangeParams = ({ fromKey = '', toKey = '' } = {}) => {
+  const params = [];
+  if (parseDateKey(fromKey)) params.push(`started_at=gte.${encodeURIComponent(`${fromKey}T00:00:00-03:00`)}`);
+  if (parseDateKey(toKey)) params.push(`started_at=lt.${encodeURIComponent(`${addDaysToKey(toKey, 1)}T00:00:00-03:00`)}`);
+  return params.length ? `&${params.join('&')}` : '';
+};
+const normalizeVoiceStatus = row => {
+  const raw = clean(row.status).toLowerCase();
+  const outcome = clean(row.outcome);
+  if (['failed', 'error', 'erro'].includes(raw)) return 'failed';
+  if (['nao_atendeu', 'ocupado', 'numero_invalido', 'caixa_postal'].includes(outcome)) return 'unanswered';
+  if (row.answered_at || row.ended_at || ['completed','connected','answered','ended'].includes(raw)) return 'connected';
+  return raw || 'connected';
+};
+const normalizeVoiceCall = (row = {}) => {
+  const started = row.started_at || row.created_at || row.ended_at || '';
+  const local = localPartsFromIso(started);
+  const sourceOutcome = clean(row.outcome);
+  const status = normalizeVoiceStatus(row);
+  return {
+    id: clean(row.id),
+    sourceKind: 'space_phone',
+    sourceVoiceCallId: clean(row.id),
+    dateKey: local.dateKey,
+    time: local.time,
+    createdAt: clean(row.created_at),
+    startedAt: clean(row.started_at),
+    endedAt: clean(row.ended_at),
+    sdrUid: clean(row.space_user_uid),
+    sdrName: clean(row.space_user_email || row.space_user_uid || 'SDR'),
+    sdrEmail: clean(row.space_user_email),
+    leadName: clean(row.lead_name),
+    phone: clean(row.to_number),
+    fromNumber: clean(row.from_number),
+    toNumber: clean(row.to_number),
+    durationSeconds: Number.isFinite(Number(row.duration_seconds)) ? Number(row.duration_seconds) : null,
+    score: null,
+    scriptAdherence: null,
+    outcome: sourceOutcome === 'agendado' ? 'scheduled' : 'none',
+    sourceOutcome,
+    outcomeLabel: detailedOutcomeLabel(sourceOutcome),
+    recording: '',
+    recordingId: '',
+    callId: clean(row.id),
+    callLegId: clean(row.telnyx_call_leg_id),
+    callSessionId: clean(row.telnyx_call_session_id),
+    transcriptAvailable: false,
+    transcript: '',
+    analysis: null,
+    status,
+    analysisStatus: 'processing',
+    scorecard: [],
+    summary: '',
+    strengths: [],
+    weaknesses: [],
+    recommendations: [],
+  };
+};
+const loadVoiceCalls = async ({ request = supabaseFetch, fromKey = '', toKey = '', limit = 500 } = {}) => {
+  try {
+    const res = await request(`/voice_calls?select=${VOICE_CALL_SELECT}${voiceRangeParams({ fromKey, toKey })}&order=started_at.desc.nullslast,created_at.desc&limit=${Math.max(1, Math.min(Number(limit)||500, 1000))}`, { timeoutMs: 15000 });
+    const rows = Array.isArray(res.data) ? res.data : [];
+    return { ok: true, rows, calls: rows.map(normalizeVoiceCall).filter(call => call.id), error: null };
+  } catch (error) {
+    return { ok: false, rows: [], calls: [], error: String(error.code || error.message || 'voice_calls_unavailable').slice(0, 80) };
+  }
+};
+const scoreAnalysisCandidate = (call = {}, score = {}) => {
+  if (clean(call.fromNumber) !== clean(score.fromNumber)) return null;
+  if (clean(call.toNumber || call.phone) !== clean(score.toNumber || score.phone)) return null;
+  const callStarted = Date.parse(call.startedAt || call.createdAt || '');
+  const scoreStarted = Date.parse(score.startedAt || score.createdAt || '');
+  if (!callStarted || !scoreStarted) return null;
+  const startedDeltaSeconds = Math.abs(callStarted - scoreStarted) / 1000;
+  if (startedDeltaSeconds > 90) return null;
+  const durationDeltaSeconds = Math.abs(number(call.durationSeconds) - number(score.durationSeconds));
+  if (call.durationSeconds && score.durationSeconds && durationDeltaSeconds > 5) return null;
+  return startedDeltaSeconds + durationDeltaSeconds;
+};
+const enrichVoiceCall = (call, score) => score ? {
+  ...call,
+  score: score.score,
+  scriptAdherence: score.scriptAdherence,
+  recording: score.recording,
+  recordingId: score.recordingId,
+  callId: call.id,
+  callLegId: call.callLegId || score.callLegId,
+  callSessionId: call.callSessionId || score.callSessionId,
+  transcriptAvailable: score.transcriptAvailable,
+  transcript: score.transcript || '',
+  analysis: score.analysis,
+  analysisStatus: score.analysisStatus === 'completed' ? 'completed' : score.analysisStatus || 'processing',
+  scorecard: score.scorecard || [],
+  summary: score.summary || '',
+  strengths: score.strengths || [],
+  weaknesses: score.weaknesses || [],
+  recommendations: score.recommendations || [],
+  aiSdrName: score.aiSdrName || score.sdrName,
+} : call;
+const mergeVoiceAndScoreCalls = (voiceCalls = [], scoredCalls = []) => {
+  const usedScores = new Set();
+  const byLeg = new Map();
+  const bySession = new Map();
+  scoredCalls.forEach(score => {
+    if (score.callLegId) byLeg.set(score.callLegId, score);
+    if (score.callSessionId) bySession.set(score.callSessionId, score);
+  });
+  const merged = voiceCalls.map(call => {
+    let score = (call.callLegId && byLeg.get(call.callLegId)) || (call.callSessionId && bySession.get(call.callSessionId));
+    if (!score) {
+      const candidates = scoredCalls.filter(item => !usedScores.has(item.id)).map(item => ({ item, score: scoreAnalysisCandidate(call, item) })).filter(item => item.score != null).sort((a,b)=>a.score-b.score);
+      if (candidates[0] && (!candidates[1] || Math.abs(candidates[0].score - candidates[1].score) > 1)) score = candidates[0].item;
+    }
+    if (score?.id) usedScores.add(score.id);
+    return enrichVoiceCall(call, score);
+  });
+  scoredCalls.forEach(score => { if (!usedScores.has(score.id)) merged.push(score); });
+  return [...new Map(merged.map(call => [call.sourceVoiceCallId ? `voice:${call.sourceVoiceCallId}` : `score:${call.id}`, call])).values()]
+    .sort((a,b)=>(Date.parse(b.startedAt || b.createdAt || '') || 0) - (Date.parse(a.startedAt || a.createdAt || '') || 0));
+};
+
+
 const firestoreDocName = (collection, id) => {
   if (!PROJECT_ID) throw Object.assign(new Error('missing_project_id'), { status: 503 });
   return `projects/${PROJECT_ID}/databases/(default)/documents/${collection}/${encodeURIComponent(id)}`;
 };
-const outcomeLabel = outcome => ({ nao_atendeu: 'Não atendida', atendeu: 'Atendida', agendou: 'Agendamento', double: 'Agendamento', show: 'Show', noshow: 'No-show' }[clean(outcome)] || clean(outcome) || 'Sem resultado');
+const detailedOutcomeLabel = outcome => ({ nao_atendeu: 'Não atendeu', ocupado: 'Ocupado', numero_invalido: 'Número inválido', caixa_postal: 'Caixa postal', sem_interesse: 'Sem interesse', retornar_depois: 'Retornar', interessado: 'Interessado', agendado: 'Agendado' }[clean(outcome)] || 'Pendente');
+const outcomeLabel = outcome => ({ nao_atendeu: 'Não atendida', atendeu: 'Atendida', agendou: 'Agendamento', double: 'Agendamento', show: 'Show', noshow: 'No-show' }[clean(outcome)] || detailedOutcomeLabel(outcome) || 'Sem resultado');
 const normalizeResult = event => {
   if (event.eventType === 'meeting') return event.outcome === 'show' ? 'show' : event.outcome === 'noshow' ? 'noshow' : 'none';
   if (event.outcome === 'agendou' || event.outcome === 'double') return 'scheduled';
@@ -333,41 +457,56 @@ const buildModel = async (query = {}, deps = {}) => {
   const request = deps.request || supabaseFetch;
   const activity = deps.activity ? await deps.activity({ period: 'custom', from: range.fromKey, to: range.toKey, range }) : await loadAdminCommercialSdrActivity({ period: 'custom', from: range.fromKey, to: range.toKey });
   const statsSource = await loadScoredCallStats({ request, fromKey: range.fromKey, toKey: range.toKey });
-  const scoreSource = await loadScoredCalls({ request, fromKey: range.fromKey, toKey: range.toKey, limit: pageSize, offset });
+  const voiceSource = await loadVoiceCalls({ request, fromKey: range.fromKey, toKey: range.toKey });
   const operationalRows = activity.sdrs || [];
+  const voiceCalls = voiceSource.calls.map(call => {
+    const matched = operationalRows.find(row => clean(row.sdrUid || row.uid) && clean(row.sdrUid || row.uid) === clean(call.sdrUid));
+    return matched ? { ...call, sdrName: clean(matched.sdrName || matched.nome) || call.sdrName, sdrEmail: clean(matched.sdrEmail || matched.email) || call.sdrEmail } : call;
+  });
   const rawScoredCalls = attachScoredCallSdrs(statsSource.calls, operationalRows);
-  const pageScoredCalls = attachScoredCallSdrs(scoreSource.calls, operationalRows);
-  const rawCalls = (activity.events || []).map(normalizeCall);
+  const activityCalls = (activity.events || []).filter(event => clean(event.source) !== 'space_phone').map(normalizeCall);
+  const mergedCalls = mergeVoiceAndScoreCalls(voiceCalls, rawScoredCalls);
+  const rawCalls = [...mergedCalls, ...activityCalls].sort((a,b)=>(Date.parse(b.startedAt || `${b.dateKey}T${b.time || '00:00'}:00-03:00`) || 0) - (Date.parse(a.startedAt || `${a.dateKey}T${a.time || '00:00'}:00-03:00`) || 0));
   const calls = filterCalls(rawCalls, query);
+  const pagedCalls = calls.slice(offset, offset + pageSize);
+  const scoredForKpi = rawCalls.filter(c => c.score != null || c.analysisStatus === 'completed');
   const summary = {
     totalCalls: calls.filter(c => c.status !== 'meeting').length,
     connected: calls.filter(c => c.status === 'connected').length,
     answered: calls.filter(c => c.status === 'connected').length,
-    over1m: rawScoredCalls.filter(c => Number(c.durationSeconds) >= 60).length || null, over2m: rawScoredCalls.filter(c => Number(c.durationSeconds) >= 120).length || null, over5m: rawScoredCalls.filter(c => Number(c.durationSeconds) >= 300).length || null, over10m: rawScoredCalls.filter(c => Number(c.durationSeconds) >= 600).length || null,
-    totalDurationSeconds: rawScoredCalls.some(c => c.durationSeconds != null) ? rawScoredCalls.reduce((sum,c)=>sum+number(c.durationSeconds),0) : null,
-    avgDurationSeconds: avg(rawScoredCalls.map(c => c.durationSeconds)),
+    over1m: rawCalls.filter(c => c.status !== 'meeting' && Number(c.durationSeconds) >= 60).length || null,
+    over2m: rawCalls.filter(c => c.status !== 'meeting' && Number(c.durationSeconds) >= 120).length || null,
+    over5m: rawCalls.filter(c => c.status !== 'meeting' && Number(c.durationSeconds) >= 300).length || null,
+    over10m: rawCalls.filter(c => c.status !== 'meeting' && Number(c.durationSeconds) >= 600).length || null,
+    totalDurationSeconds: rawCalls.some(c => c.durationSeconds != null) ? rawCalls.reduce((sum,c)=>sum+number(c.durationSeconds),0) : null,
+    avgDurationSeconds: avg(rawCalls.map(c => c.durationSeconds)),
     scheduled: calls.filter(c => c.outcome === 'scheduled').length,
+    pendingOutcome: calls.filter(c => c.status !== 'meeting' && (!c.sourceOutcome && c.outcome === 'none')).length,
     shows: calls.filter(c => c.outcome === 'show').length,
     noShows: calls.filter(c => c.outcome === 'noshow').length,
     sales: null,
     revenue: null,
     avgTicket: null,
-    analyzedCalls: rawScoredCalls.length,
-    avgScore: avg(rawScoredCalls.map(call => call.score)),
-    scriptAdherence: avg(rawScoredCalls.map(call => call.scriptAdherence)),
+    analyzedCalls: scoredForKpi.length,
+    avgScore: avg(scoredForKpi.map(call => call.score)),
+    scriptAdherence: avg(scoredForKpi.map(call => call.scriptAdherence)),
   };
-  const operationalSdrs = operationalRows.map(row => aggregateSdr(row, rawCalls, rawScoredCalls));
-  const scoreOnlySdrs = [...new Set(rawScoredCalls.filter(call => !call.sdrUid).map(call => call.sdrName).filter(Boolean))]
+  const operationalSdrs = operationalRows.map(row => aggregateSdr(row, rawCalls, scoredForKpi));
+  const scoreOnlySdrs = [...new Set(rawCalls.filter(call => !call.sdrUid).map(call => call.sdrName).filter(Boolean))]
     .filter(name => !operationalSdrs.some(row => namesMatch(row.name, name)))
-    .map(name => aggregateSdr({ sdrUid: name, sdrName: name, sdrEmail: '' }, rawCalls, rawScoredCalls));
+    .map(name => aggregateSdr({ sdrUid: name, sdrName: name, sdrEmail: '' }, rawCalls, scoredForKpi));
   const sdrs = [...operationalSdrs, ...scoreOnlySdrs].filter(row => !query.sdr || query.sdr === 'all' || row.uid === query.sdr || row.name === query.sdr);
   const sdrOptions = [...new Map([...operationalSdrs, ...scoreOnlySdrs].map(row => [row.uid || row.name, { uid: row.uid || row.name, name: row.name || 'SDR', email: row.email || '' }])).values()];
-  const filteredScoredCalls = filterCalls(pageScoredCalls, query);
-  const selectedCall = query.callId ? await loadScoredCallDetail({ request, recordingId: query.callId }).catch(() => null) : null;
+  let selectedCall = null;
+  if (query.callId) {
+    const rawMatch = rawCalls.find(call => [call.id, call.recordingId, call.callId, call.callLegId, call.callSessionId].map(clean).includes(clean(query.callId)));
+    if (rawMatch?.recordingId && clean(rawMatch.recordingId) === clean(query.callId)) selectedCall = await loadScoredCallDetail({ request, recordingId: query.callId }).catch(() => null) || rawMatch;
+    else selectedCall = rawMatch || await loadScoredCallDetail({ request, recordingId: query.callId }).catch(() => null);
+  }
   return {
     ok: true,
     generatedAt: new Date().toISOString(),
-    source: { operational: 'Firestore/sdrActivityEvents', callAnalysis: statsSource.ok ? 'Postgres/sdr_call_scores' : 'sdr_call_scores_unavailable', usesMockData: false, scoreTable: statsSource.table, scoreRows: statsSource.rows.length, scoreColumns: statsSource.columns, scoreError: statsSource.error || scoreSource.error || null },
+    source: { operational: 'Postgres/voice_calls + Firestore/sdrActivityEvents', callAnalysis: statsSource.ok ? 'Postgres/sdr_call_scores' : 'sdr_call_scores_unavailable', usesMockData: false, voiceRows: voiceSource.rows.length, voiceError: voiceSource.error || null, scoreTable: statsSource.table, scoreRows: statsSource.rows.length, scoreColumns: statsSource.columns, scoreError: statsSource.error || null },
     filters: { period: range.period, fromKey: range.fromKey, toKey: range.toKey, sdr: query.sdr || 'all', status: query.status || 'all', score: query.score || 'all', result: query.result || 'all' },
     sdrOptions,
     kpis: { ...summary, callToScheduleRate: pct(summary.scheduled, summary.totalCalls), showRate: pct(summary.shows, summary.scheduled), showToSaleRate: null },
@@ -375,10 +514,10 @@ const buildModel = async (query = {}, deps = {}) => {
     timeline: buildTimeline(calls, range.fromKey, range.toKey),
     sdrs,
     ranking: sdrs,
-    calls: filteredScoredCalls,
+    calls: pagedCalls,
     operationalEvents: calls.slice(0, 100),
-    callsTotal: rawScoredCalls.length,
-    pagination: { page, pageSize, hasNext: pageScoredCalls.length === pageSize, hasPrevious: page > 1 },
+    callsTotal: calls.length,
+    pagination: { page, pageSize, hasNext: offset + pageSize < calls.length, hasPrevious: page > 1 },
     objections: [],
     scorecard: { criteria: [], teamAverage: null, note: 'Aguardando análises IA persistidas.' },
     coaching: sdrs.map(row => ({ sdrUid: row.uid, sdrName: row.name, skill: 'Dados insuficientes', evidence: 'Ainda não há scorecards IA suficientes no período.', recommendation: 'Aguardar processamento das calls pela esteira Telnyx/n8n/IA.' })),
@@ -434,4 +573,4 @@ const createHandler = ({ build = buildModel, authResolver = resolveAdminRequestA
 };
 module.exports = createHandler();
 module.exports.createHandler = createHandler;
-module.exports.__private = { resolveRange, buildModel, normalizeCall, normalizeScoredCall, filterCalls, loadScoredCalls, namesMatch, attachScoredCallSdrs };
+module.exports.__private = { resolveRange, buildModel, normalizeCall, normalizeScoredCall, normalizeVoiceCall, mergeVoiceAndScoreCalls, filterCalls, loadScoredCalls, loadVoiceCalls, namesMatch, attachScoredCallSdrs };

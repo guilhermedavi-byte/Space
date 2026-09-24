@@ -104,3 +104,26 @@ test('SDR panel supports legacy Growth root and auto-loads on Growth initial pan
   assert.ok(dom.window.document.querySelector('[data-sdr-panel]').textContent.includes('Painel SDR'));
   dom.window.close();
 });
+
+test('SDR panel refreshes on Space Phone event and keeps drawer open', async () => {
+  const dom = new JSDOM('<body data-active-panel="admin-sdr"><div data-admin-sdr></div></body>', { runScripts: 'outside-only', url: 'https://space.example', pretendToBeVisual: true });
+  dom.window.HTMLMediaElement.prototype.pause = function () {};
+  dom.window.URL.createObjectURL = blob => `blob:audio-${blob.size}`;
+  dom.window.URL.revokeObjectURL = () => {};
+  let calls = 0;
+  dom.window.fetchWithAuth = async url => {
+    calls += String(url).startsWith('/api/admin-sdr') ? 1 : 0;
+    if (String(url).includes('/audio')) return { ok: true, status: 200, headers: { get: () => 'audio/mpeg' }, blob: async () => new dom.window.Blob(['mp3'], { type: 'audio/mpeg' }) };
+    return { ok: true, json: async () => ({ generatedAt: new Date().toISOString(), kpis: { totalCalls: calls }, sdrs: [], calls: [{ id: 'vc-ui', dateKey: '2026-09-18', time: '12:00', sdrName: 'SDR', phone: '+1', outcomeLabel: 'Agendado', analysisStatus: 'processing' }], selectedCall: calls > 1 ? { id: 'vc-ui', sdrName: 'SDR', outcomeLabel: 'Agendado', transcript: '' } : null }) };
+  };
+  dom.window.eval(fs.readFileSync('admin-sdr.js', 'utf8'));
+  await dom.window.SpaceAdminSdr.open();
+  dom.window.document.querySelector('[data-asdr-call="vc-ui"]').click();
+  await new Promise(resolve => setImmediate(resolve));
+  const drawer = dom.window.document.getElementById('asdr-drawer');
+  dom.window.dispatchEvent(new dom.window.CustomEvent('space-phone:call-updated', { detail: { id: 'vc-ui' } }));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(calls >= 3);
+  assert.equal(dom.window.document.getElementById('asdr-drawer'), drawer);
+  dom.window.close();
+});

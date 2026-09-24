@@ -2,6 +2,8 @@ const crypto = require('node:crypto');
 const { resolveAdminRequestAuth } = require('./admin-request-auth');
 const { requireResolvedAdminPermission } = require('./admin-permissions');
 const { supabaseFetch } = require('./supabase-rest');
+const { commitWritesAsAdmin } = require('./firestore-admin');
+const { PROJECT_ID, encodeFields } = require('./firestore-rest');
 const { normalizePhoneNumber } = require('../../src/space-phone/phone-number');
 
 const OUTCOMES = new Set([
@@ -30,6 +32,28 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 
 const normalizeRole = value => clean(value).toLowerCase();
 const safeText = value => clean(value).slice(0, 240);
 const asRows = result => (Array.isArray(result?.data) ? result.data : []);
+const dateKeyFor = (value, now = new Date()) => {
+  const d = value ? new Date(value) : now;
+  const safe = Number.isNaN(d.getTime()) ? now : d;
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(safe);
+  const get = type => parts.find(part => part.type === type)?.value || '';
+  return { dateKey: `${get('year')}-${get('month')}-${get('day')}`, localTime: `${get('hour')}:${get('minute')}` };
+};
+const outcomeToSdrOutcome = outcome => ({
+  nao_atendeu: 'nao_atendeu',
+  ocupado: 'nao_atendeu',
+  numero_invalido: 'nao_atendeu',
+  caixa_postal: 'nao_atendeu',
+  sem_interesse: 'atendeu',
+  retornar_depois: 'atendeu',
+  interessado: 'atendeu',
+  agendado: 'agendou',
+}[clean(outcome)] || '');
+const firestoreDocName = (collection, id, { allowTestProject = false } = {}) => {
+  const project = PROJECT_ID || (allowTestProject ? 'test-project' : '');
+  if (!project) throw Object.assign(new Error('missing_project_id'), { status: 503 });
+  return `projects/${project}/databases/(default)/documents/${collection}/${encodeURIComponent(id)}`;
+};
 
 const isoOrNull = value => {
   const raw = clean(value);
@@ -469,7 +493,38 @@ const detailModel = async ({ request, id, user, isAdmin }) => {
   return { ok: true, call: normalizeCall(row, findAnalysis(row, analysisMap), crm) };
 };
 
-const updateCall = async ({ request, id, user, isAdmin, patch = {} }) => {
+const syncOutcomeToSdrActivity = async ({ call, outcome, user, now = new Date(), commit = commitWritesAsAdmin } = {}) => {
+  const mappedOutcome = outcomeToSdrOutcome(outcome);
+  const voiceCallId = clean(call?.id);
+  if (!voiceCallId || !mappedOutcome) return { ok: false, skipped: true };
+  const time = clean(call?.endedAt || call?.ended_at || call?.startedAt || call?.started_at || call?.createdAt || call?.created_at) || now.toISOString();
+  const local = dateKeyFor(time, now);
+  const id = `space_phone_call_${voiceCallId}`;
+  const payload = {
+    id,
+    clientRequestId: id,
+    sdrUid: clean(call?.sdrUid || call?.space_user_uid || user?.sub),
+    sdrName: clean(call?.sdrName || call?.space_user_email || user?.name || user?.email || 'SDR'),
+    sdrEmail: clean(call?.sdrEmail || call?.space_user_email || user?.email),
+    dateKey: local.dateKey,
+    localTime: local.localTime,
+    eventType: 'call',
+    outcome: mappedOutcome,
+    sourceOutcome: clean(outcome),
+    source: 'space_phone',
+    sourceVoiceCallId: voiceCallId,
+    phone: clean(call?.toNumber || call?.to_number || call?.number),
+    durationSeconds: number(call?.durationSeconds || call?.duration_seconds),
+    time,
+    createdAt: time,
+    updatedAt: now.toISOString(),
+  };
+  const response = await commit({ writes: [{ update: { name: firestoreDocName('sdrActivityEvents', id, { allowTestProject: commit !== commitWritesAsAdmin }), fields: encodeFields(payload).fields } }] });
+  if (!response.ok) throw Object.assign(new Error('sdr_activity_bridge_failed'), { status: response.status || 500 });
+  return { ok: true, id, outcome: mappedOutcome };
+};
+
+const updateCall = async ({ request, id, user, isAdmin, patch = {}, bridgeCommit } = {}) => {
   const current = (await detailModel({ request, id, user, isAdmin })).call;
   const body = {};
   if (Object.prototype.hasOwnProperty.call(patch, 'notes')) body.notes = clean(patch.notes).slice(0, 5000);
@@ -486,7 +541,17 @@ const updateCall = async ({ request, id, user, isAdmin, patch = {} }) => {
   if (Object.prototype.hasOwnProperty.call(patch, 'endedReason')) body.ended_reason = clean(patch.endedReason).slice(0, 120) || null;
   if (!Object.keys(body).length) return { ok: true, call: current };
   const rows = asRows(await request(`/voice_calls?id=eq.${encodeURIComponent(current.id)}`, { method: 'PATCH', body, timeoutMs: 12000 }));
-  return { ok: true, call: normalizeCall(rows[0] || { ...current, ...body }) };
+  const call = normalizeCall(rows[0] || { ...current, ...body });
+  let bridge = null;
+  if (Object.prototype.hasOwnProperty.call(body, 'outcome') && body.outcome && (bridgeCommit || PROJECT_ID)) {
+    try {
+      bridge = await syncOutcomeToSdrActivity({ call, outcome: body.outcome, user, commit: bridgeCommit || commitWritesAsAdmin });
+    } catch (error) {
+      console.error('[space-phone] sdr activity bridge failed', { code: error?.message || 'bridge_failed', status: error?.status || 500 });
+      bridge = { ok: false, error: 'sdr_activity_bridge_failed' };
+    }
+  }
+  return { ok: true, call, bridge };
 };
 
 module.exports = {
@@ -505,6 +570,8 @@ module.exports = {
   rangeForPeriod,
   sendJson,
   summarize,
+  syncOutcomeToSdrActivity,
+  outcomeToSdrOutcome,
   updateCall,
   updateVoiceCall,
   voiceCallSelect,

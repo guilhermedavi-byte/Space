@@ -38,7 +38,7 @@
     detailTab: "summary",
     detailLoading: false,
     popover: "",
-    postCall: { id: "", polls: 0, status: "idle", call: null },
+    postCall: { id: "", polls: 0, status: "idle", call: null, savedOutcome: "", saveStatus: "", skipped: false },
     noteTimers: new Map(),
     lastTimerText: "",
   };
@@ -165,7 +165,10 @@
   const renderPostCall = () => {
     const c = state.postCall.call || state.detail?.call || {};
     const ready = aiReady(c);
-    return `<section class="sphone-pane"><div class="sphone-coach-title"><h2>AI Review</h2><span class="sphone-badge ${ready ? "ok" : "warn"}">${ready ? "Análise pronta" : "Processando análise"}</span></div><div class="sphone-context"><div class="sphone-card"><strong>Resultado</strong><div class="sphone-outcomes">${OUTCOMES.map(([value,label]) => `<button class="sphone-btn sphone-outcome" data-sp-outcome="${value}">${label}</button>`).join("")}</div><input class="sphone-input" data-sp-callback type="datetime-local" /></div><div class="sphone-card">${ready ? `<div class="sphone-post-grid"><div><span class="sphone-muted">Score IA</span><div class="sphone-ai-score">${esc(c.score ?? "-")}</div></div><div><span class="sphone-muted">Status</span><p>${c.transcriptionAvailable ? "Transcrição pronta" : "Análise disponível"}</p></div></div><p>${esc(analysisText(c.analysis, ["summary", "resumo", "call_summary"]) || "Análise pronta no pipeline IA.")}</p><p class="sphone-muted">${esc(analysisText(c.analysis, ["recommendation", "recommendations", "main_improvement", "principal_melhoria"]) || "Abra a análise completa para scorecard e transcrição.")}</p><button class="sphone-btn" data-sp-detail="${esc(c.id || state.call.id)}">Ver análise completa</button>` : `<p class="sphone-muted">Buscando correlação em sdr_call_scores por call_leg_id/call_session_id. A tela atualiza por alguns ciclos sem bloquear o telefone.</p>`}</div></div></section>`;
+    const quick = new Set(["nao_atendeu", "agendado", "retornar_depois", "sem_interesse"]);
+    const options = OUTCOMES.map(([value,label]) => `<button class="sphone-btn sphone-outcome ${state.postCall.savedOutcome === value ? "primary" : ""}" data-sp-outcome="${value}">${label}</button>`).join("");
+    const status = state.postCall.saveStatus ? `<span class="sphone-badge ${state.postCall.saveStatus === "Salvo ✓" ? "ok" : "warn"}">${esc(state.postCall.saveStatus)}</span>` : "";
+    return `<section class="sphone-pane"><div class="sphone-coach-title"><h2>Wrap-up</h2>${status || `<span class="sphone-badge ${ready ? "ok" : "warn"}">${ready ? "IA pronta" : "IA processando"}</span>`}</div><div class="sphone-context"><div class="sphone-card"><strong>Como terminou esta ligação?</strong><p class="sphone-muted">Marque o resultado comercial para atualizar o Painel SDR agora.</p><div class="sphone-outcomes">${OUTCOMES.filter(([v])=>quick.has(v)).map(([value,label]) => `<button class="sphone-btn sphone-outcome ${state.postCall.savedOutcome === value ? "primary" : ""}" data-sp-outcome="${value}">${label}</button>`).join("")}</div><details><summary class="sphone-muted" style="cursor:pointer">Mais opções</summary><div class="sphone-outcomes" style="margin-top:10px">${options}</div></details><input class="sphone-input" data-sp-callback type="datetime-local" /><div class="sphone-call-actions"><button class="sphone-btn ghost" data-sp-skip-outcome>Pular por agora</button>${state.postCall.savedOutcome || state.postCall.skipped ? `<button class="sphone-btn primary" data-sp-reset-call>Nova ligação</button>` : ""}</div></div><div class="sphone-card">${ready ? `<div class="sphone-post-grid"><div><span class="sphone-muted">Score IA</span><div class="sphone-ai-score">${esc(c.score ?? "-")}</div></div><div><span class="sphone-muted">Status</span><p>${c.transcriptionAvailable ? "Transcrição pronta" : "Análise disponível"}</p></div></div><p>${esc(analysisText(c.analysis, ["summary", "resumo", "call_summary"]) || "Análise pronta no pipeline IA.")}</p><button class="sphone-btn" data-sp-detail="${esc(c.id || state.call.id)}">Ver análise completa</button>` : `<p class="sphone-muted">IA e gravação serão anexadas depois à mesma ligação. Você já pode marcar o resultado.</p>`}</div></div></section>`;
   };
 
   const renderRight = () => {
@@ -267,7 +270,7 @@
   };
   const pollPostCall = async (id) => {
     if (!id || state.postCall.id === id && state.postCall.status === "ready") return;
-    state.postCall = { id, polls: 0, status: "processing", call: null };
+    state.postCall = { ...state.postCall, id, polls: 0, status: "processing", call: state.postCall.call || null };
     const delays = [5000, 10000, 20000, 40000];
     const run = async () => {
       if (state.postCall.id !== id || state.postCall.status === "ready" || state.postCall.polls >= delays.length) return;
@@ -285,17 +288,24 @@
     const previous = state.call.status;
     const context = snap.context || {};
     const record = snap.callRecord || {};
+    if (snap.status === "idle" && POST.has(state.call.status)) return;
     if (snap.status === "idle" && ACTIVE.has(state.call.status) && !record.id && !context.phoneNumber) {
       state.call = { ...state.call, muted: Boolean(snap.muted), held: Boolean(snap.held), error: snap.error || "" };
       return;
     }
     state.call = { ...state.call, status: snap.status === "idle" ? "ready" : snap.held ? "hold" : (snap.status || state.call.status || "ready"), number: context.phoneNumber || record.to_number || state.call.number || "", name: context.leadName || record.lead_name || state.call.name || "", muted: Boolean(snap.muted), held: Boolean(snap.held), id: record.id || state.call.id || "", callerId: record.from_number || state.call.callerId || "", origin: context.source || state.call.origin || "Discador", error: snap.error || "" };
-    if (!POST.has(previous) && POST.has(state.call.status) && state.call.id) pollPostCall(state.call.id);
+    if (!POST.has(previous) && POST.has(state.call.status) && state.call.id) { state.postCall = { ...state.postCall, id: state.call.id, status: "processing" }; pollPostCall(state.call.id); }
   };
   const saveCallPatch = async (id, patch) => {
     if (!id) return;
-    try { const response = await api({}, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...patch }) }); if (state.postCall.id === id) state.postCall.call = response.call || state.postCall.call; await load({ silent: true }); }
-    catch (error) { state.error = error.message || "Não foi possível salvar."; render(); }
+    const isOutcome = Object.prototype.hasOwnProperty.call(patch, "outcome");
+    if (isOutcome) { state.postCall.savedOutcome = patch.outcome || ""; state.postCall.saveStatus = patch.outcome ? "Salvando..." : "Pendente"; render(); }
+    try {
+      const response = await api({}, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...patch }) });
+      if (state.postCall.id === id) state.postCall.call = response.call || state.postCall.call;
+      if (isOutcome) { state.postCall.saveStatus = patch.outcome ? "Salvo ✓" : "Pendente"; state.postCall.skipped = !patch.outcome; try { window.dispatchEvent(new CustomEvent("space-phone:call-updated", { detail: { id, outcome: patch.outcome || null } })); } catch {} }
+      await load({ silent: true });
+    } catch (error) { state.error = error.message || "Não foi possível salvar."; if (isOutcome) state.postCall.saveStatus = "Erro ao salvar"; render(); }
   };
 
   document.addEventListener("click", async (event) => {
@@ -303,7 +313,7 @@
       state.popover = "";
       render();
     }
-    const t = event.target.closest("[data-sp-key],[data-sp-backspace],[data-sp-call],[data-sp-fill],[data-sp-refresh],[data-sp-period],[data-sp-detail],[data-sp-close-detail],[data-sp-mute],[data-sp-hold],[data-sp-hangup],[data-sp-popover],[data-sp-dtmf-toggle],[data-sp-dtmf],[data-sp-outcome],[data-sp-reset-call],[data-sp-tab],[data-sp-test-device]");
+    const t = event.target.closest("[data-sp-key],[data-sp-backspace],[data-sp-call],[data-sp-fill],[data-sp-refresh],[data-sp-period],[data-sp-detail],[data-sp-close-detail],[data-sp-mute],[data-sp-hold],[data-sp-hangup],[data-sp-popover],[data-sp-dtmf-toggle],[data-sp-dtmf],[data-sp-outcome],[data-sp-skip-outcome],[data-sp-reset-call],[data-sp-tab],[data-sp-test-device]");
     if (!t || !root()) return;
     if (t.matches("[data-sp-key]")) { state.dial += t.dataset.spKey; normalize(); return; }
     if (t.matches("[data-sp-backspace]")) { state.dial = state.dial.slice(0, -1); normalize(); return; }
@@ -319,7 +329,8 @@
     if (t.matches("[data-sp-popover]")) { state.popover = state.popover === t.dataset.spPopover ? "" : t.dataset.spPopover; render(); return; }
     if (t.matches("[data-sp-dtmf]")) { await callMethod("dtmf", t.dataset.spDtmf || ""); return; }
     if (t.matches("[data-sp-outcome]")) { await saveCallPatch(state.detail?.call?.id || state.postCall.id || state.call.id, { outcome: t.dataset.spOutcome, callbackAt: root().querySelector("[data-sp-callback]")?.value || null }); return; }
-    if (t.matches("[data-sp-reset-call]")) { state.call = { ...state.call, status: "ready", number: "", name: "", id: "", error: "" }; state.postCall = { id: "", polls: 0, status: "idle", call: null }; render(); return; }
+    if (t.matches("[data-sp-skip-outcome]")) { await saveCallPatch(state.detail?.call?.id || state.postCall.id || state.call.id, { outcome: "" }); return; }
+    if (t.matches("[data-sp-reset-call]")) { state.call = { ...state.call, status: "ready", number: "", name: "", id: "", error: "" }; state.postCall = { id: "", polls: 0, status: "idle", call: null, savedOutcome: "", saveStatus: "", skipped: false }; render(); return; }
     if (t.matches("[data-sp-tab]")) { state.detailTab = t.dataset.spTab || "summary"; render(); return; }
     if (t.matches("[data-sp-test-device]")) { await requestMic(); render(); return; }
   });

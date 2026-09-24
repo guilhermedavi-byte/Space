@@ -26,6 +26,7 @@
   const maskPhone = phone => String(phone || '').replace(/(\+?\d{1,3})(\d{3,})(\d{4})$/, (_, a, mid, z) => `${a} ${mid.slice(0, 3)} *** ${z}`) || 'Telefone não informado';
   const compactDate = c => `${date(c.dateKey)}${c.time ? ` • ${esc(c.time)}` : ''}`;
   const audioSrc = c => c?.recordingId ? `/api/admin/sdr/calls/${encodeURIComponent(c.recordingId)}/audio` : '';
+  const resultLabel = c => c?.outcomeLabel && c.outcomeLabel !== '—' ? c.outcomeLabel : 'Pendente';
   const asArray = v => Array.isArray(v) ? v : v ? [v] : [];
   const get = (obj, names, fallback = '') => {
     for (const name of names) if (obj && obj[name] != null && String(obj[name]).trim() !== '') return obj[name];
@@ -58,7 +59,7 @@
     <label class="asdr-field"><span>SDR</span><select class="asdr-input" data-asdr-filter="sdr"><option value="all">Todos</option>${(data.sdrOptions||[]).map(s=>`<option value="${esc(s.uid)}" ${state.filters.sdr===s.uid?'selected':''}>${esc(s.name)}</option>`).join('')}</select></label>
     <label class="asdr-field"><span>Status</span><select class="asdr-input" data-asdr-filter="status">${[['all','Todas'],['connected','Conectadas'],['over1m','> 1 minuto'],['over5m','> 5 minutos']].map(([v,l])=>`<option value="${v}" ${state.filters.status===v?'selected':''}>${l}</option>`).join('')}</select></label>
     <label class="asdr-field"><span>Nota IA</span><select class="asdr-input" data-asdr-filter="score">${[['all','Todas'],['90','90–100'],['80','80–89'],['70','70–79'],['60','60–69'],['lt60','Abaixo de 60']].map(([v,l])=>`<option value="${v}" ${state.filters.score===v?'selected':''}>${l}</option>`).join('')}</select></label>
-    <label class="asdr-field"><span>Resultado</span><select class="asdr-input" data-asdr-filter="result">${[['all','Todos'],['scheduled','Agendamento'],['show','Show'],['noshow','No-show'],['none','Sem resultado']].map(([v,l])=>`<option value="${v}" ${state.filters.result===v?'selected':''}>${l}</option>`).join('')}</select></label>
+    <label class="asdr-field"><span>Resultado</span><select class="asdr-input" data-asdr-filter="result">${[['all','Todos'],['scheduled','Agendamento'],['show','Show'],['noshow','No-show'],['none','Pendente']].map(([v,l])=>`<option value="${v}" ${state.filters.result===v?'selected':''}>${l}</option>`).join('')}</select></label>
   </div>`;
 
   const renderMainKpis = d => {
@@ -80,7 +81,7 @@
 
   const renderCalls = (d, home = false) => {
     const pag = d.pagination || {};
-    return section(home ? 'Últimas calls analisadas' : 'Ligações', '', `<div class="asdr-card"><div class="asdr-table-wrap"><table class="asdr-table"><thead><tr><th>Data</th><th>SDR</th><th>Telefone</th><th>Duração</th><th>Nota IA</th><th>Status IA</th><th>Análise</th></tr></thead><tbody>${(d.calls||[]).slice(0, home ? 10 : 100).map(c=>`<tr><td>${date(c.dateKey)} ${esc(c.time)}</td><td>${esc(c.sdrName)}</td><td>${esc(c.toNumber||c.phone||'—')}</td><td>${duration(c.durationSeconds)}</td><td>${score(c.score)}</td><td><span class="asdr-badge ${c.analysisStatus==='completed'?'ok':c.analysisStatus==='error'?'bad':'warn'}">${esc(c.analysisStatus==='completed'?'Concluída':c.analysisStatus==='transcribing'?'Transcrevendo':c.analysisStatus==='analyzing'?'Analisando':c.analysisStatus||'Pendente')}</span></td><td><button class="asdr-btn" data-asdr-call="${esc(c.recordingId||c.id)}">Ver análise</button></td></tr>`).join('') || '<tr><td colspan="7">Nenhuma ligação analisada encontrada.</td></tr>'}</tbody></table></div>${home?'<div style="margin-top:14px"><button class="asdr-btn primary" data-asdr-tab="calls">Ver todas as ligações</button></div>':`<div class="asdr-actions" style="margin-top:14px;justify-content:space-between"><span class="asdr-muted">Página ${n(pag.page||state.page)} · ${n(d.callsTotal||0)} registros no período</span><span><button class="asdr-btn" data-asdr-page="prev" ${pag.hasPrevious?'':'disabled'}>Anterior</button> <button class="asdr-btn" data-asdr-page="next" ${pag.hasNext?'':'disabled'}>Próxima</button></span></div>`}</div>`);
+    return section(home ? 'Últimas calls analisadas' : 'Ligações', '', `<div class="asdr-card"><div class="asdr-table-wrap"><table class="asdr-table"><thead><tr><th>Data</th><th>SDR</th><th>Telefone</th><th>Duração</th><th>Resultado</th><th>Nota IA</th><th>Status IA</th><th>Análise</th></tr></thead><tbody>${(d.calls||[]).slice(0, home ? 10 : 100).map(c=>`<tr><td>${date(c.dateKey)} ${esc(c.time)}</td><td>${esc(c.sdrName)}</td><td>${esc(c.toNumber||c.phone||'—')}</td><td>${duration(c.durationSeconds)}</td><td>${esc(resultLabel(c))}</td><td>${score(c.score)}</td><td><span class="asdr-badge ${c.analysisStatus==='completed'?'ok':c.analysisStatus==='error'?'bad':'warn'}">${esc(c.analysisStatus==='completed'?'Concluída':c.analysisStatus==='transcribing'?'Transcrevendo':c.analysisStatus==='analyzing'?'Analisando':c.analysisStatus||'Pendente')}</span></td><td><button class="asdr-btn" data-asdr-call="${esc(c.recordingId||c.id)}">Ver análise</button></td></tr>`).join('') || '<tr><td colspan="8">Nenhuma ligação analisada encontrada.</td></tr>'}</tbody></table></div>${home?'<div style="margin-top:14px"><button class="asdr-btn primary" data-asdr-tab="calls">Ver todas as ligações</button></div>':`<div class="asdr-actions" style="margin-top:14px;justify-content:space-between"><span class="asdr-muted">Página ${n(pag.page||state.page)} · ${n(d.callsTotal||0)} registros no período</span><span><button class="asdr-btn" data-asdr-page="prev" ${pag.hasPrevious?'':'disabled'}>Anterior</button> <button class="asdr-btn" data-asdr-page="next" ${pag.hasNext?'':'disabled'}>Próxima</button></span></div>`}</div>`);
   };
 
   const renderCoaching = d => section('Coaching', 'Insights ficam abaixo para não poluir a visão principal.', `<div class="asdr-grid">${(d.coaching||[]).map(c=>`<article class="asdr-card"><h3>${esc(c.sdrName)}</h3><p><span class="asdr-label">Foco</span>${esc(c.skill)}</p><p class="asdr-muted">${esc(c.recommendation)}</p></article>`).join('') || '<div class="asdr-empty">Aguardando análises IA suficientes.</div>'}</div>`);
@@ -217,13 +218,15 @@
   };
   const syncDrawer = d => {
     if (!d.selectedCall) return removeDrawer();
+    const key = d.selectedCall.id || d.selectedCall.recordingId || d.selectedCall.callId || '';
     const existing = document.getElementById('asdr-drawer');
-    if (existing?.dataset.recordingId === d.selectedCall.recordingId) return;
+    if (existing?.dataset.callKey === key) { state.data.selectedCall = d.selectedCall; return updateDetailBody(); }
     removeDrawer();
     drawerRestore = { body: document.body.style.overflow, html: document.documentElement.style.overflow, focus: document.activeElement };
     document.body.insertAdjacentHTML('beforeend', renderDrawer(d));
     const drawer = document.getElementById('asdr-drawer');
-    drawer.dataset.recordingId = d.selectedCall.recordingId;
+    drawer.dataset.callKey = key;
+    drawer.dataset.recordingId = d.selectedCall.recordingId || '';
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
     drawer.querySelector('button[data-asdr-close]')?.focus({ preventScroll: true });
@@ -279,8 +282,8 @@
     });
   };
 
-  const load = async () => { state.loading = true; state.error = ''; render(); try { state.data = await api(); } catch (e) { state.error = e.message || 'Erro'; } finally { state.loading = false; render(); } };
-  const exportCsv = () => { const rows = state.data?.calls || []; const csv = [['data','sdr','telefone','duracao','nota_ia','status_ia'].join(','), ...rows.map(c=>[c.dateKey,c.sdrName,c.toNumber||c.phone||'',c.durationSeconds??'',c.score??'',c.analysisStatus??''].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','))].join('\n'); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='sdr-calls-analisadas.csv'; a.click(); URL.revokeObjectURL(a.href); };
+  const load = async ({ silent = false } = {}) => { if (!silent) { state.loading = true; render(); } state.error = ''; try { state.data = await api(); } catch (e) { state.error = e.message || 'Erro'; } finally { state.loading = false; render(); } };
+  const exportCsv = () => { const rows = state.data?.calls || []; const csv = [['data','sdr','telefone','duracao','resultado','nota_ia','status_ia'].join(','), ...rows.map(c=>[c.dateKey,c.sdrName,c.toNumber||c.phone||'',c.durationSeconds??'',resultLabel(c),c.score??'',c.analysisStatus??''].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','))].join('\n'); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='sdr-calls-analisadas.csv'; a.click(); URL.revokeObjectURL(a.href); };
 
   document.addEventListener('click', e => {
     if (e.target.hasAttribute?.('data-asdr-backdrop')) return closeDrawer();
@@ -300,7 +303,10 @@
     if (t.hasAttribute('data-asdr-copy')) navigator.clipboard?.writeText(state.data?.selectedCall?.transcript || '').catch(() => {});
   });
   document.addEventListener('change', e => { const t = e.target.closest('[data-asdr-filter]'); if (!t) return; state.filters[t.getAttribute('data-asdr-filter')] = t.value; state.page = 1; state.callId = ''; state.sdrId = ''; load(); });
+  const shouldAutoRefresh = () => document.visibilityState === 'visible' && document.body.dataset.activePanel === 'admin-sdr' && root();
+  window.addEventListener('space-phone:call-updated', () => { if (root()) load({ silent: true }); });
+  setInterval(() => { if (shouldAutoRefresh()) load({ silent: true }); }, 4000);
 
-  window.SpaceAdminSdr = { open: load, render };
+  window.SpaceAdminSdr = { open: load, render, state };
   if (['admin-sdr', 'growth'].includes(document.body.dataset.initialPanel)) load();
 })();
