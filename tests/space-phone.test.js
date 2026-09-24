@@ -4,6 +4,43 @@ const { Readable } = require("node:stream");
 const { createHandler, __private } = require("../api/space-phone");
 const { createSessionForUser } = require("../_lib/session");
 
+
+const invokeAppRoute = async ({ pathParam, sessionUser, firestoreUser }) => {
+  const appPath = require.resolve("../api/app");
+  const firestoreAdminPath = require.resolve("../api/_lib/firestore-admin");
+  const previousApp = require.cache[appPath];
+  const previousFirestoreAdmin = require.cache[firestoreAdminPath];
+  require.cache[firestoreAdminPath] = {
+    id: firestoreAdminPath,
+    filename: firestoreAdminPath,
+    loaded: true,
+    exports: { getDocumentAsAdmin: async () => firestoreUser },
+  };
+  delete require.cache[appPath];
+  const appHandler = require("../api/app");
+  const req = Readable.from([]);
+  req.method = "GET";
+  req.url = `/api/app?path=${encodeURIComponent(pathParam)}`;
+  req.headers = { host: "localhost", cookie: "space_session=" + createSessionForUser(sessionUser).token };
+  let body = "";
+  const res = { statusCode: 200, setHeader() {}, end(v = "") { body += v; } };
+  try {
+    await appHandler(req, res);
+    return { statusCode: res.statusCode, body };
+  } finally {
+    if (previousApp) require.cache[appPath] = previousApp;
+    else delete require.cache[appPath];
+    if (previousFirestoreAdmin) require.cache[firestoreAdminPath] = previousFirestoreAdmin;
+    else delete require.cache[firestoreAdminPath];
+  }
+};
+
+const extractEmbeddedSession = (html) => {
+  const match = String(html || "").match(/window\.__SPACE_SESSION__ = (\{[\s\S]*?\});/);
+  assert.ok(match, "embedded session exists");
+  return JSON.parse(match[1]);
+};
+
 const invoke = async (handler, { method = "GET", url = "/api/space-phone", body } = {}) => {
   const req = body ? Readable.from([JSON.stringify(body)]) : Readable.from([]);
   req.method = method;
@@ -128,26 +165,39 @@ test("space phone route boots the dedicated admin panel and script", async () =>
   }
 });
 
-test("space phone route boots the Growth equivalent panel", async () => {
-  const appPath = require.resolve("../api/app");
-  const previousApp = require.cache[appPath];
-  delete require.cache[appPath];
-  const appHandler = require("../api/app");
-  const req = Readable.from([]);
-  req.method = "GET";
-  req.url = "/api/app?path=growth/comercial/pre-vendas/ligacoes";
-  req.headers = { host: "localhost", cookie: "space_session=" + createSessionForUser({ id: "growth-1", role: "growth", name: "SDR", email: "sdr@example.com", commercialRoles: ["sdr"] }).token };
-  let body = "";
-  const res = { statusCode: 200, setHeader() {}, end(v = "") { body += v; } };
-  try {
-    await appHandler(req, res);
-    assert.equal(res.statusCode, 200);
-    assert.match(body, /data-initial-panel="space-phone"/);
-    assert.match(body, /data-space-phone/);
-  } finally {
-    if (previousApp) require.cache[appPath] = previousApp;
-    else delete require.cache[appPath];
-  }
+test("space phone route boots the Growth equivalent panel with Firestore commercial roles", async () => {
+  const result = await invokeAppRoute({
+    pathParam: "growth/comercial/pre-vendas/ligacoes",
+    sessionUser: { id: "growth-1", role: "growth", name: "SDR", email: "sdr@example.com" },
+    firestoreUser: { id: "growth-1", tipo: "growth", role: "growth", ativo: true, active: true, commercialRoles: ["sdr"] },
+  });
+  assert.equal(result.statusCode, 200);
+  assert.match(result.body, /data-initial-panel="space-phone"/);
+  assert.match(result.body, /data-space-phone/);
+  assert.deepEqual(extractEmbeddedSession(result.body).commercialRoles, ["sdr"]);
+});
+
+test("Growth SDR panel route boots admin-sdr and preserves closer plus SDR roles", async () => {
+  const result = await invokeAppRoute({
+    pathParam: "growth/comercial/pre-vendas/painel-sdr",
+    sessionUser: { id: "matheus", role: "growth", name: "Matheus", email: "matheus@example.com", commercialRoles: [] },
+    firestoreUser: { id: "matheus", tipo: "growth", role: "growth", ativo: true, active: true, commercialRoles: ["closer", "sdr"] },
+  });
+  assert.equal(result.statusCode, 200);
+  assert.match(result.body, /data-initial-panel="admin-sdr"/);
+  assert.match(result.body, /data-admin-sdr/);
+  assert.deepEqual(extractEmbeddedSession(result.body).commercialRoles, ["closer", "sdr"]);
+});
+
+test("Growth closer-only session is hydrated from Firestore without SDR role", async () => {
+  const result = await invokeAppRoute({
+    pathParam: "growth/comercial/crm",
+    sessionUser: { id: "closer-1", role: "growth", name: "Closer", email: "closer@example.com", commercialRoles: ["sdr"] },
+    firestoreUser: { id: "closer-1", tipo: "growth", role: "growth", ativo: true, active: true, commercialRoles: ["closer"] },
+  });
+  assert.equal(result.statusCode, 200);
+  assert.match(result.body, /data-initial-panel="native-crm"/);
+  assert.deepEqual(extractEmbeddedSession(result.body).commercialRoles, ["closer"]);
 });
 
 test("space phone correlates post-call AI by from/to/time/duration fallback and self-heals IDs", async () => {

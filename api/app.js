@@ -11,6 +11,7 @@ const {
   permissionForAdminPanel,
 } = require("./_lib/admin-permissions");
 const { isUserActive } = require("../_lib/user-status");
+const { normalizeCommercialRoles, normalizePlatformRole } = require("./_lib/commercial-permissions");
 
 const ROLE_TO_SLUG = {
   student: "aluno",
@@ -89,7 +90,8 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
     if (sub === "comercial") {
       if (segments[2] === "crm") return { panel: "native-crm" };
       if (segments[2] === "pre-vendas" && segments[3] === "ligacoes") return { panel: "space-phone" };
-      if (["painel-sdr", "scripts-vendas", "objecoes", "training"].includes(segments[2])) return { panel: "growth" };
+      if (segments[2] === "pre-vendas" && segments[3] === "painel-sdr") return { panel: "admin-sdr" };
+      if (["painel-sdr", "scripts-vendas", "objecoes", "training"].includes(segments[2])) return { panel: segments[2] === "painel-sdr" ? "admin-sdr" : "growth" };
       return { panel: "growth-dashboard" };
     }
     if (sub === "crm") return { panel: "native-crm" };
@@ -235,6 +237,25 @@ module.exports = async (req, res) => {
     adminPermissionsVersion: Number(session.adminPermissionsVersion || 0) || 0,
   };
 
+  const userBasePath = roleToBasePath(user.role);
+
+  if (String(user.role || "") === "growth") {
+    try {
+      const row = await getDocumentAsAdmin(`users/${encodeURIComponent(user.id)}`);
+      if (!row || !isUserActive(row) || normalizePlatformRole(row?.tipo || row?.role || row?.type) !== "growth") {
+        res.statusCode = 403;
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.end("Acesso Growth indisponível.");
+        return;
+      }
+      user.commercialRoles = normalizeCommercialRoles(row.commercialRoles);
+    } catch (error) {
+      sendRedirect(res, userBasePath);
+      return;
+    }
+  }
+
   if (user.role === 'student' && require('./_lib/retention-flags').isRetentionV2Enabled()) {
     try {
       const service = require('./_lib/student-lifecycle');
@@ -249,7 +270,6 @@ module.exports = async (req, res) => {
       return;
     }
   }
-  const userBasePath = roleToBasePath(user.role);
 
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/app", `https://${host}`);
