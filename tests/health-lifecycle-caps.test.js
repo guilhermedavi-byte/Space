@@ -21,3 +21,4 @@ test('UI prioriza aviso e explica raw/effective com responsável e próxima aç�
  await new Promise(resolve=>setImmediate(resolve));const text=dom.window.document.body.textContent;
  assert.match(text,/Prioridade máxima — Aviso prévio/);assert.match(text,/Score observado: 90/);assert.match(text,/Health efetivo: 10/);assert.match(text,/Operador teste/);assert.match(text,/Contato amanhã/);dom.window.close();
 });
+test('contrato ativo paralelo não esconde aviso na prioridade operacional',()=>{const {operationalLifecycle}=require('../api/_lib/retention-health-lifecycle');assert.equal(operationalLifecycle([{lifecycle_status:'active'},{lifecycle_status:'cancellation_scheduled',last_active_date:'2026-10-31'}],now,'active'),'notice_period');});

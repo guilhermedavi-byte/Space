@@ -2,7 +2,7 @@
 const { supabaseFetch } = require('./supabase-rest');
 const { listCollectionAsAdmin } = require('./firestore-admin');
 const H = require('./retention-health-engine');
-const {applyLifecycleHealth}=require('./retention-health-lifecycle');
+const {applyLifecycleHealth,operationalLifecycle}=require('./retention-health-lifecycle');
 async function all(table, query = '', order = 'id') {
   const rows = [];
   for (let offset=0;offset<100000;offset+=1000) {
@@ -80,7 +80,7 @@ async function collectHealth(now = new Date()) {
     const chargeIds=new Set(charges.map(row=>`${row.connection_id}:${row.asaas_payment_id}`));
     const paid=(payments||[]).filter(row=>chargeIds.has(`${row.connection_id}:${row.asaas_payment_id}`) && ['RECEIVED','CONFIRMED','RECEIVED_IN_CASH'].includes(row.status)).sort((a,b)=>String(b.confirmed_date||b.payment_date).localeCompare(String(a.confirmed_date||a.payment_date)))[0];
     if(paid) { signals.last_payment_at=paid.confirmed_date||paid.payment_date; signals.last_payment_amount=paid.value; }
-    const score=applyLifecycleHealth(H.scoreHealth(signals,day),{lifecycle:student.lifecycle,events:lifecycleEvents.filter(e=>e.student_id===student.student_id),occurrences:signals.occurrences,on:now.toISOString()});
+    const score=applyLifecycleHealth(H.scoreHealth(signals,day),{lifecycle:operationalLifecycle(subscriptions.filter(s=>student.canonical_ids.includes(s.student_id)),day,student.lifecycle),events:lifecycleEvents.filter(e=>e.student_id===student.student_id),occurrences:signals.occurrences,on:now.toISOString()});
     const related=(cases||[]).filter(row=>student.canonical_ids.includes(row.student_id));
     if(cases) {
       monitored.push('cancellation_request_without_contact','notice_near_end');
@@ -121,7 +121,7 @@ async function readIntelligence(month) {
     const lifecycle=subs.length?require('../../assets/student-lifecycle').getLifecycleStatus({subscriptions:subs},day):base.lifecycle;
     // Reapply against raw dimensions, never compound yesterday's operational cap.
     const observed=H.scoreHealth(base.signals||{},latest.snapshot_date);
-    const live=applyLifecycleHealth(observed,{lifecycle,events:lifecycleEvents.filter(e=>e.student_id===row.student_id),occurrences:occurrences.filter(o=>o.student_id===row.student_id)});
+    const live=applyLifecycleHealth(observed,{lifecycle:operationalLifecycle(subs,day,lifecycle),events:lifecycleEvents.filter(e=>e.student_id===row.student_id),occurrences:occurrences.filter(o=>o.student_id===row.student_id)});
     const caseNow=cases.filter(c=>(base.canonical_ids||[]).includes(c.student_id)).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at)))[0];
     const next=(currentActivities||[]).filter(t=>(t.studentId||t.alunoId||t.firestore_student_id)===row.student_id&&!t.isArchived&&t.status!=='Feito').sort((a,b)=>String(a.prazo||'9999').localeCompare(String(b.prazo||'9999')))[0];
     const end=subs.filter(s=>['cancellation_scheduled','notice_period'].includes(s.lifecycle_status)).map(s=>s.last_active_date).filter(Boolean).sort()[0];

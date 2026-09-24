@@ -3,6 +3,10 @@ const {daysBetween,tier}=require('./retention-health-engine');
 const notice=s=>['cancellation_scheduled','notice_period'].includes(String(s||'').toLowerCase());
 const state=s=>String(s||'').toLowerCase();
 const rank={unknown:-1,healthy:0,attention:1,risk:2,critical:3};
+function operationalLifecycle(subscriptions,on,fallback) {
+ const statuses=subscriptions.map(s=>require('../../assets/student-lifecycle').getLifecycleStatus(s,on));
+ return statuses.some(notice)?'notice_period':statuses.includes('cancellation_requested')?'cancellation_requested':fallback;
+}
 function lifecycleContext(events=[],occurrences=[],on=new Date().toISOString()) {
  const ordered=events.filter(e=>e.occurred_at<=on).slice().sort((a,b)=>a.occurred_at.localeCompare(b.occurred_at)||String(a.id).localeCompare(String(b.id)));
  let recovery=null,latestRequest=null;
@@ -43,10 +47,10 @@ function applyLifecycleHealth(score,{lifecycle,events=[],occurrences=[],on=new D
  return {...score,health_score_effective:effective,health_tier_effective:effectiveTier,
   health_score:effective,health_tier:effectiveTier,health_cap:cap,health_cap_reason:reason,
   health_recovery_started_at:recovery?.started_at||null,health_recovery_type:recovery?.type||null,health_recovery_day:age,
-  operational_priority:priority,
+  operational_priority:priority,health_lifecycle:s,
   pre_cancellation_health_score:pre?.pre_cancellation_health_score??null,
   pre_cancellation_health_tier:pre?.pre_cancellation_health_tier??null,
   pre_cancellation_health_at:pre?.pre_cancellation_health_at??null,
   lifecycle_overlay_version:'v1'};
 }
-module.exports={applyLifecycleHealth,lifecycleContext};
+module.exports={applyLifecycleHealth,lifecycleContext,operationalLifecycle};
