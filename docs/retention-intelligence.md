@@ -41,3 +41,13 @@ The operational roster intersects real Firestore student document IDs with canon
 ## Focused verification
 
 `node --test tests/health-admin-v0.test.js`: ten requested scoring/automation/idempotency/lifecycle scenarios with fake provider calls. Existing Activity persistence/Student 360 tests and the single shared Inbox send-path test verify integration. Production SQL case/action check runs inside a rolled-back transaction; production validation reads aggregates and runs the authenticated daily job. No test messages to real students, staging or full suite.
+
+## Lifecycle operational overlay
+
+The Admin V0 dimensions/weights remain unchanged. `retention-health-lifecycle` computes an additional effective score: requested cap 25, notice cap 10, both Critical. Recovery after a request uses 44/64/79 for days 0–14/15–30/31–60; after notice it uses 35/55/74. Day 61 removes the cap. Existing dimension hard rules can still impose a worse tier. Unknown raw scores remain NULL even when an operational tier is Critical.
+
+`student_health_lifecycle_events` observes canonical lifecycle transitions with an insert-only trigger; it never changes lifecycle. Each request freezes the latest Health measurement available immediately before its event, including its original measurement time and full snapshot. The pre-cancellation fields are immutable per request; absent historical measurements stay NULL. The daily row exposes the latest request's frozen fields while the append-only projection keeps every episode.
+
+Recovery dates come from actual transitions back to active. An explicitly recorded critical occurrence during the recovery window restarts the same recovery ladder. A new request/notice overrides recovery immediately. API reads apply the overlay to the current canonical state; daily snapshots persist raw/effective scores, tier, cap, reason, recovery date/type and pre-request fields separately. The UI identifies the dated raw observation and operational limit.
+
+Command Center ranks notice, request, Critical, Risk, Attention, Healthy. A dedicated notice queue shows remaining days, last contact, next open Activity and responsible operator. No MRR or scoring weight is altered. Focused checks: `node --test tests/health-lifecycle-caps.test.js`.
