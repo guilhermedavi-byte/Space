@@ -152,6 +152,10 @@ const activitiesDrawer = document.querySelector("[data-activities-drawer]");
 const activitiesDrawerTitle = document.querySelector("[data-activities-drawer-title]");
 const activitiesDrawerSub = document.querySelector("[data-activities-drawer-sub]");
 const activitiesDrawerBody = document.querySelector("[data-activities-drawer-body]");
+const notificationsRoot = document.querySelector("[data-notifications-root]");
+const notificationsList = document.querySelector("[data-notifications-list]");
+const notificationsReadAllButton = document.querySelector("[data-notifications-read-all]");
+const notificationsFilterButtons = document.querySelectorAll("[data-notifications-filter]");
 
 // Admin > Alunos (histórico pedagógico por professor)
 const adminStudentsTeacherSelect = document.querySelector("[data-admin-students-teacher]"); // legacy (removed from template)
@@ -1032,6 +1036,12 @@ const syncRoleUI = () => {
     }
   });
 
+  document.querySelectorAll("[data-notifications-access]").forEach((el) => {
+    if (el instanceof HTMLElement) {
+      el.hidden = !["admin", "teacher", "growth", "FINANCE"].includes(String(currentRole || ""));
+    }
+  });
+
   document.querySelectorAll("[data-growth-only]").forEach((el) => {
     if (el instanceof HTMLElement) {
       el.hidden = currentRole !== "growth";
@@ -1042,7 +1052,7 @@ const syncRoleUI = () => {
     document.querySelectorAll("[data-panel-target]").forEach((el) => {
       if (!(el instanceof HTMLElement)) return;
       const target = String(el.getAttribute("data-panel-target") || "");
-      el.hidden = !["dashboard", "financeiro"].includes(target);
+      el.hidden = !["dashboard", "financeiro", "notifications"].includes(target);
     });
     const dashboardLink = document.querySelector('[data-panel-target="dashboard"] .sidebar-text');
     if (dashboardLink instanceof HTMLElement) dashboardLink.textContent = "Dashboard";
@@ -1056,7 +1066,7 @@ const syncRoleUI = () => {
         return;
       }
       const target = String(el.getAttribute("data-panel-target") || "");
-      el.hidden = !["growth-dashboard", "native-crm", "growth", "activities", "attendance-inbox", "attendance-connections"].includes(target);
+      el.hidden = !["growth-dashboard", "native-crm", "growth", "activities", "notifications", "attendance-inbox", "attendance-connections"].includes(target);
     });
     const dashboardTarget = document.querySelector("[data-growth-dashboard-link]");
     if (dashboardTarget instanceof HTMLElement) {
@@ -1119,6 +1129,7 @@ const setRole = (role) => {
   body.dataset.role = currentRole;
   syncRoleUI();
   updateGreeting();
+  if (canUseNotificationsPanel()) loadNotifications({ force: true, summary: true }).catch(() => {});
 
   if (body.dataset.activePanel === "dashboard") {
     if (currentRole === "teacher") {
@@ -7921,6 +7932,169 @@ let activitiesState = {
 if (["list", "board", "calendar"].includes(savedActivitiesView)) activitiesState.view = savedActivitiesView;
 if (["month", "week"].includes(savedActivitiesCalendarView)) activitiesState.calendarView = savedActivitiesCalendarView;
 
+let notificationsState = {
+  isLoading: false,
+  lastLoadedAt: 0,
+  filter: "all",
+  items: [],
+  unreadCount: 0,
+};
+
+const activityMentionState = new WeakMap();
+
+const canUseNotificationsPanel = () => ["admin", "teacher", "growth", "FINANCE"].includes(String(currentRole || ""));
+
+const syncNotificationsBadge = (count = notificationsState.unreadCount) => {
+  const safe = Math.max(0, Number(count) || 0);
+  notificationsState.unreadCount = safe;
+  document.querySelectorAll("[data-notifications-badge]").forEach((badge) => {
+    if (!(badge instanceof HTMLElement)) return;
+    badge.hidden = safe <= 0;
+    badge.textContent = safe > 99 ? "99+" : String(safe);
+  });
+};
+
+const notificationTitle = (item = {}) => {
+  const actor = String(item.actorNameSnapshot || "Alguém").trim();
+  if (item.type === "activity_mention") return `${actor} mencionou você`;
+  if (item.type === "activity_comment") return `${actor} comentou em uma atividade`;
+  return "Nova notificação";
+};
+
+const notificationMeta = (item = {}) => {
+  const title = String(item.metadata?.activityTitle || "").trim();
+  const stamp = item.createdAt ? formatAdminHistoryStamp(item.createdAt) : "";
+  return [title, stamp].filter(Boolean).join(" · ");
+};
+
+const renderNotificationsPanel = () => {
+  notificationsFilterButtons.forEach((button) => {
+    if (!(button instanceof HTMLElement)) return;
+    const active = String(button.getAttribute("data-notifications-filter") || "all") === notificationsState.filter;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  if (!(notificationsList instanceof HTMLElement)) return;
+  const items = Array.isArray(notificationsState.items) ? notificationsState.items : [];
+  if (notificationsState.isLoading && !items.length) {
+    notificationsList.innerHTML = `<div class="notifications-empty">Carregando notificações…</div>`;
+    return;
+  }
+  if (!items.length) {
+    notificationsList.innerHTML = `<div class="notifications-empty">${notificationsState.filter === "unread" ? "Nenhuma notificação não lida." : "Nenhuma notificação ainda."}</div>`;
+    return;
+  }
+  notificationsList.innerHTML = items.map((item) => {
+    const isUnread = !item.readAt;
+    return `
+      <button class="notifications-item ${isUnread ? "is-unread" : ""}" type="button" data-notification-open="${escapeHtml(item.id)}">
+        ${activityAvatarHtml(item.actorNameSnapshot || "Space", item.actorPhotoSnapshot || "")}
+        <span class="notifications-copy">
+          <strong>${escapeHtml(notificationTitle(item))}</strong>
+          <span>${escapeHtml(item.preview || "Sem prévia")}</span>
+          <small>${escapeHtml(notificationMeta(item))}</small>
+        </span>
+        ${isUnread ? `<i aria-label="Não lida"></i>` : ""}
+      </button>
+    `;
+  }).join("");
+};
+
+const loadNotifications = async ({ force = false, summary = false } = {}) => {
+  if (!canUseNotificationsPanel()) return;
+  if (notificationsState.isLoading) return;
+  if (!force && notificationsState.lastLoadedAt && Date.now() - notificationsState.lastLoadedAt < 20_000) {
+    if (!summary) renderNotificationsPanel();
+    return;
+  }
+  notificationsState.isLoading = true;
+  if (!summary) renderNotificationsPanel();
+  try {
+    const url = summary ? "/api/notifications?summary=1" : `/api/notifications?filter=${encodeURIComponent(notificationsState.filter)}&limit=60`;
+    const res = await fetchWithAuth(url, { method: "GET" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(String(data?.error || `notifications_load_failed:${res.status}`));
+    notificationsState.unreadCount = Number(data?.unreadCount || 0) || 0;
+    syncNotificationsBadge(notificationsState.unreadCount);
+    if (!summary) {
+      notificationsState.items = Array.isArray(data?.notifications) ? data.notifications : [];
+      notificationsState.lastLoadedAt = Date.now();
+      renderNotificationsPanel();
+    }
+  } catch (error) {
+    console.error("[notifications] load failed:", error);
+    if (!summary && notificationsList instanceof HTMLElement) notificationsList.innerHTML = `<div class="notifications-empty">Não foi possível carregar notificações agora.</div>`;
+  } finally {
+    notificationsState.isLoading = false;
+  }
+};
+
+const markNotificationRead = async (id) => {
+  const safeId = String(id || "").trim();
+  if (!safeId) return null;
+  const res = await fetchWithAuth("/api/notifications", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "read", id: safeId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(String(data?.error || `notification_read_failed:${res.status}`));
+  notificationsState.items = notificationsState.items.map((item) => String(item.id || "") === safeId ? { ...item, readAt: data?.notification?.readAt || new Date().toISOString() } : item);
+  syncNotificationsBadge(data?.unreadCount);
+  renderNotificationsPanel();
+  return data?.notification || notificationsState.items.find((item) => String(item.id || "") === safeId) || null;
+};
+
+const bindNotificationsUi = () => {
+  if (!(notificationsRoot instanceof HTMLElement) || notificationsRoot.dataset.bound === "true") return;
+  notificationsRoot.dataset.bound = "true";
+  notificationsFilterButtons.forEach((button) => {
+    if (!(button instanceof HTMLElement)) return;
+    button.addEventListener("click", () => {
+      notificationsState.filter = String(button.getAttribute("data-notifications-filter") || "all") === "unread" ? "unread" : "all";
+      notificationsState.lastLoadedAt = 0;
+      loadNotifications({ force: true }).catch(() => {});
+    });
+  });
+  notificationsList?.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const button = target.closest("[data-notification-open]");
+    if (!(button instanceof HTMLElement)) return;
+    const id = String(button.getAttribute("data-notification-open") || "").trim();
+    const item = notificationsState.items.find((row) => String(row.id || "") === id);
+    markNotificationRead(id)
+      .then((notification) => {
+        const next = notification || item;
+        if (next?.activityId) {
+          showPanel("activities");
+          navigateApp(panelPathForRole(currentRole, "activities"), { replace: false });
+          bindActivitiesUi();
+          loadActivities({ force: true, silent: true })
+            .then(() => openActivityWorkspace({ id: next.activityId }))
+            .catch(() => openActivityWorkspace({ id: next.activityId }));
+        }
+      })
+      .catch((error) => console.error("[notifications] mark read failed:", error));
+  });
+  notificationsReadAllButton?.addEventListener("click", () => {
+    fetchWithAuth("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "read_all" }),
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(String(data?.error || "notifications_read_all_failed"));
+        notificationsState.items = notificationsState.items.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() }));
+        syncNotificationsBadge(0);
+        if (notificationsState.filter === "unread") notificationsState.items = [];
+        renderNotificationsPanel();
+      })
+      .catch((error) => console.error("[notifications] read all failed:", error));
+  });
+};
+
 const formatPedagogicoDate = (dateKey) => {
   const d = parseDateKey(dateKey);
   if (!d) return "—";
@@ -11275,6 +11449,138 @@ const renderActivityChecklistAssignee = (item = {}) => {
   return `<span class="actws-check-assignee"><span class="actws-mini-avatar">${escapeHtml(getInitials(name))}</span>${escapeHtml(name)}</span>`;
 };
 
+const renderActivityCommentBody = (comment = {}) => {
+  const text = String(comment.deletedAt ? "Comentário removido" : comment.body || "");
+  const mentions = Array.isArray(comment.mentions) ? comment.mentions.filter((mention) => mention?.displayName) : [];
+  if (!mentions.length || comment.deletedAt) return escapeHtml(text);
+  const ranges = [];
+  mentions.forEach((mention) => {
+    const label = `@${String(mention.displayName || "").trim()}`;
+    if (label.length <= 1) return;
+    let from = 0;
+    while (from < text.length) {
+      const index = text.indexOf(label, from);
+      if (index < 0) break;
+      ranges.push({ start: index, end: index + label.length, label });
+      from = index + label.length;
+    }
+  });
+  ranges.sort((a, b) => a.start - b.start || b.end - a.end);
+  const selected = [];
+  let cursor = 0;
+  ranges.forEach((range) => {
+    if (range.start < cursor) return;
+    selected.push(range);
+    cursor = range.end;
+  });
+  if (!selected.length) return escapeHtml(text);
+  let html = "";
+  cursor = 0;
+  selected.forEach((range) => {
+    html += escapeHtml(text.slice(cursor, range.start));
+    html += `<span class="actws-mention">${escapeHtml(text.slice(range.start, range.end))}</span>`;
+    cursor = range.end;
+  });
+  html += escapeHtml(text.slice(cursor));
+  return html;
+};
+
+const getActivityTextareaMentionState = (textarea) => {
+  if (!(textarea instanceof HTMLTextAreaElement)) return { mentions: [], activeIndex: -1, users: [] };
+  if (!activityMentionState.has(textarea)) {
+    activityMentionState.set(textarea, { mentions: [], activeIndex: -1, users: [], query: "", popover: null, loading: false, timer: 0 });
+  }
+  return activityMentionState.get(textarea);
+};
+
+const getMentionQueryAtCursor = (textarea) => {
+  const value = String(textarea?.value || "");
+  const cursor = Number(textarea?.selectionStart || 0);
+  const before = value.slice(0, cursor);
+  const match = before.match(/(?:^|\s)@([\p{L}\p{N}._-]{0,32})$/u);
+  if (!match) return null;
+  return { query: match[1] || "", start: cursor - match[0].trimStart().length, end: cursor };
+};
+
+const closeActivityMentionPopover = (textarea) => {
+  const state = getActivityTextareaMentionState(textarea);
+  if (state.popover instanceof HTMLElement) state.popover.remove();
+  state.popover = null;
+  state.users = [];
+  state.activeIndex = -1;
+};
+
+const renderActivityMentionPopover = (textarea) => {
+  if (!(textarea instanceof HTMLTextAreaElement)) return;
+  const state = getActivityTextareaMentionState(textarea);
+  if (!state.users.length) return closeActivityMentionPopover(textarea);
+  if (!(state.popover instanceof HTMLElement)) {
+    state.popover = document.createElement("div");
+    state.popover.className = "actws-mention-popover";
+    textarea.closest("form")?.appendChild(state.popover);
+  }
+  state.popover.innerHTML = state.users.map((user, index) => `
+    <button type="button" class="${index === state.activeIndex ? "is-active" : ""}" data-actws-mention-select="${escapeHtml(user.id)}">
+      <span class="actws-mini-avatar">${escapeHtml(getInitials(user.displayName))}</span>
+      <span><strong>${escapeHtml(user.displayName)}</strong>${user.email ? `<small>${escapeHtml(user.email)}</small>` : ""}</span>
+    </button>
+  `).join("");
+};
+
+const fetchActivityMentionUsers = async (textarea, query) => {
+  const state = getActivityTextareaMentionState(textarea);
+  state.loading = true;
+  try {
+    const res = await fetchWithAuth(`/api/mentions?q=${encodeURIComponent(query || "")}&limit=8`, { method: "GET" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(String(data?.error || "mentions_load_failed"));
+    state.users = Array.isArray(data?.users) ? data.users : [];
+    state.activeIndex = state.users.length ? 0 : -1;
+    renderActivityMentionPopover(textarea);
+  } catch (error) {
+    console.error("[activities] mentions failed:", error);
+    closeActivityMentionPopover(textarea);
+  } finally {
+    state.loading = false;
+  }
+};
+
+const updateActivityMentionAutocomplete = (textarea) => {
+  if (!(textarea instanceof HTMLTextAreaElement)) return;
+  const cursorQuery = getMentionQueryAtCursor(textarea);
+  const state = getActivityTextareaMentionState(textarea);
+  window.clearTimeout(state.timer);
+  if (!cursorQuery) {
+    closeActivityMentionPopover(textarea);
+    return;
+  }
+  state.query = cursorQuery.query;
+  state.timer = window.setTimeout(() => fetchActivityMentionUsers(textarea, cursorQuery.query), 160);
+};
+
+const selectActivityMention = (textarea, userId) => {
+  if (!(textarea instanceof HTMLTextAreaElement)) return;
+  const state = getActivityTextareaMentionState(textarea);
+  const user = state.users.find((item) => String(item.id || "") === String(userId || "")) || state.users[state.activeIndex];
+  const cursorQuery = getMentionQueryAtCursor(textarea);
+  if (!user || !cursorQuery) return;
+  const label = `@${user.displayName}`;
+  const before = textarea.value.slice(0, cursorQuery.start);
+  const after = textarea.value.slice(cursorQuery.end);
+  textarea.value = `${before}${before && !/\s$/.test(before) ? " " : ""}${label} ${after}`;
+  const nextCursor = `${before}${before && !/\s$/.test(before) ? " " : ""}${label} `.length;
+  textarea.setSelectionRange(nextCursor, nextCursor);
+  state.mentions = state.mentions.filter((mention) => mention.userId !== user.id).concat({ userId: user.id, displayName: user.displayName });
+  closeActivityMentionPopover(textarea);
+  textarea.focus();
+};
+
+const getMentionsForActivityTextarea = (textarea) => {
+  const state = getActivityTextareaMentionState(textarea);
+  const text = String(textarea?.value || "");
+  return (Array.isArray(state.mentions) ? state.mentions : []).filter((mention) => text.includes(`@${mention.displayName}`));
+};
+
 const renderActivityWorkspace = (workspace = {}) => {
   const isCreateMode = workspace.mode === "create" || !workspace.activity?.id;
   const activity = getDefaultActivityDraft(workspace.activity || {});
@@ -11359,8 +11665,8 @@ const renderActivityWorkspace = (workspace = {}) => {
                 ${activityAvatarHtml(comment.authorNameSnapshot, comment.authorPhotoSnapshot)}
                 <div class="actws-comment-main">
                   <div class="actws-comment-head"><strong>${escapeHtml(comment.authorNameSnapshot || "Usuário")}</strong><time>${escapeHtml(comment.createdAt ? formatAdminHistoryStamp(comment.createdAt) : "Agora")}${comment.editedAt && !comment.deletedAt ? " · editado" : ""}</time>${canManage ? `<button type="button" class="actws-icon-action" data-actws-comment-menu="${escapeHtml(comment.id)}" aria-label="Ações do comentário">•••</button>` : ""}</div>
-                  <p data-actws-comment-body>${escapeHtml(comment.deletedAt ? "Comentário removido" : comment.body)}</p>
-                  ${canManage ? `<form class="actws-comment-edit-form" data-actws-comment-edit-form="${escapeHtml(comment.id)}" hidden><textarea name="body" rows="3">${escapeHtml(comment.body)}</textarea><div><button type="submit">Salvar</button><button type="button" data-actws-comment-cancel="${escapeHtml(comment.id)}">Cancelar</button></div></form><div class="actws-comment-menu" data-actws-comment-menu-popover="${escapeHtml(comment.id)}" hidden><button type="button" data-actws-comment-edit="${escapeHtml(comment.id)}">Editar comentário</button><button type="button" data-actws-comment-delete="${escapeHtml(comment.id)}">Excluir comentário</button></div>` : ""}
+                  <p data-actws-comment-body>${renderActivityCommentBody(comment)}</p>
+                  ${canManage ? `<form class="actws-comment-edit-form" data-actws-comment-edit-form="${escapeHtml(comment.id)}" hidden><textarea name="body" rows="3" data-actws-mention-textarea>${escapeHtml(comment.body)}</textarea><div><button type="submit">Salvar</button><button type="button" data-actws-comment-cancel="${escapeHtml(comment.id)}">Cancelar</button></div></form><div class="actws-comment-menu" data-actws-comment-menu-popover="${escapeHtml(comment.id)}" hidden><button type="button" data-actws-comment-edit="${escapeHtml(comment.id)}">Editar comentário</button><button type="button" data-actws-comment-delete="${escapeHtml(comment.id)}">Excluir comentário</button></div>` : ""}
                 </div>
               </article>
                   `;
@@ -11368,7 +11674,7 @@ const renderActivityWorkspace = (workspace = {}) => {
               </div>
               ${isCreateMode ? "" : `<button type="button" class="actws-add-inline" data-actws-comment-compose-toggle>＋ Adicionar comentário</button>
               <form class="actws-comment-form" data-actws-comment-form hidden>
-                <textarea name="comment" rows="3" placeholder="Escreva um comentário…"></textarea>
+                <textarea name="comment" rows="3" placeholder="Escreva um comentário… Use @ para mencionar alguém." data-actws-mention-textarea></textarea>
                 <div class="actws-form-actions"><span>Enter envia · Shift+Enter quebra linha</span><button type="submit">Enviar</button><button type="button" data-actws-comment-compose-cancel>Cancelar</button></div>
               </form>`}
             </section>
@@ -11794,6 +12100,13 @@ const bindActivitiesUi = () => {
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest("[data-activities-drawer-close]")) return closeActivitiesDrawer();
+      const mentionSelect = target.closest("[data-actws-mention-select]");
+      if (mentionSelect instanceof HTMLElement) {
+        const form = mentionSelect.closest("form");
+        const textarea = form?.querySelector("[data-actws-mention-textarea]");
+        selectActivityMention(textarea, mentionSelect.getAttribute("data-actws-mention-select"));
+        return;
+      }
       const composeToggle = target.closest("[data-actws-comment-compose-toggle]");
       if (composeToggle instanceof HTMLElement) {
         const workspace = composeToggle.closest("[data-activity-workspace]");
@@ -11984,7 +12297,8 @@ const bindActivitiesUi = () => {
           delete form.dataset.saving;
           return;
         }
-        payload = { comment: String(formData.get("comment") || "").trim() };
+        const textarea = form.querySelector("[data-actws-mention-textarea]");
+        payload = { comment: String(formData.get("comment") || "").trim(), mentions: getMentionsForActivityTextarea(textarea) };
         if (!payload.comment) {
           delete form.dataset.saving;
           return;
@@ -11994,9 +12308,10 @@ const bindActivitiesUi = () => {
         const pending = document.createElement("article");
         pending.className = "actws-comment is-pending";
         pending.setAttribute("data-actws-comment", tempId);
-        pending.innerHTML = `${activityAvatarHtml(sessionUser?.name || "Você", sessionUser?.photoURL || "")}<div class="actws-comment-main"><div class="actws-comment-head"><strong>${escapeHtml(sessionUser?.name || "Você")}</strong><time>Enviando…</time></div><p>${escapeHtml(payload.comment)}</p></div>`;
+        pending.innerHTML = `${activityAvatarHtml(sessionUser?.name || "Você", sessionUser?.photoURL || "")}<div class="actws-comment-main"><div class="actws-comment-head"><strong>${escapeHtml(sessionUser?.name || "Você")}</strong><time>Enviando…</time></div><p>${renderActivityCommentBody({ body: payload.comment, mentions: payload.mentions })}</p></div>`;
         commentsEl?.appendChild(pending);
         optimisticEl = pending;
+        closeActivityMentionPopover(textarea);
         form.reset();
       } else if (form.matches("[data-actws-check-add-form]")) {
         if (isCreateMode) {
@@ -12011,7 +12326,8 @@ const bindActivitiesUi = () => {
         };
       } else if (form.matches("[data-actws-comment-edit-form]")) {
         const commentId = String(form.getAttribute("data-actws-comment-edit-form") || "").trim();
-        payload = { commentAction: "edit", commentId, body: String(formData.get("body") || "").trim() };
+        const textarea = form.querySelector("[data-actws-mention-textarea]");
+        payload = { commentAction: "edit", commentId, body: String(formData.get("body") || "").trim(), mentions: getMentionsForActivityTextarea(textarea) };
       } else if (form.matches("[data-actws-check-edit-form]")) {
         const itemId = String(form.getAttribute("data-actws-check-edit-form") || "").trim();
         payload = {
@@ -12101,6 +12417,27 @@ const bindActivitiesUi = () => {
   });
   document.addEventListener("keydown", (event) => {
     const target = event.target;
+    if (target instanceof HTMLTextAreaElement && target.matches("[data-actws-mention-textarea]")) {
+      const state = getActivityTextareaMentionState(target);
+      if (state.popover instanceof HTMLElement && state.users.length && ["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) {
+        if (event.key === "Escape") {
+          closeActivityMentionPopover(target);
+          event.preventDefault();
+          return;
+        }
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          state.activeIndex = (state.activeIndex + (event.key === "ArrowDown" ? 1 : -1) + state.users.length) % state.users.length;
+          renderActivityMentionPopover(target);
+          event.preventDefault();
+          return;
+        }
+        if (event.key === "Enter") {
+          selectActivityMention(target, state.users[state.activeIndex]?.id);
+          event.preventDefault();
+          return;
+        }
+      }
+    }
     if (target instanceof HTMLTextAreaElement && target.closest("[data-actws-comment-form]") && event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       target.closest("form")?.requestSubmit();
@@ -12108,6 +12445,10 @@ const bindActivitiesUi = () => {
     }
     if (event.key === "Escape" && activitiesState.filterPopoverEl) closeActivitiesFiltersPopover();
     if (event.key === "Escape" && activitiesState.drawer.isOpen) closeActivitiesDrawer();
+  });
+  document.addEventListener("input", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLTextAreaElement && target.matches("[data-actws-mention-textarea]")) updateActivityMentionAutocomplete(target);
   });
 };
 
@@ -43326,6 +43667,17 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "notifications") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (!canUseNotificationsPanel()) {
+      navigateApp(roleBasePath(currentRole), { replace: true });
+      return;
+    }
+    bindNotificationsUi();
+    loadNotifications({ force: false }).catch(() => {});
+    return;
+  }
+
 	  if (panelName === "growth") {
     if (currentRole === "admin") {
       navigateApp("/app/admin/comercial", { replace: true });
@@ -43529,6 +43881,7 @@ const panelPathForRole = (role, panel) => {
   if (p === "attendance-connections" && ["admin", "growth"].includes(normalized)) return `/app/${normalized}/atendimento/conexoes`;
 
   if (normalized === "teacher") {
+    if (p === "notifications") return "/app/professor/notificacoes";
     if (p === "activities") return "/app/professor/atividades";
     if (p === "configuracoes-admin") return "/app/professor/configuracoes";
     if (p === "ao-vivo") return "/app/professor/agenda";
@@ -43541,6 +43894,7 @@ const panelPathForRole = (role, panel) => {
   }
 
   if (normalized === "admin") {
+    if (p === "notifications") return "/app/admin/notificacoes";
     if (p === "activities") return "/app/admin/atividades";
     if (p === "admin-sdr") return "/app/admin/comercial/pre-vendas/painel-sdr";
     if (p === "professores" || p === "alunos") return adminPedagogicoPathForState();
@@ -43564,6 +43918,7 @@ const panelPathForRole = (role, panel) => {
 
   if (normalized === "growth") {
     if (p === "dashboard" || p === "growth-dashboard") return "/app/growth/dashboard";
+    if (p === "notifications") return "/app/growth/notificacoes";
     if (p === "native-crm") return "/app/growth/comercial/crm";
     if (p === "activities") return "/app/growth/atividades";
     if (["sdr", "scripts-vendas", "objecoes", "training"].includes(p)) return growthCommercialPathForState("growth", p);
@@ -43572,6 +43927,7 @@ const panelPathForRole = (role, panel) => {
   }
 
   if (normalized === "FINANCE") {
+    if (p === "notifications") return "/app/financeiro/notificacoes";
     return financePathForState(role);
   }
 
@@ -43606,12 +43962,17 @@ const parseAppRoute = (path) => {
   if (!role) return null;
   if (["admin", "growth"].includes(role) && sub === "atendimento") return { role, panel: detail === "conexoes" ? "attendance-connections" : "attendance-inbox" };
 
+  if (roleSlug === "financeiro" && (sub === "notificacoes" || sub === "notifications")) {
+    return { role, panel: "notifications" };
+  }
+
   if (roleSlug === "financeiro") {
     const financeTab = FINANCE_URL_TO_TAB[String(query.get("aba") || "").trim()] || "overview";
     return { role, panel: "financeiro", financeTab };
   }
 
   if (role === "teacher") {
+    if (sub === "notificacoes" || sub === "notifications") return { role, panel: "notifications" };
     if (sub === "atividades") return { role, panel: "activities" };
     if (sub === "configuracoes") return { role, panel: "configuracoes-admin", settingsSection: "meu-perfil" };
     if (sub === "agenda") return { role, panel: "ao-vivo" };
@@ -43624,6 +43985,7 @@ const parseAppRoute = (path) => {
   }
 
   if (role === "admin") {
+    if (sub === "notificacoes" || sub === "notifications") return { role, panel: "notifications" };
     if (sub === "atividades") return { role, panel: "activities" };
     if (sub === "sdr") return { role, panel: "admin-sdr" };
     if (sub === "professores") return { role, panel: "admin-controle-pedagogico", redirectTo: "/app/admin/controle-pedagogico?modulo=usuarios", pedagogicoGroup: "alunosTurmas", pedagogicoTab: "pessoas", pedagogicoPeopleTab: "teachers" };
@@ -43671,12 +44033,14 @@ const parseAppRoute = (path) => {
       return { role, panel: "growth-dashboard" };
     }
     if (sub === "crm") return { role, panel: "native-crm", redirectTo: "/app/growth/comercial/crm" };
+    if (sub === "notificacoes" || sub === "notifications") return { role, panel: "notifications" };
     if (sub === "activities" || sub === "atividades") return { role, panel: "activities" };
     if (["sdr", "scripts-vendas", "objecoes", "training"].includes(sub)) return { role, panel: "growth", growthTab: sub, redirectTo: growthCommercialPathForState("growth", sub) };
     return { role, panel: "growth-dashboard" };
   }
 
   if (role === "FINANCE") {
+    if (sub === "notificacoes" || sub === "notifications") return { role, panel: "notifications" };
     const financeTab = FINANCE_URL_TO_TAB[String(query.get("aba") || "").trim()] || "overview";
     return { role, panel: "financeiro", financeTab };
   }

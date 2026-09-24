@@ -320,6 +320,24 @@
             <span class="sidebar-text">Dashboard</span>
           </button>
           <button
+            class="sidebar-link sidebar-link-with-badge"
+            type="button"
+            data-panel-target="notifications"
+            data-notifications-access
+            title="Notificações"
+          >
+            <span class="sidebar-link-main">
+              <span class="sidebar-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M18 8.8a6 6 0 0 0-12 0c0 7-2.5 7.5-2.5 7.5h17S18 15.8 18 8.8"></path>
+                  <path d="M9.5 19a2.5 2.5 0 0 0 5 0"></path>
+                </svg>
+              </span>
+              <span class="sidebar-text">Notificações</span>
+            </span>
+            <span class="sidebar-badge" data-notifications-badge hidden>0</span>
+          </button>
+          <button
             class="sidebar-link"
             type="button"
             data-panel-target="activities"
@@ -1498,6 +1516,25 @@
                 <button class="activities-drawer-close" type="button" data-activities-drawer-close aria-label="Fechar">✕</button>
               </div>
               <div class="activities-drawer-body" data-activities-drawer-body></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="platform-panel" data-panel="notifications" data-hide-platform-header="true" hidden aria-label="Notificações">
+          <div class="notifications-shell" data-notifications-root>
+            <header class="notifications-head">
+              <div>
+                <h2 class="notifications-title">Notificações</h2>
+                <p class="notifications-subtitle">Menções e conversas importantes em um só lugar.</p>
+              </div>
+              <button class="notifications-mark-all" type="button" data-notifications-read-all>Marcar todas como lidas</button>
+            </header>
+            <div class="notifications-tabs" role="tablist" aria-label="Filtros de notificações">
+              <button class="is-active" type="button" role="tab" aria-selected="true" data-notifications-filter="all">Todas</button>
+              <button type="button" role="tab" aria-selected="false" data-notifications-filter="unread">Não lidas</button>
+            </div>
+            <div class="notifications-list" data-notifications-list>
+              <div class="notifications-empty">Carregando notificações…</div>
             </div>
           </div>
         </section>

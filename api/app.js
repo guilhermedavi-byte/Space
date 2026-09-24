@@ -62,7 +62,11 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
     return { panel: "attendance-inbox" };
   }
   if (slug === "admin" && sub === "atividades") return { panel: "activities" };
+  if (slug === "admin" && (sub === "notificacoes" || sub === "notifications")) return { panel: "notifications" };
+  if (slug === "professor" && (sub === "notificacoes" || sub === "notifications")) return { panel: "notifications" };
+  if (slug === "professor" && sub === "atividades") return { panel: "activities" };
   if (slug === "admin" && sub === "sdr") return { panel: "admin-sdr" };
+  if (slug === "financeiro" && (sub === "notificacoes" || sub === "notifications")) return { panel: "notifications" };
   if (slug === "financeiro") return { panel: "financeiro" };
   if (slug === "admin" && sub === "space-office") return { panel: "space-office" };
   if (slug === "admin" && sub === "status") return { panel: "configuracoes-admin", settingsSection: "status" };
@@ -87,6 +91,7 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
     }
     if (sub === "crm") return { panel: "native-crm" };
     if (sub === "activities" || sub === "atividades") return { panel: "activities" };
+    if (sub === "notificacoes" || sub === "notifications") return { panel: "notifications" };
     if (sub === "sdr" || sub === "scripts-vendas" || sub === "objecoes" || sub === "training") return { panel: "growth" };
     return { panel: "growth-dashboard" };
   }

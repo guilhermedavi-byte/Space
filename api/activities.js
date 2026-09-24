@@ -6,6 +6,11 @@ const { getSessionFromRequest } = require("./_lib/session");
 const { listCollectionAsAdmin } = require("./_lib/firestore-admin");
 const { requireAdminPermission } = require("./_lib/admin-permissions");
 const {
+  buildActivityCommentNotifications,
+  commitNotifications,
+  resolveCommentMentions,
+} = require("./_lib/notification-service");
+const {
   FIRESTORE_BASE,
   decodeFields,
   encodeFields,
@@ -89,6 +94,9 @@ const normalizeComment = (row = {}) => ({
   authorNameSnapshot: safeText(row.authorNameSnapshot || row.authorName || row.autorNome),
   authorPhotoSnapshot: safeText(row.authorPhotoSnapshot || row.authorPhoto || row.photoURL),
   body: safeText(row.body || row.text || row.texto || row.comentario),
+  mentions: Array.isArray(row.mentions)
+    ? row.mentions.map(mention => ({ userId: safeText(mention?.userId), displayName: safeText(mention?.displayName) })).filter(mention => mention.userId && mention.displayName)
+    : [],
   createdAt: row.createdAt || row.criadoEm || null,
   editedAt: row.editedAt || null,
   deletedAt: row.deletedAt || null,
@@ -196,6 +204,26 @@ const actorFromSession = (session = {}) => ({
   photo: safeText(session.photoURL || session.picture || session.avatarUrl),
 });
 
+const resolveActivityCommentMentions = async ({ mentions = [], actorUserId = "" } = {}) => {
+  if (!Array.isArray(mentions) || !mentions.length) return [];
+  const userRows = await listCollectionAsAdmin(USERS_COLLECTION, { pageSize: 1500, decorate: false });
+  return resolveCommentMentions({ mentions, users: userRows, actorUserId });
+};
+
+const notifyActivityComment = async ({ activity, comment, actor }) => {
+  try {
+    const notifications = buildActivityCommentNotifications({
+      activity,
+      comment,
+      actor,
+      mentions: Array.isArray(comment.mentions) ? comment.mentions : [],
+    });
+    await commitNotifications(notifications);
+  } catch (error) {
+    console.error("[api] activity comment notifications failed", error);
+  }
+};
+
 const queryByField = async (collection, fieldPath, value) => {
   const safeValue = safeText(value);
   if (!safeValue) return [];
@@ -293,13 +321,14 @@ const commitActivityAppend = async ({ activity, document, writes, eventType, act
   return event;
 };
 
-const addActivityComment = async ({ activity, document, body, session }) => {
+const addActivityComment = async ({ activity, document, body, session, mentions = [] }) => {
   const text = safeText(body);
   if (!text) throw Object.assign(new Error('missing_comment'), { status: 400 });
   const now = new Date().toISOString();
   const actor = actorFromSession(session);
   const id = randomUUID();
   const prefix = FIRESTORE_BASE.split('/v1/')[1];
+  const resolvedMentions = await resolveActivityCommentMentions({ mentions, actorUserId: "" });
   const comment = {
     id,
     activityId: activity.id,
@@ -308,6 +337,7 @@ const addActivityComment = async ({ activity, document, body, session }) => {
     authorNameSnapshot: actor.name || 'Usuário',
     authorPhotoSnapshot: actor.photo || '',
     body: text,
+    mentions: resolvedMentions,
     createdAt: new Date(now),
     editedAt: null,
   };
@@ -321,7 +351,9 @@ const addActivityComment = async ({ activity, document, body, session }) => {
     metadata: { commentId: id },
     seed: id,
   });
-  return normalizeComment({ ...comment, createdAt: now });
+  const normalized = normalizeComment({ ...comment, createdAt: now });
+  await notifyActivityComment({ activity, comment: normalized, actor });
+  return normalized;
 };
 
 const commitCommentAction = async ({ activity, document, body, session }) => {
@@ -342,6 +374,7 @@ const commitCommentAction = async ({ activity, document, body, session }) => {
     const text = safeText(body?.body);
     if (!text) throw Object.assign(new Error('missing_comment_body'), { status: 400 });
     patch.body = text;
+    if (Array.isArray(body?.mentions)) patch.mentions = await resolveActivityCommentMentions({ mentions: body.mentions, actorUserId: "" });
     patch.editedAt = new Date(now);
   } else if (action === 'delete') {
     patch.body = '';
@@ -363,7 +396,9 @@ const commitCommentAction = async ({ activity, document, body, session }) => {
     metadata: { commentId },
     seed: `${commentId}:${eventType}:${now}`,
   });
-  return normalizeComment({ ...patch, editedAt: now, deletedAt: action === 'delete' ? now : patch.deletedAt });
+  const normalized = normalizeComment({ ...patch, editedAt: now, deletedAt: action === 'delete' ? now : patch.deletedAt });
+  if (action === 'edit') await notifyActivityComment({ activity, comment: normalized, actor });
+  return normalized;
 };
 
 const commitChecklistAction = async ({ activity, document, body, session }) => {
@@ -631,7 +666,7 @@ module.exports = async (req, res) => {
         return sendJson(res, 200, { ...workspace, comment });
       }
       if (safeText(body?.comment) && body?.workspace === true) {
-        const comment = await addActivityComment({ activity: existing, document, body: body.comment, session });
+        const comment = await addActivityComment({ activity: existing, document, body: body.comment, session, mentions: body?.mentions });
         const workspace = await readActivityWorkspace({ ...existing, atualizadoEm: new Date().toISOString() });
         return sendJson(res, 200, { ...workspace, comment });
       }

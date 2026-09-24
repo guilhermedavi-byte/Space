@@ -36,6 +36,15 @@ const ADMIN_PERMISSION_REGISTRY = {
       ),
     },
   },
+  notifications: {
+    label: "Notificações",
+    children: {
+      center: withActions(
+        { label: "Notificações", panel: "notifications", routes: ["/app/admin/notificacoes"], apis: ["/api/notifications", "/api/mentions"], legacyKey: "notifications" },
+        ["view", "update"]
+      ),
+    },
+  },
   automations: {
     label: "Automações",
     children: {
