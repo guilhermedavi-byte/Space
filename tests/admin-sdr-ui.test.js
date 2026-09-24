@@ -20,8 +20,8 @@ test('SDR filters collapse and audio resolves through authenticated request', as
   doc.querySelector('[data-asdr-toggle-filters]').click();
   assert.equal(doc.getElementById('asdr-filters').hidden, true);
   await new Promise(resolve => setImmediate(resolve));
-  assert.ok(requests.includes('/api/admin/sdr/calls/rec1/audio?format=json'));
-  assert.equal(doc.querySelector('audio').src, 'https://audio.example/fresh.mp3');
+  assert.ok(doc.querySelector('[data-asdr-audio]').src.endsWith('/api/admin/sdr/calls/rec1/audio'));
+  assert.ok(doc.querySelector('audio').src.endsWith('/api/admin/sdr/calls/rec1/audio'));
   assert.ok(!doc.body.textContent.includes('Firestore'));
   assert.ok(!doc.body.textContent.includes('ADMIN / COMERCIAL'));
   const audio = doc.querySelector('audio');

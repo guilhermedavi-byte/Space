@@ -13,6 +13,21 @@ const extractRecordingId = req => {
   return idx >= 0 ? safeRecordingId(parts[idx + 1]) : '';
 };
 
+const headerValue = (headers, name) => headers?.get?.(name) || headers?.[name.toLowerCase?.() || name] || headers?.[name] || '';
+const writeAudio = async (res, upstream, headOnly = false) => {
+  res.statusCode = upstream.status || 200;
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Content-Type', headerValue(upstream.headers, 'content-type') || 'audio/mpeg');
+  for (const name of ['content-length', 'content-range', 'accept-ranges']) {
+    const value = headerValue(upstream.headers, name);
+    if (value) res.setHeader(name.replace(/(^|-)([a-z])/g, (_, p, c) => p + c.toUpperCase()), value);
+  }
+  if (!headerValue(upstream.headers, 'accept-ranges')) res.setHeader('Accept-Ranges', 'bytes');
+  if (headOnly) return res.end();
+  const buffer = Buffer.from(await upstream.arrayBuffer());
+  return res.end(buffer);
+};
+
 const createHandler = ({ authResolver = resolveAdminRequestAuth, permissionResolver = requireResolvedAdminPermission, telnyxFetch = fetch } = {}) => async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -62,10 +77,16 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, permissionResol
     }
     if (new URL(req.url, 'https://localhost').searchParams.get('format') === 'json') return reply(200, { url: mp3 });
 
-    console.info('[admin-sdr-audio] diagnostic', { ...diagnostic, finalStatus: 307 });
-    res.statusCode = 307;
-    res.setHeader('Location', mp3);
-    return res.end();
+    const media = await telnyxFetch(mp3, {
+      method: req.method === 'HEAD' ? 'HEAD' : 'GET',
+      headers: { ...(req.headers.range ? { Range: req.headers.range } : {}) },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(20000),
+    });
+    diagnostic.mediaStatus = media.status;
+    if (!media.ok && media.status !== 206) return reply(502, { error: 'recording_unavailable' });
+    console.info('[admin-sdr-audio] diagnostic', { ...diagnostic, finalStatus: media.status || 200 });
+    return writeAudio(res, media, req.method === 'HEAD');
   } catch (error) {
     console.error('[admin-sdr-audio] failed', { code: error?.name === 'TimeoutError' ? 'timeout' : 'audio_failed' });
     return reply(502, { error: 'recording_unavailable' });
@@ -74,4 +95,4 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, permissionResol
 
 module.exports = createHandler();
 module.exports.createHandler = createHandler;
-module.exports._private = { extractRecordingId, safeRecordingId };
+module.exports._private = { extractRecordingId, safeRecordingId, writeAudio };

@@ -257,10 +257,7 @@
       audio.addEventListener('loadedmetadata', () => { if (status) status.textContent = `Duração ${shortDuration(audio.duration)}`; }, { once: true });
       audio.addEventListener('error', () => { if (status) status.textContent = 'Gravação indisponível'; });
       try {
-        const response = await fetchWithAuth(`${audio.dataset.audioEndpoint}?format=json`, { method: 'GET' });
-        const result = await response.json();
-        if (!response.ok || !/^https:\/\//i.test(result.url || '')) throw new Error('audio_unavailable');
-        if (audio.isConnected) audio.src = result.url;
+        if (audio.isConnected) audio.src = audio.dataset.audioEndpoint;
       } catch {
         if (status && audio.isConnected) status.textContent = 'Gravação indisponível';
       }

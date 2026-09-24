@@ -17,7 +17,7 @@ const invoke = async (handler, { url = '/api/admin/sdr/calls/rec_123/audio', met
   return { status: res.statusCode, headers, body, json };
 };
 
-test('SDR audio endpoint redirects to a fresh Telnyx mp3 URL', async () => {
+test('SDR audio endpoint proxies a fresh Telnyx mp3 URL without exposing it to the browser', async () => {
   const old = process.env.TELNYX_API_KEY;
   process.env.TELNYX_API_KEY = 'secret-test';
   const calls = [];
@@ -26,17 +26,21 @@ test('SDR audio endpoint redirects to a fresh Telnyx mp3 URL', async () => {
     permissionResolver: async () => ({ ok: true }),
     telnyxFetch: async (url, options) => {
       calls.push({ url, options });
-      return { ok: true, json: async () => ({ data: { download_urls: { mp3: 'https://audio.example/fresh.mp3' } } }) };
+      if (url === 'https://audio.example/fresh.mp3') return { ok: true, status: 206, headers: new Map([['content-type','audio/mpeg'],['content-range','bytes 0-3/4'],['accept-ranges','bytes']]), arrayBuffer: async () => Buffer.from([1,2,3,4]) };
+      return { ok: true, status: 200, json: async () => ({ data: { download_urls: { mp3: 'https://audio.example/fresh.mp3' } } }) };
     },
   });
   const res = await invoke(handler);
   process.env.TELNYX_API_KEY = old;
 
-  assert.equal(res.status, 307);
-  assert.equal(res.headers.location, 'https://audio.example/fresh.mp3');
+  assert.equal(res.status, 206);
+  assert.equal(res.headers.location, undefined);
+  assert.equal(res.headers['content-type'], 'audio/mpeg');
+  assert.equal(res.body, Buffer.from([1,2,3,4]).toString());
   assert.equal(res.headers['cache-control'], 'no-store');
   assert.equal(calls[0].url, 'https://api.telnyx.com/v2/recordings/rec_123');
   assert.equal(calls[0].options.headers.Authorization, 'Bearer secret-test');
+  assert.equal(calls[1].url, 'https://audio.example/fresh.mp3');
 });
 
 test('SDR audio endpoint fails closed when Telnyx key is missing', async () => {
@@ -71,7 +75,7 @@ test('audio JSON uses only TELNYX_API_KEY, trims whitespace and avoids duplicate
       permissionResolver: async () => ({ ok: true }),
       telnyxFetch: async (_url, options) => {
         assert.equal(options.headers.Authorization, 'Bearer KEY-private-production-key');
-        return { ok: true, json: async () => ({ data: { download_urls: { mp3: 'https://audio.example/fresh.mp3' } } }) };
+        return { ok: true, status: 200, json: async () => ({ data: { download_urls: { mp3: 'https://audio.example/fresh.mp3' } } }) };
       },
     });
     const res = await invoke(handler, { url: '/api/admin/sdr/calls/rec_123/audio?format=json' });
