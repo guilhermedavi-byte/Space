@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const { resolveAdminRequestAuth } = require('./admin-request-auth');
 const { requireResolvedAdminPermission } = require('./admin-permissions');
 const { supabaseFetch } = require('./supabase-rest');
+const { normalizePhoneNumber } = require('../../src/space-phone/phone-number');
 
 const isSpacePhoneEnabled = () => String(process.env.SPACE_PHONE_ENABLED || '').trim().toLowerCase() === 'true';
 
@@ -32,15 +33,6 @@ const assertVoiceAccess = async (req, { authResolver = resolveAdminRequestAuth, 
   return { ok: false, status: 403, body: { error: 'forbidden' } };
 };
 
-const normalizePhoneNumber = value => {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  const plus = raw.startsWith('+');
-  const digits = raw.replace(/\D/g, '');
-  if (!digits || digits.length < 8 || digits.length > 15) return '';
-  return `${plus ? '+' : '+'}${digits}`;
-};
-
 const safeText = value => String(value || '').trim().slice(0, 240);
 
 const selectSingle = async (path, { supabase = supabaseFetch } = {}) => {
@@ -69,7 +61,7 @@ const createVoiceCall = async ({ session, identity, toNumber, context = {}, supa
     opportunity_id: safeText(context.opportunityId) || null,
     lead_name: safeText(context.leadName) || null,
     from_number: normalizePhoneNumber(identity?.caller_id || process.env.TELNYX_DEFAULT_FROM_NUMBER),
-    to_number: toNumber,
+    to_number: normalizePhoneNumber(toNumber),
     status: 'created',
     started_at: nowIso,
     created_at: nowIso,

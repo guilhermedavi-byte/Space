@@ -185,7 +185,8 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
       window.__SPACE_PHONE_BOOTSTRAP__ = {
         enabled: ${process.env.SPACE_PHONE_ENABLED === "true" ? "true" : "false"},
         tokenEndpoint: "/api/voice/telnyx/token",
-        callEndpoint: "/api/voice/calls"
+        callEndpoint: "/api/voice/calls",
+        defaultCountry: ${JSON.stringify(process.env.SPACE_PHONE_DEFAULT_COUNTRY || "US")}
       };
     </script>
     ${platformVisible}

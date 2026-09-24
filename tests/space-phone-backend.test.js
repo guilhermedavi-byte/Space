@@ -51,7 +51,7 @@ test('token endpoint exchanges Telnyx credential server-side without returning A
     permissionResolver,
     supabase: async path => {
       calls.push({ type: 'supabase', path });
-      return { data: [{ telnyx_credential_id: 'cred_123', caller_id: '+15551234567', enabled: true }] };
+      return { data: [{ telnyx_credential_id: 'cred_123', caller_id: '+16175551212', enabled: true }] };
     },
     fetchImpl: async (url, init) => {
       calls.push({ type: 'fetch', url, auth: init.headers.Authorization });
@@ -72,7 +72,7 @@ test('call creation validates E.164-ish number and persists canonical voice_call
   const oldFlag = process.env.SPACE_PHONE_ENABLED;
   const oldFrom = process.env.TELNYX_DEFAULT_FROM_NUMBER;
   process.env.SPACE_PHONE_ENABLED = 'true';
-  process.env.TELNYX_DEFAULT_FROM_NUMBER = '+15557654321';
+  process.env.TELNYX_DEFAULT_FROM_NUMBER = '+12125550123';
   const writes = [];
   const out = res();
   await callsHandler({
@@ -85,13 +85,13 @@ test('call creation validates E.164-ish number and persists canonical voice_call
     },
   })(req('POST', { phoneNumber: '(617) 555-1212', context: { leadId: 'lead-1', opportunityId: 'opp-1', leadName: 'Matheus' } }), out);
   assert.equal(out.statusCode, 200);
-  assert.equal(out.body.call.to_number, '+6175551212');
+  assert.equal(out.body.call.to_number, '+16175551212');
   assert.equal(writes[0].path, '/voice_calls');
   assert.equal(writes[0].options.body.provider, 'telnyx');
   assert.equal(writes[0].options.body.source, 'space_webrtc');
   assert.equal(writes[0].options.body.direction, 'outbound');
   assert.equal(writes[0].options.body.space_user_uid, 'growth-1');
-  assert.equal(writes[0].options.body.from_number, '+15557654321');
+  assert.equal(writes[0].options.body.from_number, '+12125550123');
   process.env.SPACE_PHONE_ENABLED = oldFlag;
   process.env.TELNYX_DEFAULT_FROM_NUMBER = oldFrom;
 });
@@ -100,7 +100,7 @@ test('call creation does not succeed without mapped Telnyx identity', async () =
   const oldFlag = process.env.SPACE_PHONE_ENABLED;
   process.env.SPACE_PHONE_ENABLED = 'true';
   const out = res();
-  await callsHandler({ authResolver, permissionResolver, supabase: async () => ({ data: [] }) })(req('POST', { phoneNumber: '+15551234567' }), out);
+  await callsHandler({ authResolver, permissionResolver, supabase: async () => ({ data: [] }) })(req('POST', { phoneNumber: '+16175551212' }), out);
   assert.equal(out.statusCode, 409);
   assert.equal(out.body.error, 'voice_identity_not_configured');
   process.env.SPACE_PHONE_ENABLED = oldFlag;
@@ -118,7 +118,10 @@ test('Telnyx API key is trimmed before Bearer header', async () => {
   assert.equal(response, 'jwt');
 });
 
-test('phone normalization rejects invalid values', () => {
-  assert.equal(normalizePhoneNumber('abc'), '');
+test('phone normalization parses US default, international and invalid values', () => {
+  assert.equal(normalizePhoneNumber('(617) 555-1212'), '+16175551212');
+  assert.equal(normalizePhoneNumber('6175551212'), '+16175551212');
   assert.equal(normalizePhoneNumber('+1 617 555 1212'), '+16175551212');
+  assert.equal(normalizePhoneNumber('+55 34 99999-9999'), '+5534999999999');
+  assert.equal(normalizePhoneNumber('abc'), '');
 });

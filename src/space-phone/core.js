@@ -2,14 +2,13 @@
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.SpacePhoneCore = factory();
 })(typeof window !== 'undefined' ? window : globalThis, function () {
+  const { normalizePhoneNumber } = require('./phone-number');
   const ACTIVE_STATUSES = new Set(['connecting', 'ringing', 'active', 'ending']);
 
-  function normalizePhone(value) {
-    const raw = String(value || '').trim();
-    const digits = raw.replace(/\D/g, '');
-    if (!digits || digits.length < 8 || digits.length > 15) return '';
-    return `+${digits}`;
+  function normalizePhone(value, defaultCountry) {
+    return normalizePhoneNumber(value, { defaultCountry });
   }
+
 
   function normalizeSdkStatus(value) {
     const raw = String(value || '').toLowerCase();
@@ -50,7 +49,7 @@
     const fetchWithAuth = options.fetchWithAuth || win?.fetchWithAuth || win?.fetch?.bind(win);
     const bootstrap = options.bootstrap || win?.__SPACE_PHONE_BOOTSTRAP__ || {};
     const now = options.now || (() => Date.now());
-    const timers = options.timers || { setInterval, clearInterval, setTimeout };
+    const timers = options.timers || { setInterval, clearInterval, setTimeout, clearTimeout };
     const logger = options.logger || console;
     if (!document || !win) return null;
 
@@ -66,6 +65,9 @@
       activeStartedAt: 0,
       elapsedSeconds: 0,
       tokenLoaded: false,
+      clientReady: false,
+      clientReadyPromise: null,
+      clientListeners: [],
     };
 
     const root = createElement(document, 'section', { className: 'space-phone is-idle', 'data-space-phone': '' });
@@ -108,9 +110,19 @@
     }
 
     function setStatus(status, extra = {}) {
+      const previous = state.status;
       state.status = status;
       if (extra.error !== undefined) state.error = extra.error;
-      if (status === 'active' && !state.activeStartedAt) state.activeStartedAt = now();
+      if (status === 'ringing' && previous !== 'ringing') {
+        updateCallRecord({ status: 'ringing' }).catch(() => {});
+      }
+      if (status === 'active' && !state.activeStartedAt) {
+        state.activeStartedAt = now();
+        updateCallRecord({ status: 'active', answered_at: new Date().toISOString() }).catch(() => {});
+      }
+      if ((status === 'ended' || status === 'failed') && previous !== status) {
+        updateCallRecord({ status, ended_at: new Date().toISOString(), duration_seconds: state.elapsedSeconds }).catch(() => {});
+      }
       if (status === 'ended' || status === 'failed' || status === 'idle') {
         state.activeStartedAt = 0;
         state.muted = false;
@@ -140,28 +152,87 @@
       return data;
     }
 
+    function addClientListener(client, event, handler) {
+      if (typeof client.on !== 'function') return;
+      client.on(event, handler);
+      state.clientListeners.push({ client, event, handler });
+    }
+
+    function removeClientListener(client, event, handler) {
+      if (typeof client?.off === 'function') client.off(event, handler);
+    }
+
+    function cleanupClient({ disconnect = true } = {}) {
+      const client = state.telnyxClient;
+      state.clientListeners.forEach(item => removeClientListener(item.client, item.event, item.handler));
+      state.clientListeners = [];
+      state.clientReadyPromise = null;
+      state.clientReady = false;
+      if (disconnect && client?.disconnect) {
+        try { client.disconnect(); } catch (error) { logger.warn?.('[space-phone] disconnect failed', error?.message || error); }
+      }
+      state.telnyxClient = null;
+      state.telnyxCall = null;
+    }
+
+    function waitForReady(client, timeoutMs = Number(bootstrap.readyTimeoutMs || 12000) || 12000) {
+      if (state.clientReady) return Promise.resolve();
+      if (state.clientReadyPromise) return state.clientReadyPromise;
+      state.clientReadyPromise = new Promise((resolve, reject) => {
+        let settled = false;
+        let timer;
+        const on = (event, handler) => { if (typeof client.on === 'function') client.on(event, handler); };
+        const off = (event, handler) => { if (typeof client.off === 'function') client.off(event, handler); };
+        const done = (fn, value) => {
+          if (settled) return;
+          settled = true;
+          timers.clearTimeout?.(timer);
+          off('telnyx.ready', onReady);
+          off('telnyx.error', onError);
+          off('error', onError);
+          fn(value);
+        };
+        const onReady = () => {
+          state.clientReady = true;
+          done(resolve);
+        };
+        const onError = error => done(reject, new Error(error?.message || 'Falha na autenticação Telnyx.'));
+        timer = timers.setTimeout(() => done(reject, new Error('Telnyx não ficou pronta para chamada dentro do tempo esperado.')), Math.max(1000, timeoutMs));
+        if (timer && typeof timer.unref === 'function') timer.unref();
+        on('telnyx.ready', onReady);
+        on('telnyx.error', onError);
+        on('error', onError);
+      }).finally(() => {
+        state.clientReadyPromise = null;
+      });
+      return state.clientReadyPromise;
+    }
+
     async function ensureClient() {
-      if (state.telnyxClient) return state.telnyxClient;
+      if (state.telnyxClient && state.clientReady) return state.telnyxClient;
+      if (state.telnyxClient && !state.clientReady) {
+        await waitForReady(state.telnyxClient);
+        return state.telnyxClient;
+      }
       if (!TelnyxRTC) throw new Error('SDK Telnyx indisponível. Recarregue a página.');
       const tokenPayload = await apiFetch(bootstrap.tokenEndpoint || '/api/voice/telnyx/token', { method: 'POST' });
       const loginToken = tokenPayload.login_token;
       if (!loginToken) throw new Error('Token WebRTC não retornado.');
       const client = new TelnyxRTC({ login_token: loginToken });
-      client.remoteElement = 'space-phone-remote-media';
-      if (typeof client.on === 'function') {
-        client.on('telnyx.notification', handleNotification);
-        client.on('telnyx.error', error => fail(error?.message || 'Falha na Telnyx.'));
-        client.on('error', error => fail(error?.message || 'Falha na conexão WebRTC.'));
-      }
-      await client.connect();
+      addClientListener(client, 'telnyx.notification', handleNotification);
+      addClientListener(client, 'telnyx.error', error => fail(error?.message || 'Falha na Telnyx.'));
+      addClientListener(client, 'error', error => fail(error?.message || 'Falha na conexão WebRTC.'));
       state.telnyxClient = client;
+      const readyPromise = waitForReady(client);
+      await client.connect();
+      await readyPromise;
       return client;
     }
 
     function handleNotification(notification = {}) {
-      const call = notification.call || notification.data?.call || notification.params?.call;
-      if (call) state.telnyxCall = call;
-      const status = normalizeSdkStatus(call?.state || notification.type || notification.event_type || notification.eventType);
+      const call = notification.call || notification.data?.call || notification.params?.call || notification;
+      if (call && call !== notification) state.telnyxCall = call;
+      const status = normalizeSdkStatus(call?.state || call?.status || notification.type || notification.event_type || notification.eventType);
       if (status) setStatus(status);
       const ids = {
         telnyx_call_control_id: call?.call_control_id || call?.callControlId,
@@ -171,6 +242,18 @@
       if (state.callRecord?.id && Object.values(ids).some(Boolean)) {
         updateCallRecord({ ...ids, status: state.status }).catch(() => {});
       }
+    }
+
+    function attachCallListeners(call) {
+      if (!call || typeof call.on !== 'function') return;
+      ['telnyx.notification', 'notification', 'state', 'stateChange', 'error'].forEach(eventName => {
+        try {
+          call.on(eventName, payload => {
+            if (eventName === 'error') fail(payload?.message || 'Chamada Telnyx falhou.');
+            else handleNotification(payload || call);
+          });
+        } catch {}
+      });
     }
 
     async function updateCallRecord(patch = {}) {
@@ -184,7 +267,6 @@
 
     function fail(message) {
       setStatus('failed', { error: friendlyError(message) });
-      if (state.callRecord?.id) updateCallRecord({ status: 'failed', ended_at: new Date().toISOString(), duration_seconds: state.elapsedSeconds }).catch(() => {});
     }
 
     function friendlyError(message) {
@@ -198,7 +280,7 @@
     async function call(input = {}) {
       if (!state.enabled) throw new Error('space_phone_disabled');
       if (ACTIVE_STATUSES.has(state.status)) throw new Error('Já existe uma ligação ativa.');
-      const phoneNumber = normalizePhone(input.phoneNumber || input.to_number);
+      const phoneNumber = normalizePhone(input.phoneNumber || input.to_number, bootstrap.defaultCountry || 'US');
       if (!phoneNumber) throw new Error('Telefone inválido. Use um número com DDI.');
       state.context = { ...input, phoneNumber };
       state.error = '';
@@ -214,14 +296,18 @@
           body: JSON.stringify({ phoneNumber, context: input }),
         });
         state.callRecord = created.call || null;
+        await updateCallRecord({ status: 'connecting' }).catch(() => {});
         const client = await ensureClient();
+        const remoteElement = document.getElementById('space-phone-remote-media');
         state.telnyxCall = client.newCall({
           destinationNumber: phoneNumber,
           callerNumber: state.callRecord?.from_number,
+          remoteElement,
           audio: true,
           clientState: state.callRecord?.id,
         });
-        setStatus('ringing');
+        attachCallListeners(state.telnyxCall);
+        setStatus('connecting');
         return state.callRecord;
       } catch (error) {
         fail(error.message);
@@ -265,6 +351,7 @@
     }
 
     function bindDom() {
+      win.addEventListener?.('beforeunload', () => cleanupClient({ disconnect: true }));
       root.querySelector('[data-phone-close]').addEventListener('click', () => root.classList.remove('is-visible'));
       root.querySelector('[data-phone-hangup]').addEventListener('click', () => hangup());
       root.querySelector('[data-phone-mute]').addEventListener('click', () => state.muted ? unmute() : mute());
@@ -291,7 +378,7 @@
       return api;
     }
 
-    const api = { call, hangup, mute, unmute, getState: () => ({ ...state }), mount, normalizePhone };
+    const api = { call, hangup, mute, unmute, cleanup: cleanupClient, getState: () => ({ ...state }), mount, normalizePhone };
     return api;
   }
 
