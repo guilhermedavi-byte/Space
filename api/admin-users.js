@@ -290,7 +290,10 @@ const ensureCommercialRoleAsAdmin = async ({ uid, commercialRole = '', actorId =
     error.details = response.data || response.text || null;
     throw error;
   }
-  return { ok: true, unchanged: false, role: targetRole, commercialRoles: after, before, after };
+  const verified = await getDocumentAsAdmin(`users/${encodeURIComponent(safeUid)}`);
+  const verifiedRole = normalizeRole(verified?.tipo || verified?.role || verified?.type);
+  const verifiedRoles = normalizeCommercialRoles(verified?.commercialRoles);
+  return { ok: true, unchanged: false, role: verifiedRole, commercialRoles: verifiedRoles, before, after: verifiedRoles };
 };
 
 const updateAdminUserAsSuperAdmin = async ({ action, uid, body, actorId = "" }) => {

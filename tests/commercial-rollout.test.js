@@ -74,6 +74,10 @@ const loadAdminUsersHandler = ({
       },
       commitWritesAsAdmin: async ({ writes: nextWrites }) => {
         writes.push(...nextWrites);
+        const userWrite = nextWrites.find((write) => String(write?.update?.name || "").includes("/documents/users/"));
+        if (userWrite?.update?.fields && targetDoc && typeof targetDoc === "object") {
+          Object.assign(targetDoc, userWrite.update.fields);
+        }
         return { ok: true, status: 200 };
       },
     },
