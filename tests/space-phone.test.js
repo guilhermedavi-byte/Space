@@ -156,6 +156,7 @@ test("space phone route boots the dedicated admin panel and script", async () =>
     assert.equal(res.statusCode, 200);
     assert.match(body, /data-initial-panel="space-phone"/);
     assert.match(body, /data-space-phone/);
+    assert.match(body, /src="script\.js\?v=6"/);
     assert.match(body, /src="space-phone\.js\?v=3"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
@@ -199,6 +200,18 @@ test("Growth closer-only session is hydrated from Firestore without SDR role", a
   assert.match(result.body, /data-initial-panel="native-crm"/);
   assert.deepEqual(extractEmbeddedSession(result.body).commercialRoles, ["closer"]);
 });
+
+test("server-rendered app html cache-busts script.js", async () => {
+  const result = await invokeAppRoute({
+    pathParam: "growth/comercial/pre-vendas/ligacoes",
+    sessionUser: { id: "growth-1", role: "growth", name: "SDR", email: "sdr@example.com" },
+    firestoreUser: { id: "growth-1", tipo: "growth", role: "growth", ativo: true, active: true, commercialRoles: ["sdr"] },
+  });
+  assert.equal(result.statusCode, 200);
+  assert.match(result.body, /src="script\.js\?v=6"/);
+  assert.doesNotMatch(result.body, /src="script\.js"><\/script>/);
+});
+
 
 test("space phone correlates post-call AI by from/to/time/duration fallback and self-heals IDs", async () => {
   const patches = [];
