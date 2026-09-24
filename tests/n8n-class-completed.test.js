@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const handler = require("../api/integrations/n8n/class-completed");
-const { getMeetCode, deriveStudentName, scoreCandidate, namesMatch } = handler._test;
+const { getMeetCode, deriveStudentName, scoreCandidate, namesMatch, normalizeUserType } = handler._test;
 
 test("extrai código do Google Meet de URL ou código puro", () => {
   assert.equal(getMeetCode("https://meet.google.com/abc-defg-hij"), "abc-defg-hij");
@@ -71,4 +71,11 @@ test("professor + aluno + horário encontra aula sem Meet salvo", () => {
   assert.ok(result.reasons.includes("teacher_email"));
   assert.ok(result.reasons.includes("student_name"));
   assert.ok(result.reasons.includes("time_10m"));
+});
+
+
+test("normaliza tipos de usuário do Firestore", () => {
+  assert.equal(normalizeUserType("Professor"), "professor");
+  assert.equal(normalizeUserType("student"), "student");
+  assert.equal(normalizeUserType("Aluno"), "aluno");
 });
