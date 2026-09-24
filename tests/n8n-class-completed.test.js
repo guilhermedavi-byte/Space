@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const handler = require("../api/integrations/n8n/class-completed");
-const { getMeetCode, deriveStudentName, scoreCandidate, namesMatch, normalizeUserType } = handler._test;
+const { getMeetCode, deriveStudentName, scoreCandidate, namesMatch, normalizeUserType, scoreStudentCandidate } = handler._test;
 
 test("extrai código do Google Meet de URL ou código puro", () => {
   assert.equal(getMeetCode("https://meet.google.com/abc-defg-hij"), "abc-defg-hij");
@@ -78,4 +78,11 @@ test("normaliza tipos de usuário do Firestore", () => {
   assert.equal(normalizeUserType("Professor"), "professor");
   assert.equal(normalizeUserType("student"), "student");
   assert.equal(normalizeUserType("Aluno"), "aluno");
+});
+
+
+test("scoring de aluno aceita nome parcial com sobrenome e rejeita só primeiro nome", () => {
+  assert.ok(scoreStudentCandidate("David Verli", "David Alexandre Verli da Silva") >= 85);
+  assert.ok(scoreStudentCandidate("Pedro Alcântara", "Pedro Alcantara de Queiroz") >= 85);
+  assert.equal(scoreStudentCandidate("David", "David Alexandre Verli da Silva"), -1);
 });

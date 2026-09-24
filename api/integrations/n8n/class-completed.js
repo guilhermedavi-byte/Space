@@ -207,6 +207,132 @@ const findExistingLessonByExternalKey = async (body) => {
   return null;
 };
 
+const normalizeCandidate = (row, source) => {
+  if (!row || typeof row !== "object") return null;
+  if (source === "students") {
+    return {
+      source,
+      id: String(row.id || "").trim(),
+      name: String(row.full_name || "").trim(),
+      email: String(row.email || "").trim(),
+      phone: String(row.phone || "").trim(),
+      firestoreId: String(row.firestore_student_id || "").trim(),
+      raw: row,
+    };
+  }
+  return {
+    source,
+    id: String(row.id || "").trim(),
+    name: String(row.aluno_nome || "").trim(),
+    email: String(row.email || "").trim(),
+    phone: String(row.telefone || "").trim(),
+    firestoreId: String(row.firestore_doc_id || "").trim(),
+    raw: row,
+  };
+};
+
+const scoreStudentCandidate = (needle, candidateName) => {
+  const left = normalizeName(needle);
+  const right = normalizeName(candidateName);
+  if (!left || !right) return -1;
+  if (left === right) return 100;
+
+  const leftTokens = left.split(/\s+/).filter((token) => token.length >= 3);
+  const rightTokens = new Set(right.split(/\s+/).filter((token) => token.length >= 3));
+
+  if (leftTokens.length >= 2 && leftTokens.every((token) => rightTokens.has(token))) {
+    return 85 + Math.min(10, leftTokens.length);
+  }
+
+  const lc = compact(left);
+  const rc = compact(right);
+  if (lc && rc && (lc.includes(rc) || rc.includes(lc))) return 75;
+
+  return -1;
+};
+
+const resolveStudentAcrossSources = async (studentName) => {
+  const firstToken = normalizeName(studentName).split(/\s+/).find(Boolean) || normalizeName(studentName);
+
+  const paths = [
+    {
+      source: "students",
+      path: `/students?select=*&full_name=ilike.${safeEncode(`*${firstToken}*`)}&limit=50`,
+    },
+    {
+      source: "onboarding",
+      path: `/n8n_onboarding_alunos_space?select=*&aluno_nome=ilike.${safeEncode(`*${firstToken}*`)}&limit=50`,
+    },
+    {
+      source: "finance",
+      path: `/n8n_alunos_financeiro_space?select=*&aluno_nome=ilike.${safeEncode(`*${firstToken}*`)}&limit=50`,
+    },
+  ];
+
+  const results = await Promise.all(
+    paths.map(async ({ source, path }) => {
+      const { data } = await supabaseFetch(path).catch(() => ({ data: [] }));
+      return (Array.isArray(data) ? data : [])
+        .map((row) => normalizeCandidate(row, source))
+        .filter(Boolean);
+    })
+  );
+
+  const sourcePriority = { students: 3, onboarding: 2, finance: 1 };
+  const scored = results
+    .flat()
+    .map((candidate) => ({
+      candidate,
+      score: scoreStudentCandidate(studentName, candidate.name),
+    }))
+    .filter((item) => item.score >= 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return (sourcePriority[b.candidate.source] || 0) - (sourcePriority[a.candidate.source] || 0);
+    });
+
+  if (!scored.length) {
+    return {
+      ok: false,
+      reason: "student_not_found",
+      total_source_candidates: results.flat().length,
+    };
+  }
+
+  const groupedByName = new Map();
+  for (const item of scored) {
+    const key = normalizeName(item.candidate.name);
+    if (!key) continue;
+    const prev = groupedByName.get(key);
+    if (!prev || item.score > prev.score || (
+      item.score === prev.score &&
+      (sourcePriority[item.candidate.source] || 0) > (sourcePriority[prev.candidate.source] || 0)
+    )) {
+      groupedByName.set(key, item);
+    }
+  }
+
+  const unique = [...groupedByName.values()].sort((a, b) => b.score - a.score);
+  const top = unique[0];
+  const second = unique[1];
+
+  if (second && second.score >= top.score) {
+    return {
+      ok: false,
+      reason: "student_ambiguous",
+      student_matches: unique.length,
+      candidate_names: unique.slice(0, 5).map((item) => item.candidate.name),
+    };
+  }
+
+  return {
+    ok: true,
+    student: top.candidate,
+    score: top.score,
+    candidate_count: unique.length,
+  };
+};
+
 const createFallbackLesson = async (body) => {
   const studentName = deriveStudentName(body);
   const teacherEmail = normalizeText(body.teacher_email);
@@ -222,24 +348,18 @@ const createFallbackLesson = async (body) => {
     return { ok: false, reason: "teacher_not_found", teacher_matches: 0 };
   }
 
-  const firstToken = normalizeName(studentName).split(/\s+/).find(Boolean) || normalizeName(studentName);
-  const studentPath =
-    `/students?select=*&full_name=ilike.${safeEncode(`*${firstToken}*`)}&limit=50`;
-
-  const { data: studentRowsRaw } = await supabaseFetch(studentPath).catch(() => ({ data: [] }));
-  const studentRows = Array.isArray(studentRowsRaw) ? studentRowsRaw : [];
-  const studentCandidates = studentRows.filter((row) => namesMatch(studentName, row?.full_name));
-
-  if (studentCandidates.length !== 1) {
+  const resolvedStudent = await resolveStudentAcrossSources(studentName);
+  if (!resolvedStudent.ok) {
     return {
       ok: false,
-      reason: studentCandidates.length ? "student_ambiguous" : "student_not_found",
-      student_matches: studentCandidates.length,
-      exact_name_matches: studentRows.length,
+      reason: resolvedStudent.reason,
+      student_matches: resolvedStudent.student_matches ?? 0,
+      exact_name_matches: resolvedStudent.total_source_candidates ?? null,
+      candidate_names: resolvedStudent.candidate_names ?? [],
     };
   }
 
-  const student = studentCandidates[0];
+  const student = resolvedStudent.student;
 
   const startIso = new Date(referenceMs).toISOString();
   const meetingStartMs = Date.parse(String(body.meeting_start_time || body.started_at || ""));
@@ -260,15 +380,15 @@ const createFallbackLesson = async (body) => {
     String(body.calendar_uid || "").trim() ||
     (body.meeting_id != null ? `vexa:${body.meeting_id}` : `vexa:${meetCode || referenceMs}`);
 
-  const studentId = String(student?.id || "").trim();
-  const rawFirestoreId = String(student?.firestore_student_id || "").trim();
+  const studentId = String(student.id || "").trim();
+  const rawFirestoreId = String(student.firestoreId || "").trim();
   const safeFirestoreId =
     rawFirestoreId && !rawFirestoreId.startsWith("asaas_") ? rawFirestoreId : null;
 
   const row = {
-    aluno_nome: String(student?.full_name || studentName).trim(),
-    telefone: String(student?.phone || "").trim() || null,
-    email: String(student?.email || "").trim() || null,
+    aluno_nome: String(student.name || studentName).trim(),
+    telefone: String(student.phone || "").trim() || null,
+    email: String(student.email || "").trim() || null,
     professor_id: teacherEmail,
     professor_nome: teacherName,
     data_aula: startIso,
@@ -291,8 +411,8 @@ const createFallbackLesson = async (body) => {
     video_join_url_professor: meetingUrl || null,
     firestore_doc_id: safeFirestoreId,
     aluno_id: studentId || null,
-    aluno_email: String(student?.email || "").trim() || null,
-    aluno_telefone: String(student?.phone || "").trim() || null,
+    aluno_email: String(student.email || "").trim() || null,
+    aluno_telefone: String(student.phone || "").trim() || null,
     occurrence_id: occurrenceId,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -311,8 +431,8 @@ const createFallbackLesson = async (body) => {
   }
 
   lesson.professor_email = teacherEmail;
-  lesson.aluno_email = lesson.aluno_email || String(student?.email || "").trim();
-  lesson.aluno_telefone = lesson.aluno_telefone || String(student?.phone || "").trim();
+  lesson.aluno_email = lesson.aluno_email || String(student.email || "").trim();
+  lesson.aluno_telefone = lesson.aluno_telefone || String(student.phone || "").trim();
 
   return {
     ok: true,
@@ -320,7 +440,11 @@ const createFallbackLesson = async (body) => {
     created: true,
     score: 100,
     direct: true,
-    reasons: ["fallback_students_table", "fallback_teacher_email", "fallback_time"],
+    reasons: [
+      `fallback_${student.source}`,
+      "fallback_teacher_email",
+      "fallback_time",
+    ],
   };
 };
 
@@ -495,6 +619,7 @@ handler._test = {
   scoreCandidate,
   namesMatch,
   normalizeUserType,
+  scoreStudentCandidate,
 };
 
 module.exports = handler;
