@@ -194,17 +194,19 @@ const mapErrorStatus = error => Number(error?.status || error?.telnyxStatus || 5
 const escapeFilter = value => encodeURIComponent(clean(value).replace(/[%*,()]/g, ''));
 const voiceCallSelect = [
   'id',
-  'call_leg_id',
-  'call_session_id',
-  'connection_id',
-  'recording_id',
+  'provider',
+  'source',
   'direction',
-  'from_number',
-  'to_number',
-  'caller_id',
   'space_user_uid',
   'space_user_email',
+  'lead_id',
+  'opportunity_id',
   'lead_name',
+  'from_number',
+  'to_number',
+  'telnyx_call_control_id',
+  'telnyx_call_leg_id',
+  'telnyx_call_session_id',
   'status',
   'started_at',
   'answered_at',
@@ -215,6 +217,7 @@ const voiceCallSelect = [
   'callback_at',
   'ended_reason',
   'created_at',
+  'updated_at',
 ].join(',');
 
 const duration = (row = {}) => {
@@ -236,21 +239,22 @@ const statusKind = (row = {}) => {
 
 const normalizeCall = (row = {}, analysis = null, crm = null) => {
   const to = clean(row.to_number || row.phone || '');
-  const from = clean(row.from_number || row.caller_id || '');
+  const from = clean(row.from_number || '');
   return {
-    id: clean(row.id || row.call_leg_id || row.call_session_id || row.recording_id),
-    callLegId: clean(row.call_leg_id || row.telnyx_call_leg_id),
-    callSessionId: clean(row.call_session_id || row.telnyx_call_session_id),
-    connectionId: clean(row.connection_id),
-    recordingId: clean(row.recording_id || analysis?.recording_id),
+    id: clean(row.id || row.telnyx_call_leg_id || row.telnyx_call_session_id || analysis?.recording_id),
+    callLegId: clean(row.telnyx_call_leg_id),
+    callSessionId: clean(row.telnyx_call_session_id),
+    callControlId: clean(row.telnyx_call_control_id),
+    connectionId: clean(analysis?.connection_id),
+    recordingId: clean(analysis?.recording_id),
     direction: clean(row.direction) || 'outbound',
     number: to || from,
     fromNumber: from,
     toNumber: to,
-    callerId: clean(row.caller_id || from),
-    sdrUid: clean(row.sdr_uid || row.space_user_uid || row.sdr || ''),
-    sdrName: clean(row.sdr_name || row.lead_name || row.sdr || 'SDR'),
-    sdrEmail: clean(row.sdr_email || row.space_user_email),
+    callerId: from,
+    sdrUid: clean(row.space_user_uid || ''),
+    sdrName: clean(row.lead_name || row.space_user_email || 'SDR'),
+    sdrEmail: clean(row.space_user_email),
     status: statusKind(row),
     rawStatus: clean(row.status),
     startedAt: clean(row.started_at || row.created_at),
@@ -261,7 +265,7 @@ const normalizeCall = (row = {}, analysis = null, crm = null) => {
     outcome: clean(row.outcome),
     callbackAt: clean(row.callback_at),
     endedReason: clean(row.ended_reason),
-    recordingAvailable: Boolean(row.recording_id || analysis?.recording_id || analysis?.recording_url),
+    recordingAvailable: Boolean(analysis?.recording_id || analysis?.recording_url),
     transcriptionAvailable: Boolean(analysis?.transcript),
     analysisStatus: analysis ? (analysis.score != null ? 'completed' : analysis.transcript ? 'analyzing' : 'processing') : 'processing',
     score: analysis?.score ?? null,
@@ -305,28 +309,27 @@ const queryVoiceCalls = async ({ request, range, userFilter, status = '', q = ''
 };
 
 const loadAnalysisMap = async ({ request, calls }) => {
-  const keys = [...new Set(calls.flatMap(row => [row.call_leg_id, row.telnyx_call_leg_id, row.call_session_id, row.telnyx_call_session_id, row.recording_id].map(clean)).filter(Boolean))].slice(0, 60);
-  if (!keys.length) return new Map();
+  const pairs = calls.flatMap(row => [
+    ['call_leg_id', clean(row.telnyx_call_leg_id)],
+    ['call_session_id', clean(row.telnyx_call_session_id)],
+  ]).filter(([, value]) => value).slice(0, 80);
+  if (!pairs.length) return new Map();
   const map = new Map();
-  for (const key of keys) {
-    const filters = [`call_leg_id=eq.${encodeURIComponent(key)}`, `call_session_id=eq.${encodeURIComponent(key)}`, `recording_id=eq.${encodeURIComponent(key)}`];
-    for (const filter of filters) {
-      try {
-        const rows = asRows(await request(`/sdr_call_scores?select=recording_id,call_leg_id,call_session_id,connection_id,to_number,started_at,duration_seconds,transcript,score,analysis,recording_url,created_at&${filter}&limit=1`, { timeoutMs: 8000 }));
-        if (rows[0]) {
-          [rows[0].call_leg_id, rows[0].call_session_id, rows[0].recording_id].map(clean).filter(Boolean).forEach(id => map.set(id, rows[0]));
-          break;
-        }
-      } catch {
-        break;
+  for (const [field, value] of pairs) {
+    try {
+      const rows = asRows(await request(`/sdr_call_scores?select=recording_id,call_leg_id,call_session_id,connection_id,to_number,started_at,duration_seconds,transcript,score,analysis,recording_url,created_at&${field}=eq.${encodeURIComponent(value)}&limit=1`, { timeoutMs: 8000 }));
+      if (rows[0]) {
+        [rows[0].call_leg_id, rows[0].call_session_id].map(clean).filter(Boolean).forEach(id => map.set(id, rows[0]));
       }
+    } catch {
+      // Analysis is optional for first-call certification.
     }
   }
   return map;
 };
 
 const findAnalysis = (row, analysisMap) => {
-  const key = [row.call_leg_id, row.telnyx_call_leg_id, row.call_session_id, row.telnyx_call_session_id, row.recording_id].map(clean).find(id => analysisMap.has(id));
+  const key = [row.telnyx_call_leg_id, row.telnyx_call_session_id].map(clean).find(id => analysisMap.has(id));
   return key ? analysisMap.get(key) : null;
 };
 
@@ -386,7 +389,7 @@ const detailModel = async ({ request, id, user, isAdmin }) => {
     error.status = 400;
     throw error;
   }
-  const filters = [`id=eq.${encodeURIComponent(safeId)}`, `call_leg_id=eq.${encodeURIComponent(safeId)}`, `call_session_id=eq.${encodeURIComponent(safeId)}`, `recording_id=eq.${encodeURIComponent(safeId)}`];
+  const filters = [`id=eq.${encodeURIComponent(safeId)}`, `telnyx_call_leg_id=eq.${encodeURIComponent(safeId)}`, `telnyx_call_session_id=eq.${encodeURIComponent(safeId)}`];
   let row = null;
   for (const filter of filters) {
     const rows = asRows(await request(`/voice_calls?select=${voiceCallSelect}&${filter}&limit=1`, { timeoutMs: 12000 }));
@@ -400,7 +403,7 @@ const detailModel = async ({ request, id, user, isAdmin }) => {
     error.status = 404;
     throw error;
   }
-  if (!isAdmin && clean(row.space_user_uid || row.sdr_uid) !== clean(user.sub)) {
+  if (!isAdmin && clean(row.space_user_uid) !== clean(user.sub)) {
     const error = new Error('forbidden');
     error.status = 403;
     throw error;
@@ -448,4 +451,5 @@ module.exports = {
   summarize,
   updateCall,
   updateVoiceCall,
+  voiceCallSelect,
 };

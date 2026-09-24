@@ -29,18 +29,9 @@ begin
   end if;
 end $$;
 
-do $$
-begin
-  if exists (
-    select 1 from information_schema.tables
-    where table_schema = 'public' and table_name = 'voice_calls'
-  ) then
-    create index if not exists voice_calls_sdr_started_idx
-      on public.voice_calls (sdr_uid, started_at desc)
-      where started_at is not null;
+create index if not exists voice_calls_space_user_started_idx
+  on public.voice_calls (space_user_uid, started_at desc);
 
-    create index if not exists voice_calls_callback_idx
-      on public.voice_calls (callback_at)
-      where callback_at is not null;
-  end if;
-end $$;
+create index if not exists voice_calls_callback_idx
+  on public.voice_calls (callback_at)
+  where callback_at is not null;

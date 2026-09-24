@@ -23,13 +23,30 @@ test("space phone normalizes manual US and international phone numbers", () => {
   assert.equal(__private.normalizePhoneInput("123").ok, false);
 });
 
+
+test("voice call select only references canonical production columns plus new disposition columns", () => {
+  const allowed = new Set([
+    "id", "provider", "source", "direction", "space_user_uid", "space_user_email", "lead_id", "opportunity_id", "lead_name",
+    "from_number", "to_number", "telnyx_call_control_id", "telnyx_call_leg_id", "telnyx_call_session_id", "status",
+    "started_at", "answered_at", "ended_at", "duration_seconds", "created_at", "updated_at",
+    "notes", "outcome", "callback_at", "ended_reason",
+  ]);
+  const selected = __private.voiceCallSelect.split(",");
+  assert.ok(selected.includes("telnyx_call_leg_id"));
+  assert.ok(selected.includes("telnyx_call_session_id"));
+  for (const col of selected) assert.ok(allowed.has(col), `unexpected voice_calls column ${col}`);
+  assert.equal(selected.includes("call_leg_id"), false);
+  assert.equal(selected.includes("sdr_uid"), false);
+  assert.equal(selected.includes("recording_id"), false);
+});
+
 test("growth SDR list is server-side scoped to own voice calls", async () => {
   const seen = [];
   const handler = createHandler({
     authResolver: async () => ({ ok: true, session: { role: "growth", sub: "sdr-1" }, profile: { user: { commercialRoles: ["sdr"] } } }),
     request: async (path) => {
       seen.push(path);
-      if (path.startsWith("/voice_calls")) return { data: [{ id: "c1", sdr_uid: "sdr-1", to_number: "+16175551212", status: "completed", started_at: "2026-09-24T12:00:00Z", duration_seconds: 61 }] };
+      if (path.startsWith("/voice_calls")) return { data: [{ id: "c1", space_user_uid: "sdr-1", space_user_email: "sdr1@space.test", to_number: "+16175551212", status: "completed", started_at: "2026-09-24T12:00:00Z", duration_seconds: 61 }] };
       return { data: [] };
     },
   });
@@ -48,7 +65,7 @@ test("admin can list all calls or select an SDR", async () => {
     permissionResolver: async () => ({ ok: true }),
     request: async (path) => {
       seen.push(path);
-      return { data: path.startsWith("/voice_calls") ? [{ id: "c2", sdr_uid: "sdr-2", to_number: "+16175550000", status: "completed", started_at: "2026-09-24T12:00:00Z" }] : [] };
+      return { data: path.startsWith("/voice_calls") ? [{ id: "c2", space_user_uid: "sdr-2", space_user_email: "sdr2@space.test", to_number: "+16175550000", status: "completed", started_at: "2026-09-24T12:00:00Z" }] : [] };
     },
   });
   const res = await invoke(handler, { url: "/api/space-phone?period=last7&sdr=sdr-2" });
@@ -64,9 +81,9 @@ test("space phone persists notes, outcome and callback on the real voice call", 
     request: async (path, options = {}) => {
       if (options.method === "PATCH") {
         patches.push({ path, body: options.body });
-        return { data: [{ id: "call-1", sdr_uid: "sdr-1", to_number: "+16175551212", notes: options.body.notes, outcome: options.body.outcome, callback_at: options.body.callback_at }] };
+        return { data: [{ id: "call-1", space_user_uid: "sdr-1", space_user_email: "sdr1@space.test", to_number: "+16175551212", notes: options.body.notes, outcome: options.body.outcome, callback_at: options.body.callback_at }] };
       }
-      if (path.startsWith("/voice_calls")) return { data: [{ id: "call-1", sdr_uid: "sdr-1", to_number: "+16175551212", status: "completed", started_at: "2026-09-24T12:00:00Z" }] };
+      if (path.startsWith("/voice_calls")) return { data: [{ id: "call-1", space_user_uid: "sdr-1", space_user_email: "sdr1@space.test", to_number: "+16175551212", status: "completed", started_at: "2026-09-24T12:00:00Z" }] };
       return { data: [] };
     },
   });

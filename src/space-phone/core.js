@@ -49,7 +49,13 @@
     const fetchWithAuth = options.fetchWithAuth || win?.fetchWithAuth || win?.fetch?.bind(win);
     const bootstrap = options.bootstrap || win?.__SPACE_PHONE_BOOTSTRAP__ || {};
     const now = options.now || (() => Date.now());
-    const timers = options.timers || { setInterval, clearInterval, setTimeout, clearTimeout };
+    const nodeTimers = typeof process !== 'undefined' && process.versions?.node;
+    const timers = options.timers || {
+      setInterval: (...args) => nodeTimers ? globalThis.setInterval(...args) : win.setInterval(...args),
+      clearInterval: (...args) => nodeTimers ? globalThis.clearInterval(...args) : win.clearInterval(...args),
+      setTimeout: (...args) => nodeTimers ? globalThis.setTimeout(...args) : win.setTimeout(...args),
+      clearTimeout: (...args) => nodeTimers ? globalThis.clearTimeout(...args) : win.clearTimeout(...args),
+    };
     const logger = options.logger || console;
     if (!document || !win) return null;
 
@@ -57,6 +63,7 @@
       enabled: Boolean(bootstrap.enabled),
       status: 'idle',
       muted: false,
+      held: false,
       error: '',
       context: null,
       callRecord: null,
@@ -67,6 +74,9 @@
       tokenLoaded: false,
       clientReady: false,
       clientReadyPromise: null,
+      inputDeviceId: safeText(win.localStorage?.getItem?.('space_phone_input_device_id')),
+      outputDeviceId: safeText(win.localStorage?.getItem?.('space_phone_output_device_id')),
+      devices: { inputs: [], outputs: [], permission: 'unknown' },
       clientListeners: [],
     };
 
@@ -86,6 +96,28 @@
       </div>
     `;
 
+    function snapshot() {
+      return {
+        enabled: state.enabled,
+        status: state.status,
+        muted: state.muted,
+        held: state.held,
+        error: state.error,
+        context: state.context ? { ...state.context } : null,
+        callRecord: state.callRecord ? { ...state.callRecord } : null,
+        activeStartedAt: state.activeStartedAt,
+        elapsedSeconds: state.elapsedSeconds,
+        clientReady: state.clientReady,
+        inputDeviceId: state.inputDeviceId,
+        outputDeviceId: state.outputDeviceId,
+        devices: { inputs: [...state.devices.inputs], outputs: [...state.devices.outputs], permission: state.devices.permission },
+      };
+    }
+
+    function emitChange() {
+      try { win.dispatchEvent?.(new win.CustomEvent('space-phone:state', { detail: snapshot() })); } catch {}
+    }
+
     function render() {
       if (!state.enabled) {
         root.remove();
@@ -103,6 +135,7 @@
       const errorEl = root.querySelector('[data-phone-error]');
       errorEl.hidden = !state.error;
       errorEl.textContent = state.error;
+      emitChange();
     }
 
     function statusLabel(status) {
@@ -126,6 +159,7 @@
       if (status === 'ended' || status === 'failed' || status === 'idle') {
         state.activeStartedAt = 0;
         state.muted = false;
+        state.held = false;
       }
       render();
     }
@@ -231,7 +265,7 @@
 
     function handleNotification(notification = {}) {
       const call = notification.call || notification.data?.call || notification.params?.call || notification;
-      if (call && call !== notification) state.telnyxCall = call;
+      if (call && call !== notification && (typeof call.hangup === 'function' || typeof call.muteAudio === 'function')) state.telnyxCall = call;
       const status = normalizeSdkStatus(call?.state || call?.status || notification.type || notification.event_type || notification.eventType);
       if (status) setStatus(status);
       const ids = {
@@ -288,7 +322,9 @@
       setStatus('connecting');
       try {
         if (!win.navigator?.mediaDevices?.getUserMedia) throw new Error('Navegador sem suporte a microfone WebRTC.');
-        const stream = await win.navigator.mediaDevices.getUserMedia({ audio: true });
+        const audio = input.micId || input.inputDeviceId || state.inputDeviceId ? { deviceId: { exact: input.micId || input.inputDeviceId || state.inputDeviceId } } : true;
+        const stream = await win.navigator.mediaDevices.getUserMedia({ audio });
+        state.devices.permission = 'granted';
         stream.getTracks().forEach(track => track.stop());
         const created = await apiFetch(bootstrap.callEndpoint || '/api/voice/calls', {
           method: 'POST',
@@ -307,6 +343,7 @@
           clientState: state.callRecord?.id,
         });
         attachCallListeners(state.telnyxCall);
+        await applyAudioDevices({ micId: input.micId || input.inputDeviceId, speakerId: input.speakerId || input.outputDeviceId }).catch(() => {});
         setStatus('connecting');
         return state.callRecord;
       } catch (error) {
@@ -315,43 +352,137 @@
       }
     }
 
+    function requireTelnyxCall(action) {
+      if (!state.telnyxCall) throw new Error(`${action} indisponível: nenhuma ligação Telnyx ativa.`);
+      return state.telnyxCall;
+    }
+
     async function hangup() {
       if (!ACTIVE_STATUSES.has(state.status)) return;
       setStatus('ending');
       try {
-        if (state.telnyxCall?.hangup) await state.telnyxCall.hangup();
-        else if (state.telnyxCall?.hangUp) await state.telnyxCall.hangUp();
+        await requireTelnyxCall('Hangup').hangup();
       } catch (error) {
         logger.warn?.('[space-phone] hangup failed', error?.message || error);
+        fail(error.message);
+        throw error;
       }
       const endedAt = new Date().toISOString();
       await updateCallRecord({ status: 'ended', ended_at: endedAt, duration_seconds: state.elapsedSeconds }).catch(() => {});
       setStatus('ended');
-      timers.setTimeout(() => setStatus('idle'), 1800);
+      const resetTimer = timers.setTimeout(() => setStatus('idle'), 1800);
+      if (resetTimer && typeof resetTimer.unref === 'function') resetTimer.unref();
     }
 
     async function mute() {
       if (state.muted) return;
       try {
-        if (state.telnyxCall?.muteAudio) state.telnyxCall.muteAudio();
-        if (state.telnyxClient?.disableMicrophone) state.telnyxClient.disableMicrophone();
+        requireTelnyxCall('Mute').muteAudio();
         state.muted = true;
         render();
-      } catch (error) { fail(error.message); }
+      } catch (error) { fail(error.message); throw error; }
     }
 
     async function unmute() {
       if (!state.muted) return;
       try {
-        if (state.telnyxCall?.unmuteAudio) state.telnyxCall.unmuteAudio();
-        if (state.telnyxClient?.enableMicrophone) state.telnyxClient.enableMicrophone();
+        requireTelnyxCall('Unmute').unmuteAudio();
         state.muted = false;
         render();
-      } catch (error) { fail(error.message); }
+      } catch (error) { fail(error.message); throw error; }
+    }
+
+    async function hold() {
+      if (state.held) return;
+      try {
+        await requireTelnyxCall('Hold').hold();
+        state.held = true;
+        render();
+      } catch (error) { fail(error.message); throw error; }
+    }
+
+    async function unhold() {
+      if (!state.held) return;
+      try {
+        await requireTelnyxCall('Resume').unhold();
+        state.held = false;
+        render();
+      } catch (error) { fail(error.message); throw error; }
+    }
+
+    async function dtmf(digit) {
+      const value = safeText(digit);
+      if (!/^[0-9*#]$/.test(value)) return;
+      try {
+        return requireTelnyxCall('DTMF').dtmf(value);
+      } catch (error) { fail(error.message); throw error; }
+    }
+
+    async function setAudioInputDevice(deviceId) {
+      const value = safeText(deviceId);
+      state.inputDeviceId = value;
+      try { win.localStorage?.setItem?.('space_phone_input_device_id', value); } catch {}
+      if (state.telnyxCall && value) await state.telnyxCall.setAudioInDevice(value);
+      render();
+      return value;
+    }
+
+    async function setAudioOutputDevice(deviceId) {
+      const value = safeText(deviceId);
+      state.outputDeviceId = value;
+      try { win.localStorage?.setItem?.('space_phone_output_device_id', value); } catch {}
+      if (state.telnyxCall && value) await state.telnyxCall.setAudioOutDevice(value);
+      else await applyOutputDevice(value).catch(() => false);
+      render();
+      return value;
+    }
+
+    async function applyOutputDevice(deviceId = state.outputDeviceId) {
+      const audioEl = document.getElementById('space-phone-remote-media');
+      if (!audioEl || !deviceId || typeof audioEl.setSinkId !== 'function') return false;
+      await audioEl.setSinkId(deviceId);
+      return true;
+    }
+
+    async function applyAudioDevices({ micId, speakerId } = {}) {
+      const input = safeText(micId || state.inputDeviceId);
+      const output = safeText(speakerId || state.outputDeviceId);
+      if (input) await setAudioInputDevice(input);
+      if (output) await setAudioOutputDevice(output);
+    }
+
+    async function refreshDevices({ requestPermission = false } = {}) {
+      if (!win.navigator?.mediaDevices?.enumerateDevices) return state.devices;
+      if (requestPermission && win.navigator.mediaDevices.getUserMedia) {
+        try {
+          const stream = await win.navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop());
+          state.devices.permission = 'granted';
+        } catch {
+          state.devices.permission = 'denied';
+        }
+      }
+      const devices = await win.navigator.mediaDevices.enumerateDevices();
+      state.devices = {
+        ...state.devices,
+        inputs: devices.filter(device => device.kind === 'audioinput').map(device => ({ deviceId: device.deviceId, label: device.label || 'Microfone' })),
+        outputs: devices.filter(device => device.kind === 'audiooutput').map(device => ({ deviceId: device.deviceId, label: device.label || 'Saída' })),
+      };
+      render();
+      return state.devices;
+    }
+
+    function subscribe(listener) {
+      if (typeof listener !== 'function') return () => {};
+      const handler = event => listener(event.detail || snapshot());
+      win.addEventListener?.('space-phone:state', handler);
+      listener(snapshot());
+      return () => win.removeEventListener?.('space-phone:state', handler);
     }
 
     function bindDom() {
       win.addEventListener?.('beforeunload', () => cleanupClient({ disconnect: true }));
+      win.navigator?.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices().catch(() => {}));
       root.querySelector('[data-phone-close]').addEventListener('click', () => root.classList.remove('is-visible'));
       root.querySelector('[data-phone-hangup]').addEventListener('click', () => hangup());
       root.querySelector('[data-phone-mute]').addEventListener('click', () => state.muted ? unmute() : mute());
@@ -378,7 +509,7 @@
       return api;
     }
 
-    const api = { call, hangup, mute, unmute, cleanup: cleanupClient, getState: () => ({ ...state }), mount, normalizePhone };
+    const api = { call, hangup, mute, unmute, hold, unhold, resume: unhold, dtmf, setAudioInputDevice, setAudioOutputDevice, refreshDevices, subscribe, cleanup: cleanupClient, getState: snapshot, mount, normalizePhone };
     return api;
   }
 

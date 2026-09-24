@@ -6,7 +6,7 @@
     "test": "node --test tests/*.test.js",
     "check": "node --check script.js && node --check landing.js && node --check auth.js",
     "dev": "node --env-file=.env.local scripts/dev-server.js",
-    "build:space-phone": "esbuild src/space-phone/index.js --bundle --minify --format=iife --global-name=SpacePhoneBundle --outfile=assets/space-phone.bundle.js"
+    "build:space-phone": "esbuild src/space-phone/index.js --bundle --minify --format=iife --global-name=SpacePhoneBundle --outfile=assets/space-phone.bundle.js && node -e \"const fs=require('fs');const p='assets/space-phone.bundle.js';fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace(/[ \\t]+$/gm,''))\""
   },
   "dependencies": {
     "@telnyx/webrtc": "^2.27.10",

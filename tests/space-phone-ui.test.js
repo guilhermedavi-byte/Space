@@ -33,7 +33,18 @@ function fakeTelnyxFactory(requests = [], { autoReady = true, errorBeforeReady =
     disconnect() { this.disconnected = true; }
     newCall(params) {
       requests.push({ type: 'newCall', params });
-      const call = { handlers: {}, on(name, cb) { (this.handlers[name] ||= []).push(cb); }, hangup: async () => requests.push({ type: 'hangup' }) };
+      const call = {
+        handlers: {},
+        on(name, cb) { (this.handlers[name] ||= []).push(cb); },
+        hangup: async () => requests.push({ type: 'hangup' }),
+        muteAudio: () => requests.push({ type: 'muteAudio' }),
+        unmuteAudio: () => requests.push({ type: 'unmuteAudio' }),
+        hold: async () => requests.push({ type: 'hold' }),
+        unhold: async () => requests.push({ type: 'unhold' }),
+        dtmf: digit => requests.push({ type: 'dtmf', digit }),
+        setAudioInDevice: async id => requests.push({ type: 'setAudioInDevice', id }),
+        setAudioOutDevice: async id => requests.push({ type: 'setAudioOutDevice', id }),
+      };
       return call;
     }
     disableMicrophone() {}
@@ -176,4 +187,57 @@ test('cleanup disconnects the Telnyx client on page unload', async () => {
   await phone.call({ phoneNumber: '+16175551212' });
   phone.cleanup();
   assert.equal(FakeTelnyxRTC.instances[0].disconnected, true);
+});
+
+test('public controls operate on the real Telnyx call and not the call record', async () => {
+  const dom = createDom();
+  const requests = [];
+  const FakeTelnyxRTC = fakeTelnyxFactory(requests);
+  const phone = createSpacePhone({
+    window: dom.window,
+    document: dom.window.document,
+    TelnyxRTC: FakeTelnyxRTC,
+    bootstrap: { enabled: true, tokenEndpoint: '/token', callEndpoint: '/calls', defaultCountry: 'US' },
+    fetchWithAuth: createFetch(requests),
+  }).mount();
+  await phone.call({ phoneNumber: '+16175551212', micId: 'mic-1', speakerId: 'spk-1' });
+  await phone.mute();
+  await phone.unmute();
+  await phone.hold();
+  await phone.unhold();
+  await phone.dtmf('5');
+  await phone.setAudioInputDevice('mic-2');
+  await phone.setAudioOutputDevice('spk-2');
+  await phone.hangup();
+  assert.ok(requests.some(r => r.type === 'muteAudio'));
+  assert.ok(requests.some(r => r.type === 'unmuteAudio'));
+  assert.ok(requests.some(r => r.type === 'hold'));
+  assert.ok(requests.some(r => r.type === 'unhold'));
+  assert.ok(requests.some(r => r.type === 'dtmf' && r.digit === '5'));
+  assert.ok(requests.some(r => r.type === 'setAudioInDevice' && r.id === 'mic-2'));
+  assert.ok(requests.some(r => r.type === 'setAudioOutDevice' && r.id === 'spk-2'));
+  assert.ok(requests.some(r => r.type === 'hangup'));
+});
+
+test('subscribe publishes state machine changes from the core', async () => {
+  const dom = createDom();
+  const requests = [];
+  const FakeTelnyxRTC = fakeTelnyxFactory(requests);
+  const seen = [];
+  const phone = createSpacePhone({
+    window: dom.window,
+    document: dom.window.document,
+    TelnyxRTC: FakeTelnyxRTC,
+    bootstrap: { enabled: true, tokenEndpoint: '/token', callEndpoint: '/calls', defaultCountry: 'US' },
+    fetchWithAuth: createFetch(requests),
+  }).mount();
+  phone.subscribe(s => seen.push(s.status));
+  await phone.call({ phoneNumber: '+16175551212' });
+  FakeTelnyxRTC.instances[0].emit('telnyx.notification', { call: { state: 'ringing' } });
+  FakeTelnyxRTC.instances[0].emit('telnyx.notification', { call: { state: 'active' } });
+  await phone.hangup();
+  assert.ok(seen.includes('connecting'));
+  assert.ok(seen.includes('ringing'));
+  assert.ok(seen.includes('active'));
+  assert.ok(seen.includes('ended'));
 });

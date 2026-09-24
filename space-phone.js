@@ -40,7 +40,7 @@
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
   const fmtDate = (value) => value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "-";
-  const callSeconds = () => state.call.startedAt ? Math.round((Date.now() - state.call.startedAt) / 1000) : 0;
+  const callSeconds = () => adapter()?.getState?.()?.elapsedSeconds || 0;
   const saveLocal = () => {
     localStorage.setItem("spacePhoneRecents", JSON.stringify(state.recents.slice(0, 8)));
     localStorage.setItem("spacePhoneFavorites", JSON.stringify(state.favorites.slice(0, 16)));
@@ -65,11 +65,12 @@
 
   const statusLabel = (status) => ({ ready: "Pronto", connecting: "Conectando", ringing: "Chamando", active: "Em ligação", hold: "Em espera", ending: "Encerrando", ended: "Encerrada", failed: "Falhou" }[status] || status || "Pronto");
   const phoneStatus = () => {
-    const a = adapter();
-    if (state.devices.permission === "denied") return { label: "Microfone bloqueado", tone: "bad" };
+    const snap = adapter()?.getState?.() || {};
+    if (state.devices.permission === "denied" || snap.devices?.permission === "denied") return { label: "Microfone bloqueado", tone: "bad" };
     if (state.devices.permission === "missing") return { label: "Sem microfone", tone: "bad" };
-    if (a?.ready === true || a?.isReady === true || a?.status === "ready" || a?.status === "online") return { label: "Telefone online", tone: "ok" };
-    if (a) return { label: "Telefone conectando", tone: "warn" };
+    if (snap.error) return { label: "Erro no telefone", tone: "bad" };
+    if (snap.clientReady) return { label: "Online", tone: "ok" };
+    if (adapter()) return { label: "Conectando", tone: "warn" };
     return { label: "Telnyx indisponível", tone: "bad" };
   };
 
@@ -106,7 +107,7 @@
   const renderActive = () => `
     <section class="sphone-pane">
       <h2>Call ativa</h2>
-      <div class="sphone-active">
+      <div class="sphone-active" data-sp-active>
         <div>
           <div class="sphone-call-number">${esc(state.call.name || state.call.number || "Nenhuma chamada")}</div>
           <div class="sphone-muted">${esc(state.call.number || "Discador pronto")}</div>
@@ -227,9 +228,10 @@
   const loadDevices = async () => {
     if (!navigator.mediaDevices?.enumerateDevices) return;
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      state.devices.microphones = devices.filter((d) => d.kind === "audioinput");
-      state.devices.speakers = devices.filter((d) => d.kind === "audiooutput");
+      const coreDevices = await adapter()?.refreshDevices?.().catch(() => null);
+      const devices = coreDevices?.inputs ? [...coreDevices.inputs, ...coreDevices.outputs.map((d) => ({ ...d, kind: "audiooutput" }))] : await navigator.mediaDevices.enumerateDevices();
+      state.devices.microphones = coreDevices?.inputs || devices.filter((d) => d.kind === "audioinput");
+      state.devices.speakers = coreDevices?.outputs || devices.filter((d) => d.kind === "audiooutput");
       state.devices.permission = state.devices.microphones.length ? "granted" : "missing";
     } catch {
       state.devices.permission = "denied";
@@ -259,31 +261,52 @@
       render();
       return;
     }
-    state.call = { ...state.call, status: "connecting", number, startedAt: Date.now(), muted: false, held: false, error: "" };
+    state.call = { ...state.call, status: "connecting", number, muted: false, held: false, error: "" };
     render();
     try {
-      const fn = a.call || a.dial || a.startCall;
-      const active = await fn.call(a, { destinationNumber: number, to: number, audio: { inputDeviceId: state.devices.micId, outputDeviceId: state.devices.speakerId } });
-      state.call = { ...state.call, status: "active", id: active?.id || active?.callId || active?.call_leg_id || "", callerId: active?.callerId || active?.from || "", active };
+      await a.call({ phoneNumber: number, source: "sdr_phone", micId: state.devices.micId, speakerId: state.devices.speakerId });
       addRecent(number);
+      syncFromCore(a.getState?.());
     } catch (error) {
       state.call = { ...state.call, status: "failed", error: error?.message || "Falha ao iniciar ligação" };
     }
     render();
   };
 
-  const callMethod = async (names, fallback) => {
-    const active = state.call.active || adapter()?.activeCall || adapter()?.call;
-    const target = active || adapter();
-    const name = names.find((item) => typeof target?.[item] === "function");
-    if (!name) {
-      state.call.error = fallback;
+  const callMethod = async (name, ...args) => {
+    const a = adapter();
+    if (typeof a?.[name] !== "function") {
+      state.call.error = `Controle ${name} indisponível.`;
       render();
       return false;
     }
-    await target[name]();
-    state.call.error = "";
-    return true;
+    try {
+      await a[name](...args);
+      state.call.error = "";
+      syncFromCore(a.getState?.());
+      return true;
+    } catch (error) {
+      state.call.error = error?.message || `Falha ao executar ${name}.`;
+      render();
+      return false;
+    }
+  };
+
+  const syncFromCore = (snap = {}) => {
+    const context = snap.context || {};
+    const record = snap.callRecord || {};
+    state.call = {
+      ...state.call,
+      status: snap.status === "idle" ? "ready" : snap.held ? "hold" : (snap.status || state.call.status || "ready"),
+      number: context.phoneNumber || record.to_number || state.call.number || "",
+      name: context.leadName || record.lead_name || state.call.name || "",
+      muted: Boolean(snap.muted),
+      held: Boolean(snap.held),
+      id: record.id || state.call.id || "",
+      callerId: record.from_number || state.call.callerId || "",
+      origin: context.source || state.call.origin || "Discador",
+      error: snap.error || "",
+    };
   };
 
   const saveCallPatch = async (id, patch) => {
@@ -308,11 +331,11 @@
     if (t.matches("[data-sp-period]")) { state.period = t.dataset.spPeriod || "today"; await load(); return; }
     if (t.matches("[data-sp-detail]")) { state.detail = await api({ id: t.dataset.spDetail }); render(); return; }
     if (t.matches("[data-sp-close-detail]")) { state.detail = null; render(); return; }
-    if (t.matches("[data-sp-mute]")) { if (await callMethod(state.call.muted ? ["unmute", "setMuted"] : ["mute", "setMuted"], "Mute não suportado pelo SDK instalado.")) state.call.muted = !state.call.muted; render(); return; }
-    if (t.matches("[data-sp-hold]")) { if (await callMethod(state.call.held ? ["resume", "unhold"] : ["hold"], "Hold não suportado pelo SDK instalado.")) { state.call.held = !state.call.held; state.call.status = state.call.held ? "hold" : "active"; } render(); return; }
-    if (t.matches("[data-sp-hangup]")) { state.call.status = "ending"; render(); const ended = await callMethod(["hangup", "disconnect", "end"], "Hangup não suportado pelo SDK instalado."); state.call.status = ended ? "ended" : state.call.status; render(); await load({ silent: true }); return; }
+    if (t.matches("[data-sp-mute]")) { await callMethod(state.call.muted ? "unmute" : "mute"); render(); return; }
+    if (t.matches("[data-sp-hold]")) { await callMethod(state.call.held ? "unhold" : "hold"); render(); return; }
+    if (t.matches("[data-sp-hangup]")) { state.call.status = "ending"; render(); const ended = await callMethod("hangup"); state.call.status = ended ? "ended" : state.call.status; render(); await load({ silent: true }); return; }
     if (t.matches("[data-sp-dtmf-toggle]")) { const pad = root().querySelector("[data-sp-dtmf]"); if (pad) pad.hidden = !pad.hidden; return; }
-    if (t.matches("[data-sp-dtmf]")) { const digit = t.dataset.spDtmf || ""; const active = state.call.active || adapter()?.activeCall; const fn = ["dtmf", "sendDtmf", "sendDigits"].find((name) => typeof active?.[name] === "function"); if (fn) active[fn](digit); else { state.call.error = "DTMF não suportado pelo SDK instalado."; render(); } return; }
+    if (t.matches("[data-sp-dtmf]")) { await callMethod("dtmf", t.dataset.spDtmf || ""); return; }
     if (t.matches("[data-sp-outcome]")) { await saveCallPatch(state.detail?.call?.id || state.call.id, { outcome: t.dataset.spOutcome, callbackAt: root().querySelector("[data-sp-callback]")?.value || null }); return; }
   });
 
@@ -331,8 +354,8 @@
     const t = event.target;
     if (!root() || !(t instanceof HTMLElement)) return;
     if (t.matches("[data-sp-status]")) { state.status = t.value; await load(); }
-    if (t.matches("[data-sp-mic]")) { state.devices.micId = t.value; saveLocal(); }
-    if (t.matches("[data-sp-speaker]")) { state.devices.speakerId = t.value; saveLocal(); }
+    if (t.matches("[data-sp-mic]")) { state.devices.micId = t.value; saveLocal(); await adapter()?.setAudioInputDevice?.(t.value); }
+    if (t.matches("[data-sp-speaker]")) { state.devices.speakerId = t.value; saveLocal(); await adapter()?.setAudioOutputDevice?.(t.value); }
   });
   document.addEventListener("keydown", async (event) => {
     if (!root() || !document.body.dataset.activePanel?.includes("space-phone")) return;
@@ -346,13 +369,24 @@
 
   setInterval(() => {
     const timer = document.querySelector("[data-sp-timer]");
-    if (timer && ["active", "hold", "connecting"].includes(state.call.status)) timer.textContent = fmtSec(callSeconds());
+    if (timer && ["active", "hold"].includes(state.call.status)) timer.textContent = fmtSec(callSeconds());
   }, 1000);
   navigator.mediaDevices?.addEventListener?.("devicechange", () => loadDevices().then(render));
 
+  let unsub = null;
+  const subscribeCore = () => {
+    if (unsub || typeof adapter()?.subscribe !== "function") return;
+    unsub = adapter().subscribe((snap) => {
+      syncFromCore(snap);
+      render();
+    });
+  };
+
   window.SpacePhoneModule = {
     open: async () => {
+      subscribeCore();
       await loadDevices();
+      syncFromCore(adapter()?.getState?.());
       render();
       await load({ silent: true });
     },
