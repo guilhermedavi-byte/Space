@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const { readJsonBody, sendJson } = require("../../_lib/http");
 const { supabaseFetch } = require("../../_lib/supabase-rest");
+const { listCollectionAsAdmin } = require("../../_lib/firestore-admin");
 const { createLessonRegister, normalizeLesson } = require("../../_lib/live-lessons");
 
 const LESSONS_TABLE = "n8n_aulas_pedagogicas_space";
@@ -149,17 +150,171 @@ const fetchCandidateLessons = async (body) => {
 
   const from = new Date(referenceMs - 6 * 60 * 60 * 1000).toISOString();
   const to = new Date(referenceMs + 6 * 60 * 60 * 1000).toISOString();
-  const path =
-    `/${LESSONS_TABLE}?select=*&inicio=gte.${safeEncode(from)}&inicio=lte.${safeEncode(to)}&order=inicio.asc.nullslast&limit=200`;
 
-  const { data } = await supabaseFetch(path);
+  const paths = [
+    `/${LESSONS_TABLE}?select=*&inicio=gte.${safeEncode(from)}&inicio=lte.${safeEncode(to)}&order=inicio.asc.nullslast&limit=200`,
+    `/${LESSONS_TABLE}?select=*&data_aula=gte.${safeEncode(from)}&data_aula=lte.${safeEncode(to)}&order=data_aula.asc&limit=200`,
+  ];
+
+  const results = await Promise.all(
+    paths.map((path) => supabaseFetch(path).then(({ data }) => Array.isArray(data) ? data : []).catch(() => []))
+  );
+
+  const byId = new Map();
+  for (const row of results.flat()) {
+    if (row?.id != null) byId.set(String(row.id), row);
+  }
+
   return {
-    rows: Array.isArray(data) ? data : [],
+    rows: [...byId.values()],
     referenceMs,
   };
 };
 
+const KNOWN_TEACHERS = {
+  "dstuckert23@gmail.com": "Matheus Davidson",
+  "amandafrossard94@gmail.com": "Amanda",
+};
+
+const normalizeUserType = (value) => normalizeText(value).replace(/[^a-z0-9]+/g, "_");
+
+const findExistingLessonByExternalKey = async (body) => {
+  const occurrenceId = String(body.calendar_uid || "").trim();
+  if (occurrenceId) {
+    const { data } = await supabaseFetch(
+      `/${LESSONS_TABLE}?select=*&occurrence_id=eq.${safeEncode(occurrenceId)}&limit=1`
+    ).catch(() => ({ data: [] }));
+    const row = Array.isArray(data) ? data[0] : null;
+    if (row) return normalizeLesson(row);
+  }
+
+  const meetCode = getMeetCode(body.native_meeting_id || body.meeting_url);
+  if (meetCode) {
+    const { data } = await supabaseFetch(
+      `/${LESSONS_TABLE}?select=*&google_meet_url=ilike.${safeEncode(`*${meetCode}*`)}&limit=1`
+    ).catch(() => ({ data: [] }));
+    const row = Array.isArray(data) ? data[0] : null;
+    if (row) return normalizeLesson(row);
+  }
+
+  return null;
+};
+
+const createFallbackLesson = async (body) => {
+  const studentName = deriveStudentName(body);
+  const teacherEmail = normalizeText(body.teacher_email);
+  const referenceRaw = body.scheduled_at || body.meeting_start_time || body.started_at || "";
+  const referenceMs = Date.parse(String(referenceRaw || ""));
+
+  if (!studentName || !teacherEmail || !Number.isFinite(referenceMs)) {
+    return { ok: false, reason: "fallback_identity_missing" };
+  }
+
+  const users = await listCollectionAsAdmin("users", { pageSize: 2000 }).catch(() => []);
+  const rows = Array.isArray(users) ? users : [];
+
+  const teacherCandidates = rows.filter((row) => {
+    const type = normalizeUserType(row?.tipo || row?.role);
+    const email = normalizeText(row?.email);
+    return ["teacher", "professor"].includes(type) && email === teacherEmail;
+  });
+
+  if (teacherCandidates.length !== 1) {
+    return { ok: false, reason: "teacher_not_found", teacher_matches: teacherCandidates.length };
+  }
+
+  const teacher = teacherCandidates[0];
+  const teacherId = String(teacher?.id || "").trim();
+  const exactStudents = rows.filter((row) => {
+    const type = normalizeUserType(row?.tipo || row?.role);
+    return ["student", "aluno"].includes(type) && normalizeName(row?.nome) === normalizeName(studentName);
+  });
+
+  let studentCandidates = exactStudents;
+  const linked = exactStudents.filter((row) => {
+    const professorId = String(row?.professorId || row?.professor_id || "").trim();
+    return professorId && teacherId && professorId === teacherId;
+  });
+  if (linked.length) studentCandidates = linked;
+
+  if (studentCandidates.length !== 1) {
+    return {
+      ok: false,
+      reason: studentCandidates.length ? "student_ambiguous" : "student_not_found",
+      student_matches: studentCandidates.length,
+      exact_name_matches: exactStudents.length,
+    };
+  }
+
+  const student = studentCandidates[0];
+  const startIso = new Date(referenceMs).toISOString();
+  const meetingStartMs = Date.parse(String(body.meeting_start_time || body.started_at || ""));
+  const meetingEndMs = Date.parse(String(body.meeting_end_time || body.ended_at || ""));
+  const actualDurationMs =
+    Number.isFinite(meetingStartMs) && Number.isFinite(meetingEndMs) && meetingEndMs > meetingStartMs
+      ? meetingEndMs - meetingStartMs
+      : 60 * 60 * 1000;
+  const endIso = new Date(referenceMs + actualDurationMs).toISOString();
+  const durationMinutes = Math.max(1, Math.round(actualDurationMs / 60000));
+  const meetCode = getMeetCode(body.native_meeting_id || body.meeting_url);
+  const meetingUrl = String(body.meeting_url || "").trim() || (meetCode ? `https://meet.google.com/${meetCode}` : "");
+  const occurrenceId = String(body.calendar_uid || "").trim() ||
+    (body.meeting_id != null ? `vexa:${body.meeting_id}` : `vexa:${meetCode || referenceMs}`);
+
+  const row = {
+    aluno_nome: String(student?.nome || studentName).trim(),
+    telefone: String(student?.telefone || "").trim() || null,
+    email: String(student?.email || "").trim() || null,
+    professor_id: teacherId || null,
+    professor_nome: String(teacher?.nome || KNOWN_TEACHERS[teacherEmail] || teacherEmail).trim(),
+    plano: String(student?.plano || "").trim() || null,
+    data_aula: startIso,
+    duracao_minutos: durationMinutes,
+    google_calendar_event_id: String(body.calendar_uid || "").trim() || null,
+    google_meet_url: meetingUrl || null,
+    tipo_aula: "individual",
+    status_aula: "agendada",
+    observacoes: "Aula importada automaticamente do Vexa para registro de realização.",
+    titulo: String(body.title || `Aula ${studentName}`).trim(),
+    inicio: startIso,
+    fim: endIso,
+    timezone: "America/Sao_Paulo",
+    video_provider: "google_meet",
+    video_room_id: meetCode || null,
+    video_room_url: meetingUrl || null,
+    video_status: "completed",
+    origem: "vexa_n8n",
+    video_join_url_aluno: meetingUrl || null,
+    video_join_url_professor: meetingUrl || null,
+    firestore_doc_id: String(student?.id || "").trim() || null,
+    aluno_id: String(student?.id || "").trim() || null,
+    aluno_email: String(student?.email || "").trim() || null,
+    aluno_telefone: String(student?.telefone || "").trim() || null,
+    occurrence_id: occurrenceId,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data } = await supabaseFetch(`/${LESSONS_TABLE}`, { method: "POST", body: row });
+  const saved = Array.isArray(data) ? data[0] : data;
+  const lesson = normalizeLesson(saved);
+  if (!lesson) return { ok: false, reason: "fallback_lesson_create_failed" };
+
+  lesson.professor_email = teacherEmail;
+  lesson.aluno_email = lesson.aluno_email || String(student?.email || "").trim();
+  lesson.aluno_telefone = lesson.aluno_telefone || String(student?.telefone || "").trim();
+
+  return {
+    ok: true, lesson, created: true, score: 100, direct: true,
+    reasons: ["fallback_firestore_student", "fallback_teacher_email", "fallback_time"],
+  };
+};
 const resolveLesson = async (body) => {
+  const existing = await findExistingLessonByExternalKey(body);
+  if (existing) {
+    return { ok: true, lesson: existing, score: 130, direct: true, reasons: ["existing_external_key"] };
+  }
+
   const { rows, referenceMs } = await fetchCandidateLessons(body);
   const scored = rows
     .map((row) => scoreCandidate({ row, body, referenceMs }))
@@ -169,31 +324,27 @@ const resolveLesson = async (body) => {
   const top = scored[0];
   const second = scored[1];
 
-  if (!top || top.score < 60) {
-    return {
-      ok: false,
-      reason: "lesson_not_found",
-      topScore: top?.score ?? null,
-      candidateCount: scored.length,
-    };
+  if (top && top.score >= 60) {
+    if (!top.direct && second && second.score >= top.score - 10) {
+      return {
+        ok: false, reason: "lesson_ambiguous", topScore: top.score,
+        secondScore: second.score, candidateCount: scored.length,
+      };
+    }
+    return { ok: true, lesson: top.lesson, score: top.score, direct: top.direct, reasons: top.reasons };
   }
 
-  if (!top.direct && second && second.score >= top.score - 10) {
-    return {
-      ok: false,
-      reason: "lesson_ambiguous",
-      topScore: top.score,
-      secondScore: second.score,
-      candidateCount: scored.length,
-    };
-  }
+  const fallback = await createFallbackLesson(body);
+  if (fallback.ok) return fallback;
 
   return {
-    ok: true,
-    lesson: top.lesson,
-    score: top.score,
-    direct: top.direct,
-    reasons: top.reasons,
+    ok: false,
+    reason: fallback.reason || "lesson_not_found",
+    topScore: top?.score ?? null,
+    candidateCount: scored.length,
+    teacher_matches: fallback.teacher_matches ?? null,
+    student_matches: fallback.student_matches ?? null,
+    exact_name_matches: fallback.exact_name_matches ?? null,
   };
 };
 
@@ -263,6 +414,9 @@ const handler = async (req, res) => {
         top_score: resolved.topScore ?? null,
         second_score: resolved.secondScore ?? null,
         candidate_count: resolved.candidateCount ?? 0,
+        teacher_matches: resolved.teacher_matches ?? null,
+        student_matches: resolved.student_matches ?? null,
+        exact_name_matches: resolved.exact_name_matches ?? null,
       });
     }
 
@@ -325,6 +479,7 @@ handler._test = {
   deriveStudentName,
   scoreCandidate,
   namesMatch,
+  normalizeUserType,
 };
 
 module.exports = handler;
