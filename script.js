@@ -31509,18 +31509,16 @@ const buildAdminPedLessonRecordDataset = () => {
       ? adminPedagogicoState.legacyOccurrenceMap
       : normalizeAdminPedLegacyOccurrenceMap([]);
   const normalizedEvents = normalizePedov2ScheduleEvents(adminPedagogicoState.scheduleEvents || []);
-  const normalizedLessons = normalizePedov2LiveLessons(Array.isArray(adminPedagogicoState.pedagogicalOps?.lessons) ? adminPedagogicoState.pedagogicalOps.lessons : []);
+  const normalizedLessons = normalizePedov2LiveLessons(
+    Array.isArray(adminPedagogicoState.pedagogicalOps?.lessons) ? adminPedagogicoState.pedagogicalOps.lessons : []
+  );
   const recordsIndex = normalizePedov2Records(
     Array.isArray(adminPedagogicoState.pedagogicalOps?.registers) ? adminPedagogicoState.pedagogicalOps.registers : [],
     legacyOccurrenceMap
   );
-  const recordByEventId = buildPedov2EventRecordIndex({
-    events: normalizedEvents,
-    recordsByOccurrenceId: recordsIndex.byOccurrenceId,
-    legacyOccurrenceMap,
-  });
+
   const fallbackClassRows =
-    normalizedEvents.length > 0
+    normalizedEvents.length || normalizedLessons.length
       ? []
       : buildAdminPedLessonRecordRowsFromClasses({
           classes: adminPedagogicoState.classes,
@@ -31529,7 +31527,38 @@ const buildAdminPedLessonRecordDataset = () => {
           studentsById,
           teachersById,
         });
-  const baseRows = (normalizedEvents.length ? normalizedEvents : fallbackClassRows)
+
+  // Supabase lessons are authoritative for Vexa/n8n-generated records. Merge them
+  // with schedule events instead of choosing one source and silently dropping the other.
+  const mergedRecordEvents = [];
+  const seenOccurrenceIds = new Set();
+  const seenCompositeKeys = new Set();
+  [...normalizedLessons, ...normalizedEvents, ...fallbackClassRows].forEach((event) => {
+    if (!event || typeof event !== "object") return;
+    const occurrenceId = String(event.occurrenceId || "").trim();
+    const compositeKey = [
+      String(event.alunoId || "").trim(),
+      String(event.professorId || "").trim(),
+      String(event.dateKey || "").trim(),
+      String(Number(event.startMin) || 0),
+    ].join("|");
+
+    if (occurrenceId && seenOccurrenceIds.has(occurrenceId)) return;
+    if (compositeKey !== "|||0" && seenCompositeKeys.has(compositeKey)) return;
+
+    if (occurrenceId) seenOccurrenceIds.add(occurrenceId);
+    if (compositeKey !== "|||0") seenCompositeKeys.add(compositeKey);
+    mergedRecordEvents.push(event);
+  });
+
+  const recordByEventId = buildPedov2EventRecordIndex({
+    events: mergedRecordEvents,
+    recordsByOccurrenceId: recordsIndex.byOccurrenceId,
+    recordsByLessonId: recordsIndex.byLessonId,
+    legacyOccurrenceMap,
+  });
+
+  const baseRows = mergedRecordEvents
     .filter((event) => String(event.dateKey || "").trim() >= range.fromKey && String(event.dateKey || "").trim() <= range.toKey)
     .map((event) => {
       const alunoId = String(event.alunoId || "").trim();
@@ -31555,7 +31584,7 @@ const buildAdminPedLessonRecordDataset = () => {
         endMin: Number(event.endMin) || 0,
         startMs: Number(event.startMs) || buildDateFromDateKeyAndMinutes(event.dateKey, event.startMin)?.getTime() || 0,
         endMs: Number(event.endMs) || buildDateFromDateKeyAndMinutes(event.dateKey, event.endMin)?.getTime() || 0,
-        source: String(event.source || (normalizedEvents.length ? "schedule-events" : "classes")),
+        source: String(event.source || "schedule-events"),
       };
     });
 
@@ -35437,15 +35466,25 @@ const normalizePedov2LiveLessons = (lessons) =>
     .map((lesson) => {
       const ui = normalizeLiveLessonForUi(lesson);
       if (!ui) return null;
+      const startDate = buildDateFromDateKeyAndMinutes(ui.dateKey, ui.startMin);
+      const endDate = buildDateFromDateKeyAndMinutes(ui.dateKey, ui.endMin);
       return {
         id: String(ui.id || "").trim(),
+        liveLessonId: String(ui.id || "").trim(),
         occurrenceId: String(ui.occurrenceId || "").trim(),
         alunoId: String(ui.alunoId || "").trim(),
+        alunoNome: String(ui.aluno || lesson?.aluno_nome || "").trim(),
         professorId: String(ui.professorId || "").trim(),
+        professorNome: String(ui.professor || lesson?.professor_nome || "").trim(),
         dateKey: String(ui.dateKey || "").trim(),
         startMin: Number(ui.startMin) || 0,
         endMin: Number(ui.endMin) || 0,
+        startMs: startDate instanceof Date && !Number.isNaN(startDate.getTime()) ? startDate.getTime() : 0,
+        endMs: endDate instanceof Date && !Number.isNaN(endDate.getTime()) ? endDate.getTime() : 0,
         status: String(ui.status || "").trim().toLowerCase(),
+        title: String(lesson?.titulo || ui.aluno || "").trim(),
+        type: "lesson",
+        source: "live-lessons",
       };
     })
     .filter(Boolean);
@@ -35513,7 +35552,7 @@ const normalizePedov2Records = (records, legacyOccurrenceMap = null) => {
 const getPedov2EventCompositeKey = ({ alunoId, professorId, dateKey, startMin }) =>
   [String(alunoId || "").trim(), String(professorId || "").trim(), String(dateKey || "").trim(), String(Number(startMin) || 0)].join("|");
 
-const buildPedov2EventRecordIndex = ({ events, recordsByOccurrenceId, legacyOccurrenceMap }) => {
+const buildPedov2EventRecordIndex = ({ events, recordsByOccurrenceId, recordsByLessonId, legacyOccurrenceMap }) => {
   const recordByEventId = new Map();
   (Array.isArray(events) ? events : []).forEach((event) => {
     const eventId = String(event?.id || "").trim();
@@ -35523,8 +35562,16 @@ const buildPedov2EventRecordIndex = ({ events, recordsByOccurrenceId, legacyOccu
       (legacyOccurrenceMap && legacyOccurrenceMap.byEventId instanceof Map
         ? String(legacyOccurrenceMap.byEventId.get(eventId) || "").trim()
         : "");
-    if (!occurrenceId) return;
-    const mapped = recordsByOccurrenceId instanceof Map ? recordsByOccurrenceId.get(occurrenceId) || null : null;
+    const byOccurrence =
+      occurrenceId && recordsByOccurrenceId instanceof Map
+        ? recordsByOccurrenceId.get(occurrenceId) || null
+        : null;
+    const lessonId = String(event?.liveLessonId || event?.id || "").trim();
+    const byLesson =
+      lessonId && recordsByLessonId instanceof Map
+        ? recordsByLessonId.get(lessonId) || null
+        : null;
+    const mapped = byOccurrence || byLesson;
     if (mapped) recordByEventId.set(eventId, mapped);
   });
   return recordByEventId;
