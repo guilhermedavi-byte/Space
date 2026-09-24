@@ -148,7 +148,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
   const raw = String(templateHtml || "");
   const platformStart = raw.indexOf('<div class="platform-shell"');
   const modalStart = raw.indexOf('<div class="modal-overlay"');
-  const scriptStart = raw.lastIndexOf('<script src="script.js?v=6"></script>');
+  const scriptStart = raw.lastIndexOf('<script src="script.js?v=7"></script>');
 
   if (platformStart < 0 || modalStart < 0 || scriptStart < 0 || modalStart <= platformStart) {
     throw new Error("template_missing_sections");
@@ -201,7 +201,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="/assets/retention-intelligence.js"></script>
     <script src="finance-customer-link.js?v=1"></script>
     <script src="finance-v1.js?v=31"></script>
-    <script src="script.js?v=6"></script>
+    <script src="script.js?v=7"></script>
     <script src="/assets/space-phone.bundle.js?v=1"></script>
     <script src="space-phone.js?v=3"></script>
     <script src="admin-sdr.js?v=5"></script>

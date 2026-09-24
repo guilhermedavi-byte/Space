@@ -12,7 +12,7 @@ test('app real carrega domínio antes da UI e revalida acesso de sessão existen
   delete require.cache[appPath];const handler=require('../api/app');
   const invoke=async()=>{const res={headers:{},setHeader(k,v){this.headers[k]=v;},end(body){this.body=body;}};await handler({method:'GET',headers:{host:'localhost'},url:'/api/app?path=aluno'},res);return res;};
   let res=await invoke();assert.equal(res.statusCode,200);
-  assert.ok(res.body.indexOf('/assets/student-lifecycle.js')<res.body.indexOf('src="script.js?v=6"'));
+  assert.ok(res.body.indexOf('/assets/student-lifecycle.js')<res.body.indexOf('src="script.js?v=7"'));
   assert.match(res.body,/"lifecycle":\{"subscriptions"/);
   active=false;res=await invoke();assert.equal(res.statusCode,403);
   unavailable=true;res=await invoke();assert.equal(res.statusCode,503);

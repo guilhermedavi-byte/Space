@@ -856,11 +856,18 @@ const sanitizeSessionUser = (value) => {
   const id = typeof value.id === "string" ? value.id.trim() : "";
   if (!role || !name || !email) return null;
   const adminPermissions = Array.isArray(value.adminPermissions) ? value.adminPermissions.map((item) => String(item || "").trim()).filter(Boolean) : [];
+  const commercialRoleSource = Array.isArray(value.commercialRoles) ? value.commercialRoles : String(value.commercialRoles || "").split(/[\s,]+/);
+  const commercialRoles = Array.from(new Set(
+    commercialRoleSource
+      .map((item) => String(item || "").trim().toLowerCase())
+      .filter((item) => ["sdr", "closer"].includes(item))
+  ));
   return {
     id,
     role,
     name,
     email,
+    commercialRoles,
     lifecycle: value.lifecycle || null,
     isSuperAdmin: value.isSuperAdmin === true,
     adminPermissions,

@@ -156,7 +156,7 @@ test("space phone route boots the dedicated admin panel and script", async () =>
     assert.equal(res.statusCode, 200);
     assert.match(body, /data-initial-panel="space-phone"/);
     assert.match(body, /data-space-phone/);
-    assert.match(body, /src="script\.js\?v=6"/);
+    assert.match(body, /src="script\.js\?v=7"/);
     assert.match(body, /src="space-phone\.js\?v=3"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
@@ -208,7 +208,7 @@ test("server-rendered app html cache-busts script.js", async () => {
     firestoreUser: { id: "growth-1", tipo: "growth", role: "growth", ativo: true, active: true, commercialRoles: ["sdr"] },
   });
   assert.equal(result.statusCode, 200);
-  assert.match(result.body, /src="script\.js\?v=6"/);
+  assert.match(result.body, /src="script\.js\?v=7"/);
   assert.doesNotMatch(result.body, /src="script\.js"><\/script>/);
 });
 
