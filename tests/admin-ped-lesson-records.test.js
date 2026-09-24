@@ -30,3 +30,8 @@ test("Registros de Aulas inclui aulas Supabase/Vexa mesmo quando existem schedul
   assert.match(script, /recordsByLessonId: recordsIndex\.byLessonId/);
   assert.match(script, /source: "live-lessons"/);
 });
+
+
+test("UI pedagógica aceita id numérico de aula do Supabase", () => {
+  assert.match(script, /const id = lesson\.id == null \? "" : String\(lesson\.id\)\.trim\(\);/);
+});
