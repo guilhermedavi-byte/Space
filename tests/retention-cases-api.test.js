@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const handlerPath = require.resolve("../api/retention-cases");
 const authPath = require.resolve("../api/_lib/admin-request-auth");
+const adminPermsPath = require.resolve("../api/_lib/admin-permissions");
 const storePath = require.resolve("../api/_lib/retention-store");
 const flagsPath = require.resolve("../api/_lib/retention-flags");
 
@@ -23,6 +24,7 @@ const installCommonStubs = ({
   listResult = { rows: [], counts: {}, queues: { avisos: [], decisoes: [], efetivados: [] } },
   applyResult = { ok: true, idempotent: false, snapshot: { case: {}, student: {} } },
   resolvedTargets = { studentId: "student-uuid", subscriptionId: "subscription-uuid", firestoreStudentId: "firestore-123" },
+  resolvedCase = { caseId: "case-open-uuid", version: 3, studentId: "student-uuid", subscriptionId: "subscription-uuid" },
   retentionEnabled = true,
   involuntaryEnabled = false,
 } = {}) => {
@@ -39,6 +41,14 @@ const installCommonStubs = ({
       }),
     },
   };
+  require.cache[adminPermsPath] = {
+    id: adminPermsPath,
+    filename: adminPermsPath,
+    loaded: true,
+    exports: {
+      requireResolvedAdminPermission: async () => ({ ok: true, status: 200, body: { ok: true } }),
+    },
+  };
   require.cache[storePath] = {
     id: storePath,
     filename: storePath,
@@ -49,6 +59,7 @@ const installCommonStubs = ({
       getLifecycleMetrics: async()=>({monthKey:"2026-09"}),
       applyRetentionCommand: async ({ command }) => ({ ...applyResult, receivedCommand: command }),
       resolveRetentionSubjectByFirestoreStudentId: async () => resolvedTargets,
+      resolveOpenFormalRetentionCaseBySubject: async () => resolvedCase,
     },
   };
   require.cache[flagsPath] = {
@@ -207,6 +218,31 @@ test("POST resolve student/subscription a partir do firestore_student_id", async
   assert.equal(res.body.result.receivedCommand.subscription_id, "subscription-uuid");
 });
 
+test("POST resolve caso formal aberto para reversão sem depender do cache da tela", async () => {
+  const handler = installCommonStubs({ role: "admin" });
+  const res = makeRes();
+  const req = {
+    method: "POST",
+    url: "/api/retention-cases",
+    headers: { host: "localhost" },
+    on(event, callback) {
+      if (event === "data") callback(Buffer.from(JSON.stringify({
+        command: "retract_cancellation",
+        clientActionId: "click-revert-1",
+        firestoreStudentId: "firestore-123",
+        payload: { detail: "Aluno decidiu continuar" },
+      })));
+      if (event === "end") callback();
+    },
+  };
+  await handler(req, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.result.receivedCommand.student_id, "student-uuid");
+  assert.equal(res.body.result.receivedCommand.subscription_id, "subscription-uuid");
+  assert.equal(res.body.result.receivedCommand.case_id, "case-open-uuid");
+  assert.equal(res.body.result.receivedCommand.expected_version, 3);
+});
+
 test("POST exige requested_at saneado no pedido formal", async () => {
   const handler = installCommonStubs({ role: "growth" });
   const res = makeRes();
@@ -243,6 +279,14 @@ test("POST traduz mismatch de idempotência em conflito controlado", async () =>
       }),
     },
   };
+  require.cache[adminPermsPath] = {
+    id: adminPermsPath,
+    filename: adminPermsPath,
+    loaded: true,
+    exports: {
+      requireResolvedAdminPermission: async () => ({ ok: true, status: 200, body: { ok: true } }),
+    },
+  };
   require.cache[storePath] = {
     id: storePath,
     filename: storePath,
@@ -256,6 +300,7 @@ test("POST traduz mismatch de idempotência em conflito controlado", async () =>
         throw error;
       },
       resolveRetentionSubjectByFirestoreStudentId: async () => ({ studentId: "student-uuid", subscriptionId: "subscription-uuid" }),
+      resolveOpenFormalRetentionCaseBySubject: async () => ({ caseId: "case-open-uuid", version: 3 }),
     },
   };
   require.cache[flagsPath] = {

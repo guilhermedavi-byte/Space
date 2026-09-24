@@ -12,6 +12,9 @@ test("Central de retenção consulta a API nova quando a flag está ativa", () =
 
 test("modais de retenção mantêm o legado, mas redirecionam pela flag", () => {
   assert.match(script, /if \(isRetentionV2FeatureEnabled\(\)\) \{\s+await submitRetentionV2Command\(\{\s+command: "register_formal_request"/);
+  assert.match(script, /const resolveRetentionCaseForStudentCommand = async/);
+  assert.match(script, /command: "retract_cancellation"/);
+  assert.match(script, /data-admin-student-revert-detail/);
   assert.match(script, /command: "effectuate_churn"/);
   assert.match(script, /command: "reactivate_subscription"/);
 });

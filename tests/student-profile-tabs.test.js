@@ -11,6 +11,7 @@ function setup(fetcher = async () => ({ ok: true, json: async () => ({ activitie
   const context = vm.createContext({ document: dom.window.document, console, Intl, Date, Set,
     escapeHtml: s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch])),
     formatAdminHistoryStamp: x => x, formatAdminDate: x => x, getRetentionTimelineEventLabel: x => x,
+    normalizeStudentCancellationRecord: x => x || null,
     adminStudentsState: { history: hist }, teacherStudentsState: { history: {} },
     renderAdminStudentFilesTab() {}, ensureAdminStudentFilesLoaded() {}, fetchWithAuth: fetcher,
   });
@@ -38,7 +39,10 @@ test('histórico usa datas reais, combina fontes, escapa conteúdo e não invent
   assert.match(api.renderStudentProfileHistory(hist),/Nenhum registro no histórico ainda/);
   hist.items=[{id:'l1',createdAt:'2026-09-20',kind:'comment',summaryText:'<script>bad</script>'}];
   hist.retentionTimeline={events:[{id:'r1',occurred_at:'2026-09-21',event_type:'retract_cancellation'}]};
+  hist.alunoMeta.cancelamentosAnteriores=[{dataPedido:'2026-09-19',motivo:'Falta de tempo',desfecho:'revertido',dataEfetivacao:'2026-09-22',eventos:[{data:'2026-09-22',acao:'Cancelamento revertido',detalhe:'Aluno decidiu continuar'}]}];
   assert.equal(api.getStudentProfileJourney(hist)[0].source,'Retenção');
+  assert.match(api.renderStudentProfileHistory(hist),/Pedido de cancelamento/);
+  assert.match(api.renderStudentProfileHistory(hist),/Cancelamento revertido/);
   assert.match(api.renderStudentProfileHistory(hist),/&lt;script&gt;/);
   assert.equal(api.studentProfileRelated({studentId:'another',responsavelId:'student-1'},hist),false);
   assert.equal(api.studentProfileRelated({studentId:'student-1'},hist),true);

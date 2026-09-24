@@ -23759,6 +23759,32 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .actws-check-empty{display:grid;justify-items:start;gap:5px;padding:16px 8px;color:rgba(255,255,255,.42)}
 .actws-check-empty span{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:rgba(116,215,173,.07);border:1px solid rgba(116,215,173,.12);color:rgba(116,215,173,.65);font-size:12px}
 .actws-check-empty strong{font-size:13px;font-weight:600;color:rgba(255,255,255,.5)}
+.actws-occurrence{display:grid;justify-items:start;gap:8px;margin-top:8px}
+.actws-occurrence-trigger{appearance:none;border:0;background:transparent;color:rgba(255,255,255,.38);display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:5px 7px 5px 0;font:inherit;font-size:12px;font-weight:620;line-height:1;cursor:pointer;transition:background .14s ease,color .14s ease,padding .14s ease}
+.actws-occurrence-trigger span:first-child{font-size:12px;color:rgba(255,112,104,.56);transform:translateY(-.5px)}
+.actws-occurrence-trigger:hover,.actws-occurrence-trigger:focus-visible,.actws-occurrence.is-open .actws-occurrence-trigger{background:rgba(255,255,255,.035);color:rgba(255,255,255,.72);padding-left:7px;outline:none}
+.actws-occurrence-trigger:focus-visible{box-shadow:0 0 0 2px rgba(255,112,104,.22)}
+.actws-occurrence-panel{width:min(100%,520px);display:grid;gap:12px;margin-top:1px;padding:13px 14px;border:1px solid rgba(255,255,255,.07);border-radius:12px;background:rgba(255,255,255,.032);box-shadow:inset 0 1px 0 rgba(255,255,255,.025)}
+.actws-occurrence-panel[hidden]{display:none}
+.actws-occurrence-panel[data-saving="true"]{opacity:.72}
+.actws-occurrence-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.actws-occurrence-head strong{color:rgba(255,255,255,.84);font-size:12.5px;font-weight:720;letter-spacing:0}
+.actws-occurrence-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.actws-occurrence-field{display:grid;gap:6px;min-width:0;color:inherit}
+.actws-occurrence-field span{font-size:11px;font-weight:620;color:rgba(255,255,255,.42);letter-spacing:0;text-transform:none}
+.actws-occurrence-field select{appearance:none;-webkit-appearance:none;width:100%;height:36px;min-width:0;border:1px solid rgba(255,255,255,.085);border-radius:10px;background-color:rgba(8,15,26,.78);background-image:linear-gradient(45deg,transparent 50%,rgba(255,255,255,.58) 50%),linear-gradient(135deg,rgba(255,255,255,.58) 50%,transparent 50%);background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;color:rgba(255,255,255,.84);font:inherit;font-size:12.5px;font-weight:620;padding:0 30px 0 10px;cursor:pointer;transition:background-color .14s ease,border-color .14s ease,box-shadow .14s ease,color .14s ease}
+.actws-occurrence-field select:hover{background-color:rgba(255,255,255,.05);border-color:rgba(255,255,255,.13);color:#fff}
+.actws-occurrence-field select:focus{outline:none;border-color:rgba(255,112,104,.35);box-shadow:0 0 0 2px rgba(255,112,104,.14)}
+.actws-occurrence-field select:disabled{cursor:default;opacity:.7}
+.actws-occurrence-field option{background:#101b2b;color:#f7f9ff}
+.actws-occurrence-error{margin:0;color:var(--activity-danger);font-size:12px;line-height:1.4}
+.actws-occurrence-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.actws-occurrence-cancel,.actws-occurrence-submit{appearance:none;border-radius:999px;font:inherit;font-size:12px;font-weight:720;line-height:1;min-height:31px;padding:8px 12px;cursor:pointer;transition:background .14s ease,border-color .14s ease,color .14s ease,opacity .14s ease}
+.actws-occurrence-cancel{border:1px solid transparent;background:transparent;color:rgba(255,255,255,.46)}
+.actws-occurrence-cancel:hover,.actws-occurrence-cancel:focus-visible{background:rgba(255,255,255,.045);color:rgba(255,255,255,.8);outline:none}
+.actws-occurrence-submit{border:1px solid rgba(255,112,104,.24);background:rgba(255,112,104,.13);color:#ffd4d1}
+.actws-occurrence-submit:hover,.actws-occurrence-submit:focus-visible{background:rgba(255,112,104,.19);border-color:rgba(255,112,104,.34);color:#fff;outline:none}
+.actws-occurrence-cancel:disabled,.actws-occurrence-submit:disabled{cursor:default;opacity:.65}
 .student-profile-activity-record{width:100%;text-align:left;color:inherit;cursor:pointer}
 .student-profile-activity-record:hover,.student-profile-activity-record:focus-visible{border-color:rgba(255,86,79,.22);background:rgba(255,255,255,.045);outline:none}
 .notifications-shell{display:grid;gap:18px;max-width:980px;margin:0 auto;padding:6px 0 32px}
@@ -23818,6 +23844,8 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
   .actws-details.is-active,.actws-checklist.is-active{display:block}
   .actws-timeline{border:0}
   .actws-comment-form{grid-template-columns:1fr}
+  .actws-occurrence-fields{grid-template-columns:1fr}
+  .actws-occurrence-actions{justify-content:flex-start}
 }
 
 @media (max-width: 720px){

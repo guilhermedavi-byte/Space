@@ -4,7 +4,13 @@ const { requireResolvedAdminPermission } = require("./_lib/admin-permissions");
 const { hasCapability } = require("./_lib/retention-capabilities");
 const { isRetentionInvoluntaryChurnEnabled, isRetentionV2Enabled } = require("./_lib/retention-flags");
 const { COMMAND_CAPABILITY, buildCommandPayload, needsOverrideJustification, isRetentionCommandRoleAllowed } = require("./_lib/retention-domain");
-const { applyRetentionCommand, getRetentionCaseTimeline, listRetentionCases, resolveRetentionSubjectByFirestoreStudentId } = require("./_lib/retention-store");
+const {
+  applyRetentionCommand,
+  getRetentionCaseTimeline,
+  listRetentionCases,
+  resolveOpenFormalRetentionCaseBySubject,
+  resolveRetentionSubjectByFirestoreStudentId,
+} = require("./_lib/retention-store");
 
 const getUrl = (req) => new URL(req.url || "/api/retention-cases", `https://${String(req.headers.host || "localhost")}`);
 
@@ -129,6 +135,14 @@ module.exports = async (req, res) => {
       const resolved = await resolveRetentionSubjectByFirestoreStudentId({ firestoreStudentId: command.firestore_student_id });
       command.student_id = resolved.studentId;
       command.subscription_id = resolved.subscriptionId;
+    }
+    if (!command.case_id && command.command !== "register_formal_request" && command.command !== "register_preventive_intent" && command.command !== "flag_risk") {
+      const resolvedCase = await resolveOpenFormalRetentionCaseBySubject({
+        studentId: command.student_id,
+        subscriptionId: command.subscription_id,
+      });
+      command.case_id = resolvedCase.caseId;
+      command.expected_version = command.expected_version || resolvedCase.version;
     }
     const result = await applyRetentionCommand({ command });
     return sendJson(res, 200, {

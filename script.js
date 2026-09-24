@@ -10988,6 +10988,22 @@ const activatePedagogicoLessonFromEl = (event, pedItem) => {
 const ACTIVITY_STATUS_OPTIONS = ["Pendente", "Em andamento", "Feito"];
 const ACTIVITY_PRIORITY_OPTIONS = ["Alta", "Média", "Baixa"];
 const ACTIVITY_TYPE_OPTIONS = ["Financeiro", "Pedagógico", "Auxiliar", "Retenção", "Ligação de qualidade"];
+const ACTIVITY_OCCURRENCE_CATEGORY_OPTIONS = [
+  ["teacher", "Professor"],
+  ["schedule", "Horários"],
+  ["pedagogical", "Pedagógico"],
+  ["service", "Atendimento"],
+  ["financial", "Financeiro"],
+  ["progress_perception", "Percepção de evolução"],
+  ["complaint", "Reclamação"],
+  ["other", "Outro"],
+];
+const ACTIVITY_OCCURRENCE_SEVERITY_OPTIONS = [
+  ["light", "Leve"],
+  ["moderate", "Moderada"],
+  ["high", "Alta"],
+  ["critical", "Crítica"],
+];
 
 const normalizeActivityStatus = (value) => {
   const safe = String(value || "").trim();
@@ -11028,6 +11044,45 @@ const getActivityResponsibleUser = (activity) => {
 };
 
 const getActivityResponsibleName = (activity) => getActivityResponsibleUser(activity)?.nome || "Sem responsável";
+
+const renderActivityOccurrenceOptions = (options = []) =>
+  options.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("");
+
+const renderActivityOccurrenceForm = (commentId) => {
+  const safeCommentId = escapeHtml(commentId);
+  return `
+    <div class="actws-occurrence" data-actws-occurrence-shell="${safeCommentId}">
+      <button type="button" class="actws-occurrence-trigger" data-actws-occurrence-toggle="${safeCommentId}" aria-expanded="false" aria-controls="actws-occurrence-panel-${safeCommentId}">
+        <span aria-hidden="true">⚑</span>
+        <span>Marcar como ocorrência</span>
+      </button>
+      <form class="actws-occurrence-panel" id="actws-occurrence-panel-${safeCommentId}" data-actws-occurrence="${safeCommentId}" hidden>
+        <div class="actws-occurrence-head">
+          <strong>Registrar ocorrência</strong>
+        </div>
+        <div class="actws-occurrence-fields">
+          <label class="actws-occurrence-field">
+            <span>Categoria</span>
+            <select name="category" aria-label="Categoria da ocorrência">
+              ${renderActivityOccurrenceOptions(ACTIVITY_OCCURRENCE_CATEGORY_OPTIONS)}
+            </select>
+          </label>
+          <label class="actws-occurrence-field">
+            <span>Gravidade</span>
+            <select name="severity" aria-label="Gravidade da ocorrência">
+              ${renderActivityOccurrenceOptions(ACTIVITY_OCCURRENCE_SEVERITY_OPTIONS)}
+            </select>
+          </label>
+        </div>
+        <p class="actws-occurrence-error" data-actws-occurrence-error hidden></p>
+        <div class="actws-occurrence-actions">
+          <button type="button" class="actws-occurrence-cancel" data-actws-occurrence-cancel="${safeCommentId}">Cancelar</button>
+          <button type="submit" class="actws-occurrence-submit" data-actws-occurrence-submit>Registrar ocorrência</button>
+        </div>
+      </form>
+    </div>
+  `;
+};
 
 const getActivityStatusMeta = (status) => {
   const safe = normalizeActivityStatus(status);
@@ -11807,7 +11862,7 @@ const renderActivityWorkspace = (workspace = {}) => {
                 <div class="actws-comment-main">
                   <div class="actws-comment-head"><strong>${escapeHtml(authorName)}</strong><time>${escapeHtml(comment.createdAt ? formatAdminHistoryStamp(comment.createdAt) : "Agora")}${comment.editedAt && !comment.deletedAt ? " · editado" : ""}</time>${canManage ? `<button type="button" class="actws-icon-action" data-actws-comment-menu="${escapeHtml(comment.id)}" aria-label="Ações do comentário">•••</button>` : ""}</div>
                   <p data-actws-comment-body>${renderActivityCommentBody(comment)}</p>
-                  ${canAdminComments && activity.studentId && !comment.deletedAt ? `<details><summary>Marcar como ocorrência</summary><form data-actws-occurrence="${escapeHtml(comment.id)}"><label>Categoria<select name="category">${Object.entries({teacher:'Professor',schedule:'Horários',pedagogical:'Pedagógico',service:'Atendimento',financial:'Financeiro',progress_perception:'Percepção de evolução',complaint:'Reclamação',other:'Outro'}).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Gravidade<select name="severity">${Object.entries({light:'Leve',moderate:'Moderada',high:'Alta',critical:'Crítica'}).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><button type="submit">Registrar ocorrência</button></form></details>` : ''}
+                  ${canAdminComments && activity.studentId && !comment.deletedAt ? renderActivityOccurrenceForm(comment.id) : ''}
 
                   ${canManage ? `<form class="actws-comment-edit-form" data-actws-comment-edit-form="${escapeHtml(comment.id)}" hidden><textarea name="body" rows="3" data-actws-mention-textarea>${escapeHtml(comment.body)}</textarea><div><button type="submit">Salvar</button><button type="button" data-actws-comment-cancel="${escapeHtml(comment.id)}">Cancelar</button></div></form><div class="actws-comment-menu" data-actws-comment-menu-popover="${escapeHtml(comment.id)}" hidden><button type="button" data-actws-comment-edit="${escapeHtml(comment.id)}">Editar comentário</button><button type="button" data-actws-comment-delete="${escapeHtml(comment.id)}">Excluir comentário</button></div>` : ""}
                 </div>
@@ -12280,6 +12335,37 @@ const bindActivitiesUi = () => {
         if (trigger instanceof HTMLElement) trigger.hidden = false;
         return;
       }
+      const occurrenceToggle = target.closest("[data-actws-occurrence-toggle]");
+      if (occurrenceToggle instanceof HTMLElement) {
+        const shell = occurrenceToggle.closest("[data-actws-occurrence-shell]");
+        const form = shell?.querySelector("[data-actws-occurrence]");
+        if (form instanceof HTMLFormElement) {
+          const willOpen = form.hidden;
+          form.hidden = !willOpen;
+          occurrenceToggle.setAttribute("aria-expanded", String(willOpen));
+          shell?.classList.toggle("is-open", willOpen);
+          const error = form.querySelector("[data-actws-occurrence-error]");
+          if (error instanceof HTMLElement) {
+            error.hidden = true;
+            error.textContent = "";
+          }
+          if (willOpen) form.querySelector("select")?.focus();
+        }
+        return;
+      }
+      const occurrenceCancel = target.closest("[data-actws-occurrence-cancel]");
+      if (occurrenceCancel instanceof HTMLElement) {
+        const shell = occurrenceCancel.closest("[data-actws-occurrence-shell]");
+        const form = shell?.querySelector("[data-actws-occurrence]");
+        const trigger = shell?.querySelector("[data-actws-occurrence-toggle]");
+        if (form instanceof HTMLFormElement) {
+          form.reset();
+          form.hidden = true;
+        }
+        if (trigger instanceof HTMLElement) trigger.setAttribute("aria-expanded", "false");
+        shell?.classList.remove("is-open");
+        return;
+      }
       const commentMenuButton = target.closest("[data-actws-comment-menu]");
       if (commentMenuButton instanceof HTMLElement) {
         const commentId = String(commentMenuButton.getAttribute("data-actws-comment-menu") || "").trim();
@@ -12427,6 +12513,7 @@ const bindActivitiesUi = () => {
       if ((!id && !isCreateMode) || form.dataset.saving) return;
       form.dataset.saving = "true";
       const formData = new FormData(form);
+      const isOccurrenceSubmit = form.matches("[data-actws-occurrence]");
       let payload = null;
       let optimisticEl = null;
       if (form.matches("[data-actws-details-form]")) {
@@ -12492,7 +12579,22 @@ const bindActivitiesUi = () => {
           dueDate: String(formData.get("dueDate") || "").trim(),
         };
       }
-      if(form.matches('[data-actws-occurrence]')) payload={healthAction:'occurrence',commentId:form.dataset.actwsOccurrence,category:formData.get('category'),severity:formData.get('severity')};
+      if (isOccurrenceSubmit) {
+        payload = { healthAction: "occurrence", commentId: form.dataset.actwsOccurrence, category: formData.get("category"), severity: formData.get("severity") };
+        const submitButton = form.querySelector("[data-actws-occurrence-submit]");
+        const error = form.querySelector("[data-actws-occurrence-error]");
+        form.querySelectorAll("select,button").forEach(control => {
+          if (control instanceof HTMLSelectElement || control instanceof HTMLButtonElement) control.disabled = true;
+        });
+        if (submitButton instanceof HTMLButtonElement) {
+          submitButton.dataset.label = submitButton.textContent || "Registrar ocorrência";
+          submitButton.textContent = "Registrando...";
+        }
+        if (error instanceof HTMLElement) {
+          error.hidden = true;
+          error.textContent = "";
+        }
+      }
       if(payload && form.matches('[data-actws-details-form]')) {
         try { Object.assign(payload,activityHealthPayload(workspace,payload.status)); } catch(error) {setActivitiesStatus(error.message,'error');delete form.dataset.saving;return;}
       }
@@ -12504,11 +12606,36 @@ const bindActivitiesUi = () => {
       request
         .then(data => {
           if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data);
-          setActivitiesStatus(isCreateMode ? "Atividade criada ✓" : "Salvo ✓", "success");
+          setActivitiesStatus(isOccurrenceSubmit ? "Ocorrência registrada." : isCreateMode ? "Atividade criada ✓" : "Salvo ✓", "success");
           window.setTimeout(() => setActivitiesStatus(""), 1800);
         })
-        .catch(error => { console.error("[activities] workspace submit failed:", error); optimisticEl?.remove(); setActivitiesStatus("Não foi possível salvar agora.", "error"); })
-        .finally(() => { delete form.dataset.saving; });
+        .catch(error => {
+          console.error("[activities] workspace submit failed:", error);
+          optimisticEl?.remove();
+          if (isOccurrenceSubmit) {
+            const inlineError = form.querySelector("[data-actws-occurrence-error]");
+            if (inlineError instanceof HTMLElement) {
+              inlineError.textContent = "Não foi possível registrar a ocorrência. Tente novamente.";
+              inlineError.hidden = false;
+            }
+            setActivitiesStatus("Não foi possível registrar a ocorrência.", "error");
+            return;
+          }
+          setActivitiesStatus("Não foi possível salvar agora.", "error");
+        })
+        .finally(() => {
+          if (isOccurrenceSubmit && form.isConnected) {
+            form.querySelectorAll("select,button").forEach(control => {
+              if (control instanceof HTMLSelectElement || control instanceof HTMLButtonElement) control.disabled = false;
+            });
+            const submitButton = form.querySelector("[data-actws-occurrence-submit]");
+            if (submitButton instanceof HTMLButtonElement && submitButton.dataset.label) {
+              submitButton.textContent = submitButton.dataset.label;
+              delete submitButton.dataset.label;
+            }
+          }
+          delete form.dataset.saving;
+        });
     });
     activitiesDrawer.addEventListener("change", (event) => {
       const target = event.target;
@@ -12600,6 +12727,24 @@ const bindActivitiesUi = () => {
       event.preventDefault();
       target.closest("form")?.requestSubmit();
       return;
+    }
+    if (event.key === "Escape") {
+      const occurrenceShell = target instanceof Element ? target.closest("[data-actws-occurrence-shell]") : null;
+      if (occurrenceShell instanceof HTMLElement) {
+        const form = occurrenceShell.querySelector("[data-actws-occurrence]");
+        const trigger = occurrenceShell.querySelector("[data-actws-occurrence-toggle]");
+        if (form instanceof HTMLFormElement && !form.hidden) {
+          form.reset();
+          form.hidden = true;
+          occurrenceShell.classList.remove("is-open");
+          if (trigger instanceof HTMLElement) {
+            trigger.setAttribute("aria-expanded", "false");
+            trigger.focus();
+          }
+          event.preventDefault();
+          return;
+        }
+      }
     }
     if (event.key === "Escape" && activitiesState.filterPopoverEl) closeActivitiesFiltersPopover();
     if (event.key === "Escape" && activitiesState.drawer.isOpen) closeActivitiesDrawer();
@@ -27574,7 +27719,7 @@ const getRetentionTimelineEventLabel = (eventType) => {
   const raw = String(eventType || "").trim();
   if (raw === "flag_risk") return "Risco sinalizado";
   if (raw === "register_preventive_intent") return "Intenção preventiva";
-  if (raw === "register_formal_request") return "Pedido formal";
+  if (raw === "register_formal_request") return "Pedido de cancelamento";
   if (raw === "register_contact") return "Contato registrado";
   if (raw === "mark_awaiting_customer") return "Aguardando aluno";
   if (raw === "retract_cancellation") return "Cancelamento revertido";
@@ -28226,11 +28371,42 @@ const studentProfilePanel = (key, html, hist, mode) => `<div class="student-prof
 const activityEventLabel = type => ({ activity_created: 'Atividade criada', activity_updated: 'Atividade atualizada', status_changed: 'Status alterado', assignee_changed: 'Responsável alterado', due_date_changed: 'Prazo alterado', priority_changed: 'Prioridade alterada', comment_added: 'Comentário adicionado', checklist_item_added: 'Checklist criado', checklist_item_completed: 'Checklist concluído', checklist_item_reopened: 'Checklist reaberto', activity_completed: 'Atividade concluída', activity_reopened: 'Atividade reaberta', activity_archived: 'Atividade arquivada', student_linked: 'Aluno vinculado', student_unlinked: 'Aluno desvinculado' }[type] || 'Atividade');
 const activityProfileDetail = (row, event) => [row.descricao, row.observacoes && `Observações: ${row.observacoes}`, row.responsavelId && `Responsável: ${row.responsavelNome || row.responsavelId}`, row.prioridade && `Prioridade: ${row.prioridade}`, row.tipo && `Tipo: ${row.tipo}`, row.prazo && `Prazo: ${formatAdminDate(row.prazo)}`, Number(row.commentsCount) ? `${Number(row.commentsCount)} comentários` : "", Number(row.checklistTotal) ? `${Number(row.checklistDone || 0)}/${Number(row.checklistTotal)} itens` : "", row.criadoEm && `Criada: ${formatAdminHistoryStamp(row.criadoEm)}`, row.completedAt && `Última conclusão: ${formatAdminHistoryStamp(row.completedAt)}`, event && `Registrado por: ${event.actorNameSnapshot || event.actorName || event.actorId}`, event?.eventType === 'activity_completed' && `Concluída por: ${event.actorNameSnapshot || event.actorName || event.actorId}`, row.isArchived && 'Arquivada'].filter(Boolean).join('\n');
 const studentActivityEvents = hist => hist.profileResources?.activities?.events || [];
+const formatRetentionTimelineJourneyDetail = (event = {}) => {
+  const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+  const parts = [];
+  if (payload.reason) parts.push(`Motivo: ${String(payload.reason).trim()}`);
+  if (payload.detail) parts.push(`Observação: ${String(payload.detail).trim()}`);
+  if (payload.origin) parts.push(`Origem: ${String(payload.origin).trim()}`);
+  const actor = String(event?.actor_name || "").trim();
+  if (actor) parts.push(`Registrado por: ${actor}`);
+  const summary = String(event?.summary || "").trim();
+  return parts.join("\n") || (summary && summary !== "—" ? summary : "");
+};
 const getStudentProfileJourney = hist => {
   const events = [];
   const add = (source, id, date, title, detail) => events.push({ source, id, date, title, detail, time: Date.parse(date) || 0 });
   (hist.items || []).forEach((item, i) => add("Pedagógico", item.id || i, item.createdAt || item.dateKey, item.kind === "comment" ? "Comentário pedagógico" : "Registro de aula", item.summaryText || item.observacoes || ""));
-  (hist.retentionTimeline?.events || []).forEach((event, i) => add("Retenção", event.id || i, event.occurred_at, getRetentionTimelineEventLabel(event.event_type), event.summary || ""));
+  (hist.retentionTimeline?.events || []).forEach((event, i) => add("Retenção", event.id || i, event.occurred_at, getRetentionTimelineEventLabel(event.event_type), formatRetentionTimelineJourneyDetail(event)));
+  const addCancellationRecord = (record, key) => {
+    const normalized = normalizeStudentCancellationRecord(record);
+    if (!normalized) return;
+    const reason = [normalized.motivo ? `Motivo: ${normalized.motivo}` : "", normalized.motivoDetalhe ? `Observação: ${normalized.motivoDetalhe}` : ""].filter(Boolean).join("\n");
+    if (normalized.dataPedido) add("Retenção", `${key}:requested`, normalized.dataPedido, "Pedido de cancelamento", reason);
+    (Array.isArray(normalized.eventos) ? normalized.eventos : []).forEach((event, index) => {
+      const action = String(event?.acao || "").trim();
+      if (!action) return;
+      if (action === "Pedido registrado") return;
+      add("Retenção", `${key}:event:${index}`, event.data, action, String(event?.detalhe || "").trim());
+    });
+    const outcome = normalized.desfecho;
+    const outcomeType = typeof outcome === "object" && outcome ? String(outcome.tipo || outcome.type || "").trim() : String(outcome || "").trim();
+    if (outcomeType === "revertido" && normalized.dataEfetivacao) {
+      const hasRevertEvent = (Array.isArray(normalized.eventos) ? normalized.eventos : []).some((event) => /revert/i.test(String(event?.acao || "")));
+      if (!hasRevertEvent) add("Retenção", `${key}:reverted`, normalized.dataEfetivacao, "Cancelamento revertido", "");
+    }
+  };
+  addCancellationRecord(hist.alunoMeta?.cancelamento, "current-cancellation");
+  (Array.isArray(hist.alunoMeta?.cancelamentosAnteriores) ? hist.alunoMeta.cancelamentosAnteriores : []).forEach((record, index) => addCancellationRecord(record, `archived-cancellation-${index}`));
   const activityEvents = studentActivityEvents(hist);
   const milestones = new Set(["activity_created", "activity_completed", "activity_reopened", "activity_archived"]);
   activityEvents.filter(event => milestones.has(String(event.eventType || ""))).forEach(event => add('Atividades', event.id, event.occurredAt, `${activityEventLabel(event.eventType)} — ${event.snapshot?.titulo || ''}`, activityProfileDetail(event.snapshot || {}, event)));
@@ -40893,9 +41069,35 @@ const syncRetentionV2SnapshotToCache = (snapshot) => {
   });
 };
 
+const resolveRetentionCaseForStudentCommand = async ({ alunoId, subscriptionId = "", requireOpenCase = false } = {}) => {
+  const id = String(alunoId || "").trim();
+  const subId = String(subscriptionId || "").trim();
+  const findCase = () => {
+    const candidate = getAdminRetentionCaseByStudentId(id) || getAdminRetentionDecisionByStudentId(id);
+    if (!candidate) return null;
+    if (subId && String(candidate.subscriptionId || "") !== subId) return null;
+    return candidate;
+  };
+  let linkedCase = findCase();
+  if (!linkedCase && requireOpenCase) {
+    adminPedagogicoState.retention = {
+      ...(adminPedagogicoState.retention && typeof adminPedagogicoState.retention === "object" ? adminPedagogicoState.retention : {}),
+      loadedAt: 0,
+    };
+    await refreshAdminPedagogicoRetentionState({ force: true }).catch(() => null);
+    linkedCase = findCase();
+  }
+  if (requireOpenCase && !linkedCase) {
+    const error = new Error("Não encontramos um pedido de cancelamento aberto para reverter. Atualize a ficha e tente novamente.");
+    error.code = "retention_case_required";
+    throw error;
+  }
+  return linkedCase;
+};
+
 const submitRetentionV2Command = async ({ command, alunoId, subscriptionId = "", payload = {}, justification = "", override = false } = {}) => {
-  const candidateCase = getAdminRetentionCaseByStudentId(alunoId) || getAdminRetentionDecisionByStudentId(alunoId);
-  const linkedCase = subscriptionId && candidateCase?.subscriptionId !== subscriptionId ? null : candidateCase;
+  const requiresExistingCase = !["register_formal_request", "register_preventive_intent", "flag_risk"].includes(String(command || "").trim());
+  const linkedCase = await resolveRetentionCaseForStudentCommand({ alunoId, subscriptionId, requireOpenCase: requiresExistingCase });
   const body = {
     command,
     caseId: linkedCase?.caseId || "",
@@ -41700,18 +41902,41 @@ const openAdminStudentRevertCancellationModal = ({ alunoId } = {}) => {
   if (!cancelamento) return;
   openModal({
     title: "Reverter cancelamento",
-    primaryLabel: "Reverter",
+    primaryLabel: "Reverter cancelamento",
     secondaryLabel: "Cancelar",
-    bodyHtml: "O aluno desistiu do cancelamento? O registro será arquivado e o aluno volta ao estado normal.",
+    bodyHtml: `
+      <div class="admin-student-lifecycle-modal">
+        <div class="admin-student-lifecycle-modal-summary">
+          <strong>Reverter cancelamento?</strong><br />
+          O pedido de cancelamento será revertido e o aluno voltará ao estado ativo.
+          O pedido original continuará registrado no histórico.
+        </div>
+        <label class="admin-student-lifecycle-modal-field">
+          <span>Observação da reversão (opcional)</span>
+          <textarea rows="3" data-admin-student-revert-detail placeholder="Ex.: Aluno decidiu continuar após negociação."></textarea>
+        </label>
+        <div class="admin-student-lifecycle-modal-error" data-admin-student-revert-error hidden></div>
+      </div>
+    `,
     onPrimary: () => {
+      const detailEl = modalBody?.querySelector("[data-admin-student-revert-detail]");
+      const errorEl = modalBody?.querySelector("[data-admin-student-revert-error]");
+      const detail = detailEl instanceof HTMLTextAreaElement ? String(detailEl.value || "").trim() : "";
+      const setErr = (message) => {
+        if (!(errorEl instanceof HTMLElement)) return;
+        errorEl.textContent = String(message || "");
+        errorEl.hidden = !message;
+      };
       if (modalPrimary) modalPrimary.disabled = true;
       if (modalSecondary) modalSecondary.disabled = true;
+      const previousLabel = modalPrimary?.textContent || "";
+      if (modalPrimary) modalPrimary.textContent = "Revertendo…";
       const archived = {
         ...cancelamento,
         desfecho: "revertido",
         dataEfetivacao: new Date().toISOString(),
         eventos: (Array.isArray(cancelamento.eventos) ? cancelamento.eventos : []).concat([
-          createStudentCancellationHistoryEntry("Cancelamento revertido", "Aluno voltou ao estado normal"),
+          createStudentCancellationHistoryEntry("Cancelamento revertido", detail || "Aluno voltou ao estado normal"),
         ]),
       };
       const cancelamentosAnteriores = archiveStudentCancellationRecord({ alunoMeta: meta, record: archived });
@@ -41722,19 +41947,29 @@ const openAdminStudentRevertCancellationModal = ({ alunoId } = {}) => {
               command: "retract_cancellation",
               alunoId: id,
               payload: {
-                detail: "Aluno voltou ao estado normal",
+                detail: detail || "Aluno voltou ao estado normal",
               },
             });
+            setAdminPedagogicoStatus("Cancelamento revertido com sucesso.", "success");
+            setAdminStudentsStatus("Cancelamento revertido com sucesso.", "success");
             closeModal();
             return;
           }
           await saveAdminStudentLifecyclePatch({ alunoId: id, patch: { cancelamento: null, cancelamentosAnteriores } });
           rerenderAdminStudentLifecycleViews();
+          setAdminPedagogicoStatus("Cancelamento revertido com sucesso.", "success");
+          setAdminStudentsStatus("Cancelamento revertido com sucesso.", "success");
           closeModal();
         } catch (error) {
           console.error("[admin] revert student cancellation failed:", error);
+          setErr(
+            error?.code === "request_not_open" || error?.code === "retention_case_closed"
+              ? "Este pedido não está mais em um estado reversível."
+              : error?.message || "Não foi possível reverter o cancelamento agora."
+          );
           if (modalPrimary) modalPrimary.disabled = false;
           if (modalSecondary) modalSecondary.disabled = false;
+          if (modalPrimary) modalPrimary.textContent = previousLabel || "Reverter cancelamento";
         }
       })();
       return false;

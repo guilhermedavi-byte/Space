@@ -2,6 +2,7 @@
 const { supabaseFetch } = require('./supabase-rest');
 const { listCollectionAsAdmin } = require('./firestore-admin');
 const H = require('./retention-health-engine');
+const {applyLifecycleHealth}=require('./retention-health-lifecycle');
 async function all(table, query = '', order = 'id') {
   const rows = [];
   for (let offset=0;offset<100000;offset+=1000) {
@@ -17,7 +18,7 @@ const safeDay = value => { try { return value ? H.dateKey(value) : null; } catch
 async function collectHealth(now = new Date()) {
   const day = H.dateKey(now), errors = {};
   const optional = (name,promise) => promise.catch(() => { errors[name] = 'Fonte indisponível'; return null; });
-  const [users,canonical,subscriptions,activities,logs,links,receivables,payments,connections,cases,occurrences,pulses] = await Promise.all([
+  const [users,canonical,subscriptions,activities,logs,links,receivables,payments,connections,cases,occurrences,pulses,lifecycleEvents] = await Promise.all([
     listCollectionAsAdmin('users',{decorate:false}), all('students'), all('subscriptions'),
     optional('activities',listCollectionAsAdmin('activities',{decorate:false})),
     optional('attendance',listCollectionAsAdmin('lessonLogs',{decorate:false})),
@@ -26,7 +27,7 @@ async function collectHealth(now = new Date()) {
     optional('payments',all('finance_payments')),
     optional('connections',all('finance_connection_state','','connection_id')),
     optional('cases',all('retention_cases')),
-    optional('occurrences',all('student_occurrences')),optional('quality_pulses',all('student_quality_pulses')),
+    optional('occurrences',all('student_occurrences')),optional('quality_pulses',all('student_quality_pulses')),all('student_health_lifecycle_events'),
   ]);
   // The completed Activity is the durable source; repair a projection interrupted after its Firestore commit.
   for(const activity of activities||[]) {
@@ -79,7 +80,7 @@ async function collectHealth(now = new Date()) {
     const chargeIds=new Set(charges.map(row=>`${row.connection_id}:${row.asaas_payment_id}`));
     const paid=(payments||[]).filter(row=>chargeIds.has(`${row.connection_id}:${row.asaas_payment_id}`) && ['RECEIVED','CONFIRMED','RECEIVED_IN_CASH'].includes(row.status)).sort((a,b)=>String(b.confirmed_date||b.payment_date).localeCompare(String(a.confirmed_date||a.payment_date)))[0];
     if(paid) { signals.last_payment_at=paid.confirmed_date||paid.payment_date; signals.last_payment_amount=paid.value; }
-    const score=H.scoreHealth(signals,day);
+    const score=applyLifecycleHealth(H.scoreHealth(signals,day),{lifecycle:student.lifecycle,events:lifecycleEvents.filter(e=>e.student_id===student.student_id),occurrences:signals.occurrences,on:now.toISOString()});
     const related=(cases||[]).filter(row=>student.canonical_ids.includes(row.student_id));
     if(cases) {
       monitored.push('cancellation_request_without_contact','notice_near_end');
@@ -87,7 +88,12 @@ async function collectHealth(now = new Date()) {
       if(waiting) score.risk_factors.push({type:'cancellation_request_without_contact',severity:'high',label:'Pedido sem primeiro contato registrado há 2+ dias',metric:'days_without_contact',current_value:H.daysBetween(waiting.cancellation_requested_at,day),threshold:2});
       if(['cancellation_scheduled','notice_period'].includes(student.lifecycle) && student.last_active_date && H.daysBetween(day,student.last_active_date)>=0 && H.daysBetween(day,student.last_active_date)<=7) score.risk_factors.push({type:'notice_near_end',severity:'attention',label:'Aviso termina nos próximos 7 dias',metric:'notice_days_remaining',current_value:H.daysBetween(day,student.last_active_date),threshold:7});
     }
-    return {...student,...score,snapshot_date:day,monitored_alert_types:monitored};
+    const latestCase=related.slice().sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at)))[0];
+    const nextTask=tasks.filter(t=>!t.isArchived&&t.status!=='Feito').sort((a,b)=>String(a.prazo||'9999').localeCompare(String(b.prazo||'9999')))[0];
+    return {...student,...score,snapshot_date:day,monitored_alert_types:monitored,
+      notice_days_remaining:student.last_active_date?Math.max(0,H.daysBetween(day,student.last_active_date)):null,
+      last_contact_at:latestCase?.last_contact_at||latestCase?.first_contact_at||null,
+      retention_owner:latestCase?.owner_name||null,next_activity:nextTask?{id:nextTask.firestoreDocId||nextTask.id,title:nextTask.titulo,due:nextTask.prazo,owner:nextTask.responsavelNome||null}:null};
   });
   return {day,rows,users,activities,population:{...H.executive(rows),source_errors:errors,model_version:'admin_v0',computed_at:now.toISOString()}};
 }
@@ -102,15 +108,27 @@ async function readIntelligence(month) {
   const populations=await all('retention_population_snapshots',`snapshot_date=gte.${H.addDays(day,-400)}`,'snapshot_date.desc');
   const latest=populations[0];
   if(!latest) return {rows:[],alerts:[],events:[],trend:[],summary:null,snapshot_date:null,analytics:{},missing:['Snapshot inicial ainda não disponível']};
-  const [daily,history,alerts,events,cases,openingRows,riskCases,occurrences,pulses,settings,riskActions]=await Promise.all([
+  const [daily,history,alerts,events,cases,openingRows,riskCases,occurrences,pulses,settings,riskActions,lifecycleEvents,subscriptions,currentActivities]=await Promise.all([
     all('student_health_daily',`snapshot_date=eq.${latest.snapshot_date}`,'student_id'),
     all('student_health_daily',`snapshot_date=in.(${H.addDays(latest.snapshot_date,-7)},${H.addDays(latest.snapshot_date,-14)})`,'snapshot_date,student_id'),
     all('retention_alerts'),all('retention_health_events',`snapshot_date=gte.${H.addDays(day,-90)}`),all('retention_cases'),
     all('student_health_daily',`snapshot_date=eq.${month}-01`,'student_id'),
-    all('retention_risk_cases'),all('student_occurrences'),all('student_quality_pulses'),all('retention_health_settings'),all('retention_risk_actions'),
+    all('retention_risk_cases'),all('student_occurrences'),all('student_quality_pulses'),all('retention_health_settings'),all('retention_risk_actions'),all('student_health_lifecycle_events'),all('subscriptions'),listCollectionAsAdmin('activities',{decorate:false}).catch(()=>null),
   ]);
   const rows=daily.map(row=>{
-    const data=row.data;
+    const base=row.data;
+    const subs=subscriptions.filter(s=>(base.canonical_ids||[]).includes(s.student_id));
+    const lifecycle=subs.length?require('../../assets/student-lifecycle').getLifecycleStatus({subscriptions:subs},day):base.lifecycle;
+    // Reapply against raw dimensions, never compound yesterday's operational cap.
+    const observed=H.scoreHealth(base.signals||{},latest.snapshot_date);
+    const live=applyLifecycleHealth(observed,{lifecycle,events:lifecycleEvents.filter(e=>e.student_id===row.student_id),occurrences:occurrences.filter(o=>o.student_id===row.student_id)});
+    const caseNow=cases.filter(c=>(base.canonical_ids||[]).includes(c.student_id)).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at)))[0];
+    const next=(currentActivities||[]).filter(t=>(t.studentId||t.alunoId||t.firestore_student_id)===row.student_id&&!t.isArchived&&t.status!=='Feito').sort((a,b)=>String(a.prazo||'9999').localeCompare(String(b.prazo||'9999')))[0];
+    const end=subs.filter(s=>['cancellation_scheduled','notice_period'].includes(s.lifecycle_status)).map(s=>s.last_active_date).filter(Boolean).sort()[0];
+    const data={...base,...live,lifecycle,risk_factors:base.risk_factors,
+      last_contact_at:caseNow?.last_contact_at||caseNow?.first_contact_at||null,retention_owner:caseNow?.owner_name||null,
+      notice_days_remaining:end?Math.max(0,H.daysBetween(day,end)):null,
+      next_activity:currentActivities?(next?{id:next.firestoreDocId||next.id,title:next.titulo,due:next.prazo,owner:next.responsavelNome||null}:null):base.next_activity};
     const delta=days=> {const previous=history.find(item=>item.student_id===row.student_id && item.snapshot_date===H.addDays(latest.snapshot_date,-days)); return previous && previous.data?.model_version===row.data?.model_version && previous.score_coverage_pct===row.score_coverage_pct && JSON.stringify(previous.missing_dimensions)===JSON.stringify(row.missing_dimensions) && H.finite(previous.health_score) && H.finite(row.health_score) ? row.health_score-previous.health_score:null;};
     return {...data,risk_cases:riskCases.filter(c=>c.student_id===row.student_id).map(c=>({...c,actions:riskActions.filter(a=>a.risk_case_id===c.id)})),occurrences:occurrences.filter(c=>c.student_id===row.student_id),quality_pulse:pulses.filter(c=>c.student_id===row.student_id).sort((a,b)=>b.called_at.localeCompare(a.called_at))[0]||null,health_change_7d:delta(7),health_change_14d:delta(14)};
   });
@@ -133,7 +151,7 @@ async function readIntelligence(month) {
     request_to_notice:requested.length?100*notices.length/requested.length:null,notice_to_churn:resolvedNotices.length?100*resolvedNotices.filter(row=>row.churned_at).length/resolvedNotices.length:null,
     first_contact_hours:firstContacts.length?firstContacts.reduce((a,b)=>a+b,0)/firstContacts.length:null,first_contact_coverage:requested.length?100*firstContacts.length/requested.length:0,
     grr:null,nrr:null,revenue_churn:null,revenue_saved:null,reasons:byReason,methodology:'Casos da cohort de pedido no mês; Save Rate sobre desfechos conhecidos. Base inicial somente snapshot do dia 1.'};
-  return {rows,alerts,events,settings:settings[0]||{},summary:latest.data,snapshot_date:latest.snapshot_date,computed_at:latest.updated_at,trend:populations.map(row=>({date:row.snapshot_date,...row.data})).reverse(),analytics,cases:operationalCases,
+  return {rows,alerts,events,settings:settings[0]||{},summary:{...latest.data,...H.executive(rows)},snapshot_date:latest.snapshot_date,computed_at:latest.updated_at,trend:populations.map(row=>({date:row.snapshot_date,...row.data})).reverse(),analytics,cases:operationalCases,
     missing:['Teacher Pulse: Não disponível neste modelo.','Admin V0: expert-informed; não é um modelo preditivo comprovado','MRR, tenure e survival dependem de contratos confiáveis','NRR/GRR dependem de base MRR e movimentos de receita','Financeiro só pontua após reconciliação completa nas últimas 48h']};
 }
 module.exports={all,collectHealth,runHealthSnapshot,readIntelligence};

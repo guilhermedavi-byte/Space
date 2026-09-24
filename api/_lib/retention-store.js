@@ -282,6 +282,35 @@ const resolveRetentionSubjectByFirestoreStudentId = async ({ firestoreStudentId 
   return resolveRetentionSubjectOnce({ firestoreStudentId: safeId });
 };
 
+const resolveOpenFormalRetentionCaseBySubject = async ({ studentId, subscriptionId } = {}) => {
+  const safeStudentId = safeText(studentId);
+  const safeSubscriptionId = safeText(subscriptionId);
+  if (!safeStudentId && !safeSubscriptionId) {
+    throw buildRetentionStoreError("retention_case_required");
+  }
+  const filters = [
+    "select=id,version,student_id,subscription_id,lifecycle_status,closed_at",
+    "case_kind=eq.formal",
+    "closed_at=is.null",
+    "lifecycle_status=in.(cancellation_requested,cancellation_scheduled)",
+    "order=updated_at.desc",
+    "limit=1",
+  ];
+  if (safeSubscriptionId) filters.push(`subscription_id=eq.${encodeURIComponent(safeSubscriptionId)}`);
+  else filters.push(`student_id=eq.${encodeURIComponent(safeStudentId)}`);
+  const { data } = await supabaseFetch(`/retention_cases?${filters.join("&")}`);
+  const row = Array.isArray(data) ? data[0] : null;
+  if (!row?.id) {
+    throw buildRetentionStoreError("request_not_open");
+  }
+  return {
+    caseId: String(row.id || ""),
+    version: Number(row.version) || 0,
+    studentId: String(row.student_id || ""),
+    subscriptionId: String(row.subscription_id || ""),
+  };
+};
+
 const getRetentionCaseTimeline = async ({ caseId } = {}) => {
   return invokeRetentionRpc("retention_get_case_timeline", { p_case_id: caseId });
 };
@@ -313,6 +342,7 @@ module.exports = {
   listRetentionCases,
   getLifecycleMetrics,
   resolveRetentionSubjectByFirestoreStudentId,
+  resolveOpenFormalRetentionCaseBySubject,
   getRetentionCaseTimeline,
   applyRetentionCommand,
   runLegacyRetentionImport,
