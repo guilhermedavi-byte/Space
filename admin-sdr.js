@@ -254,10 +254,20 @@
   const wireAudio = () => {
     document.querySelectorAll('[data-asdr-audio]').forEach(async audio => {
       const status = audio.closest('.asdr-audio-row')?.querySelector('[data-asdr-audio-state]');
+      if (audio.dataset.wired === '1') return;
+      audio.dataset.wired = '1';
       audio.addEventListener('loadedmetadata', () => { if (status) status.textContent = `Duração ${shortDuration(audio.duration)}`; }, { once: true });
       audio.addEventListener('error', () => { if (status) status.textContent = 'Gravação indisponível'; });
       try {
-        if (audio.isConnected) audio.src = audio.dataset.audioEndpoint;
+        if (status) status.textContent = 'Carregando gravação...';
+        const res = await fetchWithAuth(audio.dataset.audioEndpoint, { headers: { Accept: 'audio/mpeg' } });
+        if (!res.ok) throw new Error('audio_unavailable');
+        const blob = await res.blob();
+        if (!blob.size || !audio.isConnected) throw new Error('audio_unavailable');
+        if (audio.dataset.objectUrl) URL.revokeObjectURL(audio.dataset.objectUrl);
+        const objectUrl = URL.createObjectURL(blob);
+        audio.dataset.objectUrl = objectUrl;
+        audio.src = objectUrl;
       } catch {
         if (status && audio.isConnected) status.textContent = 'Gravação indisponível';
       }

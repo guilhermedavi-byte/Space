@@ -3,12 +3,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
 
-test('SDR filters collapse and audio resolves through authenticated request', async () => {
+test('SDR filters collapse and audio loads through authenticated blob request', async () => {
   const dom = new JSDOM('<div data-admin-sdr></div>', { runScripts: 'outside-only', url: 'https://space.example' });
   const requests = [];
+  dom.window.URL.createObjectURL = blob => `blob:audio-${blob.size}`;
+  dom.window.URL.revokeObjectURL = () => {};
   dom.window.fetchWithAuth = async url => {
-    requests.push(url);
-    return { ok: true, json: async () => url.includes('/audio?') ? { url: 'https://audio.example/fresh.mp3' } : { selectedCall: { recordingId: 'rec1', sdrName: 'SDR', transcript: '' } } };
+    requests.push(String(url));
+    if (String(url).includes('/audio')) return { ok: true, blob: async () => new dom.window.Blob(['mp3'], { type: 'audio/mpeg' }) };
+    return { ok: true, json: async () => ({ selectedCall: { recordingId: 'rec1', sdrName: 'SDR', transcript: '' } }) };
   };
   dom.window.HTMLMediaElement.prototype.pause = function () {};
   dom.window.eval(fs.readFileSync('admin-sdr.js', 'utf8'));
@@ -20,8 +23,9 @@ test('SDR filters collapse and audio resolves through authenticated request', as
   doc.querySelector('[data-asdr-toggle-filters]').click();
   assert.equal(doc.getElementById('asdr-filters').hidden, true);
   await new Promise(resolve => setImmediate(resolve));
-  assert.ok(doc.querySelector('[data-asdr-audio]').src.endsWith('/api/admin/sdr/calls/rec1/audio'));
-  assert.ok(doc.querySelector('audio').src.endsWith('/api/admin/sdr/calls/rec1/audio'));
+  assert.ok(requests.some(url => url.endsWith('/api/admin/sdr/calls/rec1/audio')));
+  assert.equal(doc.querySelector('[data-asdr-audio]').dataset.audioEndpoint, '/api/admin/sdr/calls/rec1/audio');
+  assert.equal(doc.querySelector('audio').src, 'blob:audio-3');
   assert.ok(!doc.body.textContent.includes('Firestore'));
   assert.ok(!doc.body.textContent.includes('ADMIN / COMERCIAL'));
   const audio = doc.querySelector('audio');
@@ -37,6 +41,7 @@ test('SDR filters collapse and audio resolves through authenticated request', as
   assert.equal(doc.body.style.overflow, '');
   dom.window.close();
 });
+
 
 const transcriptView = async (transcript, sdrName = 'Luana') => {
   const dom = new JSDOM('<div data-admin-sdr></div>', { runScripts: 'outside-only', url: 'https://space.example' });
