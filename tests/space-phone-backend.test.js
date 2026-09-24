@@ -16,6 +16,12 @@ function req(method, body = undefined) {
   return stream;
 }
 
+
+function restoreEnv(name, value) {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
+
 function res() {
   return {
     statusCode: 0,
@@ -36,14 +42,16 @@ test('Space Phone endpoints fail closed when feature flag is disabled', async ()
   await tokenHandler({ authResolver, permissionResolver, supabase: async () => { throw new Error('should_not_read'); } })(req('POST'), out);
   assert.equal(out.statusCode, 403);
   assert.equal(out.body.error, 'space_phone_disabled');
-  process.env.SPACE_PHONE_ENABLED = old;
+  restoreEnv('SPACE_PHONE_ENABLED', old);
 });
 
 test('token endpoint exchanges Telnyx credential server-side without returning API key', async () => {
   const oldFlag = process.env.SPACE_PHONE_ENABLED;
   const oldKey = process.env.TELNYX_API_KEY;
+  const oldWebrtcKey = process.env.TELNYX_WEBRTC_API_KEY;
   process.env.SPACE_PHONE_ENABLED = 'true';
   process.env.TELNYX_API_KEY = 'KEY_TEST_SECRET';
+  delete process.env.TELNYX_WEBRTC_API_KEY;
   const calls = [];
   const out = res();
   await tokenHandler({
@@ -64,8 +72,68 @@ test('token endpoint exchanges Telnyx credential server-side without returning A
   assert.ok(!JSON.stringify(out.body).includes('KEY_TEST_SECRET'));
   assert.equal(calls[1].url, 'https://api.telnyx.com/v2/telephony_credentials/cred_123/token');
   assert.equal(calls[1].auth, 'Bearer KEY_TEST_SECRET');
-  process.env.SPACE_PHONE_ENABLED = oldFlag;
-  process.env.TELNYX_API_KEY = oldKey;
+  restoreEnv('SPACE_PHONE_ENABLED', oldFlag);
+  restoreEnv('TELNYX_API_KEY', oldKey);
+  restoreEnv('TELNYX_WEBRTC_API_KEY', oldWebrtcKey);
+});
+
+test('Telnyx WebRTC API key has priority over legacy recordings key', async () => {
+  const oldKey = process.env.TELNYX_API_KEY;
+  const oldWebrtcKey = process.env.TELNYX_WEBRTC_API_KEY;
+  process.env.TELNYX_WEBRTC_API_KEY = 'KEY_WEBRTC_SECRET';
+  process.env.TELNYX_API_KEY = 'KEY_LEGACY_SECRET';
+  try {
+    const response = await createTelnyxCredentialToken({
+      credentialId: 'cred',
+      fetchImpl: async (_url, init) => {
+        assert.equal(init.headers.Authorization, 'Bearer KEY_WEBRTC_SECRET');
+        return { ok: true, status: 201, text: async () => 'jwt' };
+      },
+    });
+    assert.equal(response, 'jwt');
+  } finally {
+    restoreEnv('TELNYX_API_KEY', oldKey);
+    restoreEnv('TELNYX_WEBRTC_API_KEY', oldWebrtcKey);
+  }
+});
+
+test('Telnyx WebRTC token falls back to legacy API key when dedicated key is absent', async () => {
+  const oldKey = process.env.TELNYX_API_KEY;
+  const oldWebrtcKey = process.env.TELNYX_WEBRTC_API_KEY;
+  process.env.TELNYX_API_KEY = 'KEY_LEGACY_SECRET';
+  delete process.env.TELNYX_WEBRTC_API_KEY;
+  try {
+    const response = await createTelnyxCredentialToken({
+      credentialId: 'cred',
+      fetchImpl: async (_url, init) => {
+        assert.equal(init.headers.Authorization, 'Bearer KEY_LEGACY_SECRET');
+        return { ok: true, status: 201, text: async () => 'jwt' };
+      },
+    });
+    assert.equal(response, 'jwt');
+  } finally {
+    restoreEnv('TELNYX_API_KEY', oldKey);
+    restoreEnv('TELNYX_WEBRTC_API_KEY', oldWebrtcKey);
+  }
+});
+
+test('Telnyx WebRTC token returns 503 when no API key is configured', async () => {
+  const oldKey = process.env.TELNYX_API_KEY;
+  const oldWebrtcKey = process.env.TELNYX_WEBRTC_API_KEY;
+  delete process.env.TELNYX_API_KEY;
+  delete process.env.TELNYX_WEBRTC_API_KEY;
+  try {
+    await assert.rejects(
+      () => createTelnyxCredentialToken({
+        credentialId: 'cred',
+        fetchImpl: async () => { throw new Error('should_not_fetch'); },
+      }),
+      error => error.message === 'telnyx_api_key_not_configured' && error.status === 503
+    );
+  } finally {
+    restoreEnv('TELNYX_API_KEY', oldKey);
+    restoreEnv('TELNYX_WEBRTC_API_KEY', oldWebrtcKey);
+  }
 });
 
 test('call creation validates E.164-ish number and persists canonical voice_calls row', async () => {
@@ -92,8 +160,8 @@ test('call creation validates E.164-ish number and persists canonical voice_call
   assert.equal(writes[0].options.body.direction, 'outbound');
   assert.equal(writes[0].options.body.space_user_uid, 'growth-1');
   assert.equal(writes[0].options.body.from_number, '+12125550123');
-  process.env.SPACE_PHONE_ENABLED = oldFlag;
-  process.env.TELNYX_DEFAULT_FROM_NUMBER = oldFrom;
+  restoreEnv('SPACE_PHONE_ENABLED', oldFlag);
+  restoreEnv('TELNYX_DEFAULT_FROM_NUMBER', oldFrom);
 });
 
 test('call creation does not succeed without mapped Telnyx identity', async () => {
@@ -103,7 +171,7 @@ test('call creation does not succeed without mapped Telnyx identity', async () =
   await callsHandler({ authResolver, permissionResolver, supabase: async () => ({ data: [] }) })(req('POST', { phoneNumber: '+16175551212' }), out);
   assert.equal(out.statusCode, 409);
   assert.equal(out.body.error, 'voice_identity_not_configured');
-  process.env.SPACE_PHONE_ENABLED = oldFlag;
+  restoreEnv('SPACE_PHONE_ENABLED', oldFlag);
 });
 
 test('Telnyx API key is trimmed before Bearer header', async () => {

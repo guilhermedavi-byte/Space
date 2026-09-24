@@ -158,7 +158,9 @@ const updateVoiceCall = async ({ session, callId, patch = {}, supabase = supabas
   return updated;
 };
 
-const createTelnyxCredentialToken = async ({ credentialId, fetchImpl = fetch, apiKey = process.env.TELNYX_API_KEY }) => {
+const resolveTelnyxWebrtcApiKey = () => clean(process.env.TELNYX_WEBRTC_API_KEY) || clean(process.env.TELNYX_API_KEY);
+
+const createTelnyxCredentialToken = async ({ credentialId, fetchImpl = fetch, apiKey = resolveTelnyxWebrtcApiKey() }) => {
   const safeCredentialId = clean(credentialId);
   const safeApiKey = clean(apiKey);
   if (!safeCredentialId) {
