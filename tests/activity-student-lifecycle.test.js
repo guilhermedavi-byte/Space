@@ -34,6 +34,7 @@ function app() {
     return doc ? { ok: true, data: { ...doc, name: key } } : { ok: false, status: 404 };
   };
   const mocks = {
+    './_lib/retention-activity-health': require('../api/_lib/retention-activity-health'),
     'node:crypto': { randomUUID }, './_lib/activity-events': eventsModule,
     '../_lib/google-service-account': { getGoogleAccessToken: async () => ({ accessToken: 'fake' }) },
     './_lib/http': { readJsonBody: async req => req.body, sendJson: (res, status, body) => Object.assign(res, { status, body }) },

@@ -1,3 +1,4 @@
+const healthActivity = require('./_lib/retention-activity-health');
 const { randomUUID } = require("node:crypto");
 const { buildActivityEvent, planActivityChange, studentOf, EVENTS_COLLECTION } = require("./_lib/activity-events");
 const { getGoogleAccessToken } = require("../_lib/google-service-account");
@@ -152,6 +153,9 @@ const normalizeActivity = (row = {}) => {
   const responsavelId = safeText(row.responsavelId);
   const tipo = safeText(row.tipo);
   return {
+    risk_case_id: row.risk_case_id || null,
+    outcome: row.outcome || null,
+    qualityPulse: row.qualityPulse || null,
     completedAt: row.completedAt || null,
     completedBy: safeText(row.completedBy),
     responsavelNome: safeText(row.responsavelNome),
@@ -395,6 +399,7 @@ const commitActivity = async ({ id, document, patch, session, archive = false })
   const response = await requestJson(`${FIRESTORE_BASE}:commit`, { method: 'POST', headers: { Authorization: `Bearer ${await getAccessToken()}` }, body: { writes } });
   if (!response.ok) throw Object.assign(new Error('activity_commit_failed'), { status: [409, 412].includes(response.status) || response.data?.error?.status === 'FAILED_PRECONDITION' ? 409 : response.status });
   const normalized = normalizeActivity(next);
+  await healthActivity.projectQuality(normalized);
   if (document) {
     const eventId = events.map(event => event.id).filter(Boolean).join(':');
     await notifyActivityMutation({ before: normalizeActivity({ ...document.row, id }), after: normalized, actor: actorFromSession(session), eventId });
@@ -734,6 +739,7 @@ module.exports = async (req, res) => {
       comentarios: safeText(body?.comment) ? [{ id: randomUUID(), text: safeText(body.comment), authorId: session.sub, authorName: session.nome || session.name || "", createdAt: now.toISOString() }] : [],
     };
     try {
+      Object.assign(payload,healthActivity.completionPatch({},payload,body,session));
       const created = await commitActivity({ id: randomUUID(), patch: payload, session });
       return sendJson(res, 201, { activity: created });
     } catch (error) {
@@ -762,6 +768,12 @@ module.exports = async (req, res) => {
       if (!canAssignResponsavel(session, nextResponsavelId)) return sendJson(res, 403, { error: "forbidden_responsavel" });
 
       if (existing.isArchived) return sendJson(res, 409, { error: "activity_archived" });
+      if(body.healthAction==='occurrence') {
+        if(role!=='admin') return sendJson(res,403,{error:'forbidden'});
+        const workspace=await readActivityWorkspace(existing);
+        await healthActivity.markOccurrence({activity:existing,comment:workspace.comments.find(c=>c.id===body.commentId),body,session});
+        return sendJson(res,200,workspace);
+      }
       const patch = {
         atualizadoEm: new Date(),
       };
@@ -794,6 +806,12 @@ module.exports = async (req, res) => {
         return sendJson(res, 200, { ...workspace, checklistItem: item });
       }
       if (safeText(body?.comment)) patch.comentarios = [...existing.comentarios, { id: randomUUID(), text: safeText(body.comment), authorId: session.sub, authorName: session.nome || session.name || "", createdAt: new Date().toISOString() }];
+      const completion=healthActivity.completionPatch(existing,patch,body,session);
+      if(completion.qualityPulse?.comment_id) {
+        const workspace=await readActivityWorkspace(existing);
+        if(!workspace.comments.some(c=>c.id===completion.qualityPulse.comment_id&&!c.deletedAt)) return sendJson(res,400,{error:'invalid_pulse_comment'});
+      }
+      Object.assign(patch,completion);
       const updated = await commitActivity({ id, document, patch, session });
       if (body?.workspace === true) {
         const workspace = await readActivityWorkspace(updated);
@@ -802,7 +820,7 @@ module.exports = async (req, res) => {
       return sendJson(res, 200, { activity: updated });
     } catch (error) {
       console.error("[api] activities patch failed", error);
-      return sendJson(res, [400, 404, 409].includes(error?.status) ? error.status : 500, { error: "activities_patch_failed" });
+      return sendJson(res, [400, 404, 409].includes(error?.status) ? error.status : 500, { error: error.status===400 ? error.message : "activities_patch_failed" });
     }
   }
 
@@ -835,3 +853,6 @@ module.exports._test = {
   normalizeUserIdentity,
   resolveUserIdentity,
 };
+
+// Internal trusted job adapter: the same validation, CAS and append-only event flow as the API.
+module.exports.internal = {readDocument,commitActivity};

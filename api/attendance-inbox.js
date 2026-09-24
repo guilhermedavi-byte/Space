@@ -40,32 +40,7 @@ const sanitizePayload = value => {
   }
   return safe;
 };
-const evolutionRequest = async (instance, number, text) => {
-  const key = String(process.env.EVOLUTION_API_KEY || '').trim();
-  const baseRaw = String(process.env.EVOLUTION_API_URL || '').trim();
-  let base;
-  try { base = new URL(baseRaw); } catch { fail('evolution_not_configured', 503); }
-  if (!key || base.protocol !== 'https:' || !/^[a-zA-Z0-9_-]{1,100}$/.test(instance)) fail('evolution_not_configured', 503);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000);
-  try {
-    const response = await fetch(base.href.replace(/\/$/, '') + '/message/sendText/' + encodeURIComponent(instance), {
-      method: 'POST', redirect: 'error', signal: controller.signal,
-      headers: { apikey: key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ number, text, linkPreview: true }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      console.warn('[attendance-inbox] evolution send failed', { status: response.status });
-      fail(response.status === 401 || response.status === 403 ? 'evolution_configuration_error' : 'evolution_unavailable', 503);
-    }
-    return payload;
-  } catch (error) {
-    if (String(error.code || '').startsWith('evolution_')) throw error;
-    console.warn('[attendance-inbox] evolution send failed', { timeout: error.name === 'AbortError' });
-    fail('evolution_unavailable', 503);
-  } finally { clearTimeout(timer); }
-};
+const { evolutionRequest, sendInboxText } = require('./_lib/attendance-send-text');
 
 const actorCrmUser = async (actor) => {
   const row = actor?.uid ? await getDocumentAsAdmin(`users/${encodeURIComponent(actor.uid)}`).catch(() => null) : null;
@@ -212,67 +187,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
       const clientRequestId = clean(body?.client_request_id || randomUUID(), 128);
       if (!text) fail('attendance_invalid_request', 422);
 
-      const detailResult = await request('/rpc/attendance_inbox_detail', {
-        method: 'POST',
-        body: { p_actor_uid: actor.uid, p_role: actor.role, p_conversation_id: conversationId, p_after: 0, p_limit: 1 },
-        timeoutMs: 15000,
-      });
-      const detail = detailResult.data || {};
-      const connection = detail?.conversation?.connection || {};
-      const contact = detail?.contact || {};
-      if (connection.provider !== 'evolution_whatsapp' || connection.status !== 'active' || connection.setup_pending) {
-        fail('attendance_channel_disabled', 409);
-      }
-      const instance = clean(connection.instance_name || '', 100) || clean(
-        (await request('/rpc/attendance_evolution_instance_for_connection', {
-          method: 'POST',
-          body: { p_connection_id: connection.connection_id },
-          timeoutMs: 8000
-        })).data,
-        100
-      );
-      const number = String(contact.phone || '').replace(/\D/g, '');
-      if (!instance || !/^\d{7,16}$/.test(number)) fail('attendance_invalid_recipient', 422);
-
-      if (actor.role === 'admin') {
-        await request('/rpc/attendance_ensure_admin_member', {
-          method: 'POST',
-          body: {
-            p_actor_uid: actor.uid,
-            p_role: actor.role,
-            p_team_id: detail?.conversation?.team?.team_id
-          },
-          timeoutMs: 15000,
-        });
-      }
-
-      const appended = await request('/rpc/attendance_append_message', {
-        method: 'POST',
-        body: {
-          p_actor_uid: actor.uid,
-          p_conversation_id: conversationId,
-          p_message: { direction: 'outbound', kind: 'text', content: { text }, client_request_id: clientRequestId, metadata: { provider: 'evolution_whatsapp' } },
-        },
-        timeoutMs: 15000,
-      });
-      const messageId = appended.data?.message_id;
-      try {
-        const provider = await sendEvolution(instance, number, text);
-        const externalId = clean(provider?.key?.id || provider?.id || provider?.messageId || '', 200) || null;
-        await request('/rpc/attendance_set_message_transport', {
-          method: 'POST',
-          body: { p_message_id: messageId, p_status: 'sent', p_external_message_id: externalId, p_metadata: { provider: 'evolution_whatsapp' } },
-          timeoutMs: 15000,
-        });
-        return sendJson(res, 200, { ok: true, message_id: messageId, external_message_id: externalId, status: 'sent' });
-      } catch (error) {
-        await request('/rpc/attendance_set_message_transport', {
-          method: 'POST',
-          body: { p_message_id: messageId, p_status: 'failed', p_external_message_id: null, p_metadata: { provider: 'evolution_whatsapp', send_failed: true } },
-          timeoutMs: 15000,
-        }).catch(() => {});
-        throw error;
-      }
+      return sendJson(res,200,await sendInboxText({actor,conversationId,text,clientRequestId,request,sendEvolution}));
     }
 
     const conversationId = clean(url.searchParams.get('conversation_id'), 64);

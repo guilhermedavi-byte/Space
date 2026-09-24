@@ -10987,7 +10987,7 @@ const activatePedagogicoLessonFromEl = (event, pedItem) => {
 
 const ACTIVITY_STATUS_OPTIONS = ["Pendente", "Em andamento", "Feito"];
 const ACTIVITY_PRIORITY_OPTIONS = ["Alta", "Média", "Baixa"];
-const ACTIVITY_TYPE_OPTIONS = ["Financeiro", "Pedagógico", "Auxiliar"];
+const ACTIVITY_TYPE_OPTIONS = ["Financeiro", "Pedagógico", "Auxiliar", "Retenção", "Ligação de qualidade"];
 
 const normalizeActivityStatus = (value) => {
   const safe = String(value || "").trim();
@@ -11512,6 +11512,9 @@ const isActivityItemOverdue = (dateKey) => {
 const getDefaultActivityDraft = (activity = {}) => {
   const canAssignOthers = Boolean(activitiesState.permissions?.canAssignOthers) || currentRole === "admin" || currentRole === "growth";
   return {
+    risk_case_id: activity.risk_case_id || null,
+    outcome: activity.outcome || "",
+    qualityPulse: activity.qualityPulse || null,
     id: String(activity.id || ""),
     studentId: String(activity.studentId || ""),
     titulo: String(activity.titulo || ""),
@@ -11695,6 +11698,27 @@ const getMentionsForActivityTextarea = (textarea) => {
   return (Array.isArray(state.mentions) ? state.mentions : []).filter((mention) => text.includes(`@${mention.displayName}`));
 };
 
+const ACTIVITY_RETENTION_OUTCOMES = {resolved:"Resolvido",contacted:"Contato realizado",no_response:"Sem retorno",needs_followup:"Precisa de acompanhamento",student_recovered:"Aluno recuperado",escalated:"Escalado"};
+const activityHealthFields = (activity, comments) => {
+  const p = activity.qualityPulse || {};
+  const field = (key,label,max=5,min=1) => `<label class="actws-prop"><span>${label}</span><select name="health_${key}"><option value="">Não informado</option>${Array.from({length:max-min+1},(_,i)=>i+min).map(n=>`<option value="${n}" ${p[key]===n?'selected':''}>${n}</option>`).join('')}</select></label>`;
+  return `<details class="actws-details-meta" data-actws-health><summary>Retenção / Ligação de qualidade</summary><p>A ação pode terminar sem encerrar o caso de risco.</p><label class="actws-prop"><span>Resultado da ação</span><select name="health_outcome"><option value="">Selecione ao concluir Retenção</option>${Object.entries(ACTIVITY_RETENTION_OUTCOMES).map(([key,label])=>`<option value="${key}" ${activity.outcome===key?'selected':''}>${label}</option>`).join('')}</select></label><p>Para concluir uma Ligação de qualidade:</p>${field('general_satisfaction','Satisfação geral')}${field('teacher_satisfaction','Professor')}${field('perceived_progress','Evolução percebida')}${field('schedule_fit','Rotina / horários')}${field('nps','NPS',10,0)}<label class="actws-prop"><span>Continuidade</span><select name="health_continuation_intent"><option value="">Selecione</option>${Object.entries({normal:'Normal',doubts:'Dúvidas',considering_exit:'Considera sair',wants_to_cancel:'Quer cancelar'}).map(([key,label])=>`<option value="${key}" ${p.continuation_intent===key?'selected':''}>${label}</option>`).join('')}</select></label><label class="actws-prop"><span>Resumo da ligação</span><select name="health_comment_id"><option value="">Sem comentário vinculado</option>${comments.filter(c=>!c.deletedAt).map(c=>`<option value="${escapeHtml(c.id)}" ${p.comment_id===c.id?'selected':''}>${escapeHtml(c.body.slice(0,70))}</option>`).join('')}</select></label><p>Escreva o resumo normalmente na Discussão. Nenhum pedido de cancelamento é criado aqui.</p></details>`;
+};
+const activityHealthPayload = (workspace,status) => {
+  if(status!=="Feito") return {};
+  const value=key=>workspace.querySelector(`[name="health_${key}"]`)?.value || "";
+  const type=normalizeSearchText(workspace.querySelector('[name="tipo"]')?.value||'');
+  const result={};
+  if(value('outcome'))result.outcome=value('outcome');
+  if(type==='ligacao de qualidade') {
+    result.qualityPulse={continuation_intent:value('continuation_intent'),comment_id:value('comment_id')||null};
+    for(const key of ['general_satisfaction','teacher_satisfaction','perceived_progress','schedule_fit','nps']) result.qualityPulse[key]=value(key)===''?null:Number(value(key));
+    if(Object.values(result.qualityPulse).some((v,i)=>i!==1&&(v===null||v===''))) {workspace.querySelector('[data-actws-health]').open=true;throw Error('Preencha o Quality Pulse para concluir a ligação.');}
+  }
+  if((type==='retencao'||workspace.dataset.riskCase) && !result.outcome) {workspace.querySelector('[data-actws-health]').open=true;throw Error('Selecione o resultado da ação de Retenção.');}
+  return result;
+};
+
 const renderActivityWorkspace = (workspace = {}) => {
   const isCreateMode = workspace.mode === "create" || !workspace.activity?.id;
   const activity = getDefaultActivityDraft(workspace.activity || {});
@@ -11718,7 +11742,7 @@ const renderActivityWorkspace = (workspace = {}) => {
   const descriptionValue = getActivityWorkspaceDescription(activity);
   const linkedStudentName = student?.nome || "Sem aluno vinculado";
   return `
-    <div class="actws" data-activity-workspace="${escapeHtml(activity.id)}" data-actws-mode="${isCreateMode ? "create" : "edit"}">
+    <div class="actws" data-activity-workspace="${escapeHtml(activity.id)}" data-actws-mode="${isCreateMode ? "create" : "edit"}" data-risk-case="${escapeHtml(activity.risk_case_id||'')}">
       <header class="actws-head">
         <div class="actws-titleblock">
           <input class="actws-title-input" name="titulo" value="${escapeHtml(titleValue)}" placeholder="${escapeHtml(titlePlaceholder)}" form="actws-details-form" required />
@@ -11750,9 +11774,10 @@ const renderActivityWorkspace = (workspace = {}) => {
             <section class="actws-section">
               <h3>Classificação</h3>
               ${propRow("Prioridade", `<select name="prioridade">${ACTIVITY_PRIORITY_OPTIONS.map(option => `<option value="${escapeHtml(option)}" ${option === normalizeActivityPriority(activity.prioridade) ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select>`, `is-priority is-${priorityTone}`)}
-              ${propRow("Tipo", `<input name="tipo" value="${escapeHtml(activity.tipo || "")}" placeholder="Sem tipo" />`)}
+              ${propRow("Tipo", `<input name="tipo" list="actws-types" value="${escapeHtml(activity.tipo || "")}" placeholder="Sem tipo" /><datalist id="actws-types">${ACTIVITY_TYPE_OPTIONS.map(t=>`<option value="${escapeHtml(t)}">`).join('')}</datalist>`)}
               ${propRow("Aluno", `<span class="actws-prop-display">${renderActivityStudentInline(student)}</span><select name="studentId">${renderActivityStudentOptions(activity.studentId)}</select>${student?.email ? `<small>${escapeHtml(student.email)}</small>` : ""}`, "is-student")}
             </section>
+            ${activityHealthFields(activity,comments)}
             <details class="actws-details-meta">
               <summary>Detalhes</summary>
               <div class="actws-kv"><span>Criada por</span><strong>${escapeHtml(isCreateMode ? "—" : activityUserName(activity.criadoPor, activity.criadoPor))}</strong></div>
@@ -11782,6 +11807,8 @@ const renderActivityWorkspace = (workspace = {}) => {
                 <div class="actws-comment-main">
                   <div class="actws-comment-head"><strong>${escapeHtml(authorName)}</strong><time>${escapeHtml(comment.createdAt ? formatAdminHistoryStamp(comment.createdAt) : "Agora")}${comment.editedAt && !comment.deletedAt ? " · editado" : ""}</time>${canManage ? `<button type="button" class="actws-icon-action" data-actws-comment-menu="${escapeHtml(comment.id)}" aria-label="Ações do comentário">•••</button>` : ""}</div>
                   <p data-actws-comment-body>${renderActivityCommentBody(comment)}</p>
+                  ${canAdminComments && activity.studentId && !comment.deletedAt ? `<details><summary>Marcar como ocorrência</summary><form data-actws-occurrence="${escapeHtml(comment.id)}"><label>Categoria<select name="category">${Object.entries({teacher:'Professor',schedule:'Horários',pedagogical:'Pedagógico',service:'Atendimento',financial:'Financeiro',progress_perception:'Percepção de evolução',complaint:'Reclamação',other:'Outro'}).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Gravidade<select name="severity">${Object.entries({light:'Leve',moderate:'Moderada',high:'Alta',critical:'Crítica'}).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><button type="submit">Registrar ocorrência</button></form></details>` : ''}
+
                   ${canManage ? `<form class="actws-comment-edit-form" data-actws-comment-edit-form="${escapeHtml(comment.id)}" hidden><textarea name="body" rows="3" data-actws-mention-textarea>${escapeHtml(comment.body)}</textarea><div><button type="submit">Salvar</button><button type="button" data-actws-comment-cancel="${escapeHtml(comment.id)}">Cancelar</button></div></form><div class="actws-comment-menu" data-actws-comment-menu-popover="${escapeHtml(comment.id)}" hidden><button type="button" data-actws-comment-edit="${escapeHtml(comment.id)}">Editar comentário</button><button type="button" data-actws-comment-delete="${escapeHtml(comment.id)}">Excluir comentário</button></div>` : ""}
                 </div>
               </article>
@@ -11885,6 +11912,7 @@ const patchActivityWorkspace = async (id, payload = {}) => {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(String(data?.error || `activity_workspace_patch_failed:${res.status}`));
   await loadActivities({ force: true, silent: true });
+  globalThis.SpaceRetentionIntelligence?.invalidate();
   refreshOpenStudentActivities();
   return data;
 };
@@ -12367,8 +12395,11 @@ const bindActivitiesUi = () => {
         const current = (activitiesState.items || []).find(item => String(item.id || "") === id);
         const workspaceRoot = activitiesDrawer.querySelector(`[data-activity-workspace="${CSS.escape(id)}"]`);
         const currentStatus = workspaceRoot?.querySelector('select[name="status"]')?.value || current?.status || "Pendente";
+        const nextStatus = normalizeActivityStatus(currentStatus)==="Feito"?"Pendente":"Feito";
+        let healthPayload;
+        try { healthPayload=activityHealthPayload(workspaceRoot,nextStatus); } catch(error) { setActivitiesStatus(error.message,"error");return; }
         toggleDone.setAttribute("disabled", "true");
-        patchActivityWorkspace(id, { status: normalizeActivityStatus(currentStatus) === "Feito" ? "Pendente" : "Feito" })
+        patchActivityWorkspace(id, { status: nextStatus,...healthPayload })
           .then(data => { if (activitiesDrawerBody instanceof HTMLElement) activitiesDrawerBody.innerHTML = renderActivityWorkspace(data); })
           .catch(error => { console.error("[activities] toggle done failed:", error); setActivitiesStatus("Não foi possível atualizar o status.", "error"); })
           .finally(() => toggleDone.removeAttribute("disabled"));
@@ -12460,6 +12491,10 @@ const bindActivitiesUi = () => {
           assigneeId: String(formData.get("assigneeId") || "").trim(),
           dueDate: String(formData.get("dueDate") || "").trim(),
         };
+      }
+      if(form.matches('[data-actws-occurrence]')) payload={healthAction:'occurrence',commentId:form.dataset.actwsOccurrence,category:formData.get('category'),severity:formData.get('severity')};
+      if(payload && form.matches('[data-actws-details-form]')) {
+        try { Object.assign(payload,activityHealthPayload(workspace,payload.status)); } catch(error) {setActivitiesStatus(error.message,'error');delete form.dataset.saving;return;}
       }
       if (!payload) { delete form.dataset.saving; return; }
       const request = isCreateMode && form.matches("[data-actws-details-form]")

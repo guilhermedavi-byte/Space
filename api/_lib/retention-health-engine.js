@@ -1,49 +1,88 @@
 'use strict';
 const { dateKey, addDays, isActiveOn, getLifecycleStatus } = require('../../assets/student-lifecycle');
-const WEIGHTS = { engagement: 25, attendance: 25, learning: 20, financial: 15, relationship: 15 };
+const WEIGHTS = { presence: 30, teacher_pulse: 30, experience: 25, financial: 15 };
 const clamp = n => Math.max(0, Math.min(100, n));
 const finite = n => n !== null && n !== undefined && n !== '' && Number.isFinite(Number(n));
 const daysBetween = (a, b) => Math.floor((Date.parse(dateKey(b)) - Date.parse(dateKey(a))) / 86400000);
 const tier = score => score == null ? 'unknown' : score >= 80 ? 'healthy' : score >= 65 ? 'attention' : score >= 45 ? 'risk' : 'critical';
-function scoreHealth(signals = {}) {
+// Only explicit student outcomes count. All other outcomes are neutral and cannot break a streak.
+function presenceSignals(logs, on) {
+  const accepted = new Set(['realizada','falta_aluno','falta','falta_do_aluno','falta do aluno']);
+  const observed = [...new Map(logs.filter(l => l.dateKey && l.dateKey <= on && accepted.has(l.statusAula))
+    .map(l => [l.eventId || l.firestoreDocId || l.id,l])).values()]
+    .sort((a,b) => String(b.dateKey).localeCompare(String(a.dateKey)) || String(b.horaInicio || b.createdAt || b.id).localeCompare(String(a.horaInicio || a.createdAt || a.id)));
+  if (!observed.length) return {};
+  let streak = observed.findIndex(l => l.statusAula === 'realizada');
+  if (streak < 0) streak = observed.length;
+  const recent = observed.filter(l => l.dateKey >= addDays(on,-30));
+  return { presence_observed: recent.length > 0, student_absence_streak: streak,
+    student_absences_last_5: observed.slice(0,5).filter(l=>l.statusAula !== 'realizada').length,
+    recent_absences: recent.filter(l=>l.statusAula !== 'realizada').length,
+    last_attended_class_at: observed.find(l=>l.statusAula==='realizada')?.dateKey || null,
+    last_absence_at: observed.find(l=>l.statusAula!=='realizada')?.dateKey || null,
+    absence_sequence_id: streak ? String(observed[streak-1].eventId || observed[streak-1].firestoreDocId || observed[streak-1].id) : null,
+    latest_observed_at: observed[0].dateKey,
+    consecutive_no_shows: streak, last_class_at: observed.find(l=>l.statusAula==='realizada')?.dateKey || null,
+    attendance_rate_30d: recent.length ? 100*recent.filter(l=>l.statusAula==='realizada').length/recent.length : null };
+}
+function scoreHealth(signals = {}, on = dateKey(new Date())) {
   const scores = Object.fromEntries(Object.keys(WEIGHTS).map(key => [key, null]));
-  const factors = [];
-  const factor = (type, severity, label, metric, current_value, threshold) => factors.push({ type, severity, label, metric, current_value, threshold });
-  if (finite(signals.days_since_last_activity)) {
-    const days = Number(signals.days_since_last_activity);
-    scores.engagement = days < 3 ? 100 : days < 7 ? 85 : days < 14 ? 60 : days < 30 ? 30 : 10;
-    if (days >= 14) factor('inactivity_14d','critical',`${days} dias sem atividade registrada`,'days_since_last_activity',days,14);
-    else if (days >= 7 && finite(signals.engagement_change_pct) && signals.engagement_change_pct < 0) factor('inactivity_7d','attention',`${days} dias sem atividade, abaixo do padrão`,'days_since_last_activity',days,7);
+  const factors = [], rules = [];
+  const factor = (type,severity,label,metric,current_value,threshold) => factors.push({type,severity,label,metric,current_value,threshold});
+  const hard = (type,label,min_tier) => rules.push({type,label,min_tier});
+  const streak = Number(signals.student_absence_streak) || 0;
+  if (signals.presence_observed === true) {
+    scores.presence = streak >= 4 ? 10 : streak === 3 ? 25 : streak === 2 ? 55 : signals.recent_absences > 0 ? 90 : 100;
+    if (signals.student_absences_last_5 >= 3) scores.presence = Math.min(scores.presence,50);
+    if (streak >= 2) factor('consecutive_absences',streak>=4?'critical':'high',`${streak} faltas consecutivas`,'student_absence_streak',streak,2);
+    if (signals.student_absences_last_5 >= 3) factor('absences_last_five','high','3+ faltas nas últimas 5 aulas observadas','student_absences_last_5',signals.student_absences_last_5,3);
   }
-  if (finite(signals.engagement_change_pct)) {
-    const drop = Number(signals.engagement_change_pct);
-    if (scores.engagement == null) scores.engagement = 100;
-    if (drop <= -40) { scores.engagement = Math.min(scores.engagement, clamp(100 + drop)); factor('engagement_drop','high',`Frequência caiu ${Math.abs(Math.round(drop))}% contra o próprio baseline`,'engagement_change_pct',drop,-40); }
+  // A stale source is unknown; an unresolved observed absence sequence still needs attention.
+  if (streak >= 4) hard('four_absences','4 ou mais faltas consecutivas','critical');
+  const occurrences = [...new Map((signals.occurrences || []).map(o=>[o.comment_id ? `${o.activity_id}:${o.comment_id}` : o.metadata?.episode_id || o.id,o])).values()];
+  const open = occurrences.filter(o=>o.status==='open');
+  const severity = {light:90,moderate:70,high:40,critical:15};
+  let friction = null;
+  if (signals.occurrences_observed === true) {
+    friction = 100;
+    for (const o of open) {
+      const repeat = occurrences.filter(x=>x.category===o.category && daysBetween(x.opened_at,on)>=0 && daysBetween(x.opened_at,on)<=90).length;
+      friction = Math.min(friction,clamp(severity[o.severity] - (repeat>=3?20:repeat===2?10:0)));
+    }
+    if(open.length) factor('open_occurrence',open.some(o=>o.severity==='critical')?'critical':'high',`${open.length} ocorrência(s) aberta(s)`,'open_occurrences',open.length,1);
   }
-  if (finite(signals.attendance_rate_30d)) {
-    scores.attendance = clamp(Number(signals.attendance_rate_30d));
-    if (scores.attendance < 80) factor('low_attendance','attention',`Presença registrada de ${Math.round(scores.attendance)}% em 30 dias`,'attendance_rate_30d',signals.attendance_rate_30d,80);
-    if (signals.consecutive_no_shows >= 2) { scores.attendance = Math.min(scores.attendance,40); factor('consecutive_absences','high',`${signals.consecutive_no_shows} faltas consecutivas`,'consecutive_no_shows',signals.consecutive_no_shows,2); }
+  const pulse = signals.quality_pulse;
+  const age = pulse?.called_at ? daysBetween(pulse.called_at,on) : Infinity;
+  const conversion = {1:10,2:35,3:65,4:85,5:100};
+  const voiceFields = {general_satisfaction:.35,perceived_progress:.30,teacher_satisfaction:.20,schedule_fit:.15};
+  const voice = pulse && Object.keys(voiceFields).every(k=>conversion[pulse[k]]!=null)
+    ? Object.entries(voiceFields).reduce((n,[k,w])=>n+conversion[pulse[k]]*w,0) : null;
+  const usableVoice = voice !== null && age>=0 && age<=60;
+  if(friction!==null) scores.experience = usableVoice ? friction - Math.max(0,friction-voice)*(age<=30?1:.5) : friction;
+  // Without the occurrence source, a recent pulse itself is still an observed dimension.
+  else if(usableVoice && age<=30) scores.experience=voice;
+  if(usableVoice && voice<65) factor('negative_quality_pulse','high','Student Voice abaixo de 65','student_voice_score',voice,65);
+  if(age>=0 && age<=60 && pulse?.continuation_intent==='considering_exit') hard('considering_exit','Aluno considera sair','risk');
+  if(age>=0 && age<=60 && pulse?.continuation_intent==='wants_to_cancel') hard('wants_to_cancel','Aluno manifestou intenção de cancelar; formalização depende do operador','critical');
+  if(['current','overdue','recovered'].includes(signals.financial_status)) {
+    const d=Number(signals.days_overdue)||0;
+    scores.financial = signals.financial_status!=='overdue'?100:d<=3?80:d<=10?60:d<=30?30:10;
+    if(d>0) factor('overdue_payment',d>10?'critical':'high',`Cobrança em aberto vencida há ${d} dias`,'days_overdue',d,1);
   }
-  if (finite(signals.days_since_progress)) {
-    const days = Number(signals.days_since_progress);
-    scores.learning = days < 7 ? 100 : days < 14 ? 80 : days < 30 ? 55 : 25;
-    if (days >= 30) factor('stalled_learning','high',`${days} dias sem progresso registrado`,'days_since_progress',days,30);
+  if(open.some(o=>o.severity==='critical')) {
+    hard('critical_occurrence','Ocorrência crítica aberta','attention');
+    if(streak>=2 || (usableVoice && voice<65) || (scores.financial!==null && scores.financial<=30)) hard('critical_with_independent_signal','Ocorrência crítica com outro sinal independente de risco','critical');
   }
-  if (['current','recovered','overdue'].includes(signals.financial_status)) {
-    const days = Number(signals.days_overdue) || 0;
-    scores.financial = signals.financial_status !== 'overdue' ? 100 : days <= 3 ? 75 : days <= 10 ? 55 : days <= 30 ? 25 : 0;
-    if (signals.financial_status === 'overdue') factor('overdue_payment',days > 10 ? 'critical' : 'high',`Cobrança em aberto vencida há ${days} dias`,'days_overdue',days,1);
-  }
-  if (signals.support_observed === true) {
-    scores.relationship = clamp(100 - Math.min(60, (signals.overdue_support_activities || 0) * 30) - Math.min(30, (signals.critical_support_activities || 0) * 15));
-    if (signals.critical_support_activities > 0) factor('critical_support_activity','attention',`${signals.critical_support_activities} atividade(s) de suporte/retenção de alta prioridade`,'critical_support_activities',signals.critical_support_activities,1);
-    if (signals.overdue_support_activities > 0) factor('overdue_retention_activity','high',`${signals.overdue_support_activities} atividade(s) de suporte/retenção vencida(s)`,'overdue_support_activities',signals.overdue_support_activities,1);
-  }
-  const available = Object.keys(WEIGHTS).filter(key => scores[key] != null);
-  const coverage = available.reduce((sum,key) => sum + WEIGHTS[key],0);
-  const score = coverage ? Math.round(available.reduce((sum,key) => sum + WEIGHTS[key] * scores[key],0) / coverage) : null;
-  return { health_score: score, health_tier: tier(score), score_coverage_pct: coverage, missing_dimensions: Object.keys(WEIGHTS).filter(key => scores[key] == null), ...Object.fromEntries(Object.entries(scores).map(([key,val]) => [`${key}_score`,val])), risk_factors: factors, signals, model_version: 'deterministic-v1' };
+  const available = Object.keys(WEIGHTS).filter(k=>scores[k]!==null);
+  const coverage = available.reduce((n,k)=>n+WEIGHTS[k],0);
+  const raw = coverage ? Math.round(available.reduce((n,k)=>n+scores[k]*WEIGHTS[k],0)/coverage) : null;
+  const rawTier = tier(raw), rank = ['unknown','healthy','attention','risk','critical'];
+  const effective = rules.reduce((t,r)=>rank.indexOf(r.min_tier)>rank.indexOf(t)?r.min_tier:t,rawTier);
+  return { model_version:'admin_v0',health_score_raw:raw,health_tier_raw:rawTier,health_tier_effective:effective,
+    health_score:raw,health_tier:effective,score_coverage_pct:coverage,dimension_scores:scores,
+    missing_dimensions:Object.keys(WEIGHTS).filter(k=>scores[k]===null),risk_factors:factors,hard_rules_applied:rules,
+    ...Object.fromEntries(Object.entries(scores).map(([k,v])=>[`${k}_score`,v])),
+    signals:{...signals,friction_score:friction,student_voice_score:voice,quality_pulse_age_days:Number.isFinite(age)?age:null} };
 }
 function activePopulation(users, canonicalStudents, subscriptions, on) {
   const uniqueUsers = new Map(users.filter(user => ['student','aluno'].includes(user.tipo || user.role)).map(user => [user.firestoreDocId || user.id,user]));
@@ -77,4 +116,4 @@ function executive(rows) {
     notice_period: active.filter(row => ['notice_period','cancellation_scheduled'].includes(row.lifecycle)).length,
     churned: rows.filter(row => row.lifecycle === 'churned').length };
 }
-module.exports = { WEIGHTS, scoreHealth, tier, activePopulation, executive, finite, daysBetween, dateKey, addDays };
+module.exports = { WEIGHTS, presenceSignals, scoreHealth, tier, activePopulation, executive, finite, daysBetween, dateKey, addDays };

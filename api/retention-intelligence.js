@@ -17,6 +17,18 @@ module.exports=async(req,res)=>{
    const actionGuard=await requireResolvedAdminPermission(auth,'pedagogico.retention.update');
    if(!actionGuard.ok) return sendJson(res,actionGuard.status,actionGuard.body);
    const body=await readJsonBody(req);
+   if(body.action==='settings') {
+    const message=String(body.absence_message||'').trim();
+    if(!message||message.length>2000)return sendJson(res,400,{error:'invalid_message'});
+    await supabaseFetch('/retention_health_settings?id=eq.admin_v0',{method:'PATCH',body:{absence_message:message,updated_by:auth.session.sub,updated_at:new Date().toISOString()}});
+    return sendJson(res,200,{ok:true});
+   }
+   if(body.action==='resolve_occurrence') {
+    if(!/^[a-f0-9-]{36}$/i.test(body.id||''))return sendJson(res,400,{error:'invalid_occurrence'});
+    await supabaseFetch('/student_occurrences?id=eq.'+body.id,{method:'PATCH',body:{status:'resolved',resolved_at:new Date().toISOString(),resolved_by:auth.session.sub,recovery_status:'resolved'}});
+    return sendJson(res,200,{ok:true});
+   }
+
    if(!/^[a-f0-9-]{36}$/i.test(body.id||'') || !['resolved','dismissed','acknowledged'].includes(body.status)) return sendJson(res,400,{error:'invalid_alert_update'});
    const {data}=await supabaseFetch(`/retention_alerts?id=eq.${body.id}`,{method:'PATCH',body:{status:body.status,resolved_at:body.status==='acknowledged'?null:new Date().toISOString(),resolved_by:auth.session.sub,updated_at:new Date().toISOString()}});
    return sendJson(res,200,{alert:data?.[0]||null});

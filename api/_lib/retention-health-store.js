@@ -17,7 +17,7 @@ const safeDay = value => { try { return value ? H.dateKey(value) : null; } catch
 async function collectHealth(now = new Date()) {
   const day = H.dateKey(now), errors = {};
   const optional = (name,promise) => promise.catch(() => { errors[name] = 'Fonte indisponível'; return null; });
-  const [users,canonical,subscriptions,activities,logs,links,receivables,payments,connections,cases] = await Promise.all([
+  const [users,canonical,subscriptions,activities,logs,links,receivables,payments,connections,cases,occurrences,pulses] = await Promise.all([
     listCollectionAsAdmin('users',{decorate:false}), all('students'), all('subscriptions'),
     optional('activities',listCollectionAsAdmin('activities',{decorate:false})),
     optional('attendance',listCollectionAsAdmin('lessonLogs',{decorate:false})),
@@ -26,7 +26,15 @@ async function collectHealth(now = new Date()) {
     optional('payments',all('finance_payments')),
     optional('connections',all('finance_connection_state','','connection_id')),
     optional('cases',all('retention_cases')),
+    optional('occurrences',all('student_occurrences')),optional('quality_pulses',all('student_quality_pulses')),
   ]);
+  // The completed Activity is the durable source; repair a projection interrupted after its Firestore commit.
+  for(const activity of activities||[]) {
+    if(activity.status==='Feito' && activity.qualityPulse) {
+      try { await require('./retention-activity-health').projectQuality({...activity,id:activity.firestoreDocId||activity.id}); if(pulses && !pulses.some(p=>p.activity_id===(activity.firestoreDocId||activity.id)))pulses.push({...activity.qualityPulse,activity_id:activity.firestoreDocId||activity.id,student_id:activity.studentId}); }
+      catch { errors.quality_projection='Projeção de Quality Pulse pendente'; }
+    }
+  }
   const population = H.activePopulation(users,canonical,subscriptions,day).map(row=>({...row,teacher_name:users.find(user=>(user.firestoreDocId||user.id)===row.teacher)?.nome||null}));
   if (!population.length) throw Error('empty_operational_roster');
   const rows = population.map(student => {
@@ -43,19 +51,15 @@ async function collectHealth(now = new Date()) {
       signals.activity_ids=open.map(row=>row.id);
       monitored.push('overdue_retention_activity','critical_support_activity');
     }
-    const studentLogs=(logs||[]).filter(log => log.alunoId===student.student_id && safeDay(log.dateKey) && log.dateKey>=H.addDays(day,-30) && log.dateKey<=day);
-    const dedupLogs=[...new Map(studentLogs.map(log => [log.eventId || log.id,log])).values()].sort((a,b)=>b.dateKey.localeCompare(a.dateKey));
-    const observed=dedupLogs.filter(log=>['realizada','falta_aluno','falta','falta_do_aluno','falta do aluno'].includes(log.statusAula));
-    if (observed.length) {
-      signals.classes_attended_30d=observed.filter(log=>log.statusAula==='realizada').length;
-      signals.classes_missed_30d=observed.length-signals.classes_attended_30d;
-      signals.attendance_rate_30d=100*signals.classes_attended_30d/observed.length;
-      signals.consecutive_no_shows=observed.findIndex(log=>log.statusAula==='realizada');
-      if(signals.consecutive_no_shows<0) signals.consecutive_no_shows=observed.length;
-      signals.last_class_at=observed.find(log=>log.statusAula==='realizada')?.dateKey || null;
-      signals.rescheduled_classes_30d=dedupLogs.filter(log=>log.statusAula==='remarcada').length;
-      monitored.push('consecutive_absences','low_attendance');
+    if(logs) {
+      Object.assign(signals,H.presenceSignals(logs.filter(log=>log.alunoId===student.student_id),day));
+      monitored.push('consecutive_absences','absences_last_five','low_attendance');
     }
+    signals.occurrences_observed=occurrences!==null;
+    signals.occurrences=(occurrences||[]).filter(o=>o.student_id===student.student_id);
+    signals.quality_pulse=(pulses||[]).filter(p=>p.student_id===student.student_id && p.called_at<=now.toISOString()).sort((a,b)=>b.called_at.localeCompare(a.called_at))[0]||null;
+    if(occurrences) monitored.push('open_occurrence');
+    if(pulses) monitored.push('negative_quality_pulse');
     const studentLinks=(links||[]).filter(link=>link.firestore_doc_id===student.student_id);
     const ids=new Set(studentLinks.map(link=>`${link.connection_id}:${link.asaas_customer_id}`));
     const charges=(receivables||[]).filter(row=>ids.has(`${row.connection_id}:${row.asaas_customer_id}`));
@@ -75,7 +79,7 @@ async function collectHealth(now = new Date()) {
     const chargeIds=new Set(charges.map(row=>`${row.connection_id}:${row.asaas_payment_id}`));
     const paid=(payments||[]).filter(row=>chargeIds.has(`${row.connection_id}:${row.asaas_payment_id}`) && ['RECEIVED','CONFIRMED','RECEIVED_IN_CASH'].includes(row.status)).sort((a,b)=>String(b.confirmed_date||b.payment_date).localeCompare(String(a.confirmed_date||a.payment_date)))[0];
     if(paid) { signals.last_payment_at=paid.confirmed_date||paid.payment_date; signals.last_payment_amount=paid.value; }
-    const score=H.scoreHealth(signals);
+    const score=H.scoreHealth(signals,day);
     const related=(cases||[]).filter(row=>student.canonical_ids.includes(row.student_id));
     if(cases) {
       monitored.push('cancellation_request_without_contact','notice_near_end');
@@ -85,28 +89,30 @@ async function collectHealth(now = new Date()) {
     }
     return {...student,...score,snapshot_date:day,monitored_alert_types:monitored};
   });
-  return {day,rows,population:{...H.executive(rows),source_errors:errors,model_version:'deterministic-v1',computed_at:now.toISOString()}};
+  return {day,rows,users,activities,population:{...H.executive(rows),source_errors:errors,model_version:'admin_v0',computed_at:now.toISOString()}};
 }
 async function runHealthSnapshot() {
   const result=await collectHealth();
+  const automation=await require('./retention-risk-automation').runAbsenceAutomation(result);
   const {data}=await supabaseFetch('/rpc/retention_health_snapshot',{method:'POST',body:{p_date:result.day,p_rows:result.rows,p_population:result.population},timeoutMs:15000});
-  return {...data,summary:result.population};
+  return {...data,summary:result.population,automation};
 }
 async function readIntelligence(month) {
   const day=H.dateKey(new Date());
   const populations=await all('retention_population_snapshots',`snapshot_date=gte.${H.addDays(day,-400)}`,'snapshot_date.desc');
   const latest=populations[0];
   if(!latest) return {rows:[],alerts:[],events:[],trend:[],summary:null,snapshot_date:null,analytics:{},missing:['Snapshot inicial ainda não disponível']};
-  const [daily,history,alerts,events,cases,openingRows]=await Promise.all([
+  const [daily,history,alerts,events,cases,openingRows,riskCases,occurrences,pulses,settings,riskActions]=await Promise.all([
     all('student_health_daily',`snapshot_date=eq.${latest.snapshot_date}`,'student_id'),
     all('student_health_daily',`snapshot_date=in.(${H.addDays(latest.snapshot_date,-7)},${H.addDays(latest.snapshot_date,-14)})`,'snapshot_date,student_id'),
     all('retention_alerts'),all('retention_health_events',`snapshot_date=gte.${H.addDays(day,-90)}`),all('retention_cases'),
     all('student_health_daily',`snapshot_date=eq.${month}-01`,'student_id'),
+    all('retention_risk_cases'),all('student_occurrences'),all('student_quality_pulses'),all('retention_health_settings'),all('retention_risk_actions'),
   ]);
   const rows=daily.map(row=>{
     const data=row.data;
-    const delta=days=> {const previous=history.find(item=>item.student_id===row.student_id && item.snapshot_date===H.addDays(latest.snapshot_date,-days)); return previous && previous.score_coverage_pct===row.score_coverage_pct && JSON.stringify(previous.missing_dimensions)===JSON.stringify(row.missing_dimensions) && H.finite(previous.health_score) && H.finite(row.health_score) ? row.health_score-previous.health_score:null;};
-    return {...data,health_change_7d:delta(7),health_change_14d:delta(14)};
+    const delta=days=> {const previous=history.find(item=>item.student_id===row.student_id && item.snapshot_date===H.addDays(latest.snapshot_date,-days)); return previous && previous.data?.model_version===row.data?.model_version && previous.score_coverage_pct===row.score_coverage_pct && JSON.stringify(previous.missing_dimensions)===JSON.stringify(row.missing_dimensions) && H.finite(previous.health_score) && H.finite(row.health_score) ? row.health_score-previous.health_score:null;};
+    return {...data,risk_cases:riskCases.filter(c=>c.student_id===row.student_id).map(c=>({...c,actions:riskActions.filter(a=>a.risk_case_id===c.id)})),occurrences:occurrences.filter(c=>c.student_id===row.student_id),quality_pulse:pulses.filter(c=>c.student_id===row.student_id).sort((a,b)=>b.called_at.localeCompare(a.called_at))[0]||null,health_change_7d:delta(7),health_change_14d:delta(14)};
   });
   const canonicalIds=new Set(rows.flatMap(row=>row.canonical_ids||[]));
   const operationalCases=cases.filter(row=>canonicalIds.has(row.student_id));
@@ -127,7 +133,7 @@ async function readIntelligence(month) {
     request_to_notice:requested.length?100*notices.length/requested.length:null,notice_to_churn:resolvedNotices.length?100*resolvedNotices.filter(row=>row.churned_at).length/resolvedNotices.length:null,
     first_contact_hours:firstContacts.length?firstContacts.reduce((a,b)=>a+b,0)/firstContacts.length:null,first_contact_coverage:requested.length?100*firstContacts.length/requested.length:0,
     grr:null,nrr:null,revenue_churn:null,revenue_saved:null,reasons:byReason,methodology:'Casos da cohort de pedido no mês; Save Rate sobre desfechos conhecidos. Base inicial somente snapshot do dia 1.'};
-  return {rows,alerts,events,summary:latest.data,snapshot_date:latest.snapshot_date,computed_at:latest.updated_at,trend:populations.map(row=>({date:row.snapshot_date,...row.data})).reverse(),analytics,cases:operationalCases,
-    missing:['Engagement/baseline: telemetria de estudo não integrada','Learning/CEFR: avaliações e progresso confiáveis não integrados','Créditos e guided learning hours não disponíveis','MRR, tenure e survival dependem de contratos confiáveis','NRR/GRR dependem de base MRR e movimentos de receita','Financeiro só pontua após reconciliação completa nas últimas 48h']};
+  return {rows,alerts,events,settings:settings[0]||{},summary:latest.data,snapshot_date:latest.snapshot_date,computed_at:latest.updated_at,trend:populations.map(row=>({date:row.snapshot_date,...row.data})).reverse(),analytics,cases:operationalCases,
+    missing:['Teacher Pulse: Não disponível neste modelo.','Admin V0: expert-informed; não é um modelo preditivo comprovado','MRR, tenure e survival dependem de contratos confiáveis','NRR/GRR dependem de base MRR e movimentos de receita','Financeiro só pontua após reconciliação completa nas últimas 48h']};
 }
 module.exports={all,collectHealth,runHealthSnapshot,readIntelligence};
