@@ -78,6 +78,7 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
   if (slug === "admin" && sub === "automacoes") return { panel: "automations" };
   if (slug === "admin" && sub === "comercial") {
     if (segments[2] === "crm") return { panel: "native-crm" };
+    if (segments[2] === "pre-vendas" && segments[3] === "ligacoes") return { panel: "space-phone" };
     if (segments[2] === "pre-vendas" && segments[3] === "painel-sdr") return { panel: "admin-sdr" };
     if (segments[2] === "pre-vendas" || segments[2] === "atividade-sdr") return { panel: "admin-comercial-atividade-sdr" };
     if (segments[2] === "metas") return { panel: "admin-comercial-metas" };
@@ -87,6 +88,7 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
   if (slug === "growth") {
     if (sub === "comercial") {
       if (segments[2] === "crm") return { panel: "native-crm" };
+      if (segments[2] === "pre-vendas" && segments[3] === "ligacoes") return { panel: "space-phone" };
       if (["painel-sdr", "scripts-vendas", "objecoes", "training"].includes(segments[2])) return { panel: "growth" };
       return { panel: "growth-dashboard" };
     }
@@ -199,6 +201,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="finance-v1.js?v=31"></script>
     <script src="script.js"></script>
     <script src="/assets/space-phone.bundle.js?v=1"></script>
+    <script src="space-phone.js?v=1"></script>
     <script src="admin-sdr.js?v=4"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>
