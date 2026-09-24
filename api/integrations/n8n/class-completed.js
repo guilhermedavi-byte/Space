@@ -619,6 +619,7 @@ handler._test = {
   scoreCandidate,
   namesMatch,
   normalizeUserType,
+  scoreStudentCandidate,
 };
 
 module.exports = handler;
