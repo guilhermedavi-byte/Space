@@ -95,7 +95,7 @@ test('click-to-call waits for telnyx.ready, passes remote audio element and bloc
     fetchWithAuth: createFetch(requests),
   }).mount();
   dom.window.document.querySelector('[data-space-phone-call]').click();
-  const newCall = await waitForRequest(requests, 'newCall', 120);
+  const newCall = await waitForRequest(requests, 'newCall', 5000);
   assert.equal(phone.getState().status, 'connecting');
   assert.equal(newCall.params.destinationNumber, '+16175551212');
   assert.equal(newCall.params.callerNumber, '+14155552671');

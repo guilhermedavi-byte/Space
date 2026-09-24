@@ -312,12 +312,17 @@ test('space phone qualification completion is gated by agendado and required fie
   const ok = await invoke(handler, { method: 'PATCH', body: { id: 'call-q2', action: 'complete_qualification' } });
   assert.equal(ok.status, 200);
   assert.equal(ok.json.qualification.status, 'complete');
-  assert.equal(ok.json.qualification.datacrazy.syncStatus, 'blocked_api_audit');
+  assert.equal(ok.json.qualification.datacrazy.syncStatus, 'pending');
   assert.equal(calls.some(call => String(call.path).startsWith('/datacrazy')), false);
 });
 
-test('space phone AI suggestion marks missing fields as not validated', async () => {
+test('space phone dispatches AI requested without storing fake live summary', async () => {
+  const previous = process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL;
+  process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL = 'https://n8n.test/webhook';
   const patches = [];
+  const originalFetch = global.fetch;
+  const events = [];
+  global.fetch = async (_url, options = {}) => { events.push(JSON.parse(options.body)); return { ok: true, status: 200 }; };
   const handler = createHandler({
     authResolver: async () => ({ ok: true, session: { role: 'growth', sub: 'sdr-1' }, profile: { user: { commercialRoles: ['sdr'] } } }),
     request: async (path, options = {}) => {
@@ -328,9 +333,15 @@ test('space phone AI suggestion marks missing fields as not validated', async ()
       return { data: [] };
     },
   });
-  const res = await invoke(handler, { url: '/api/space-phone?id=call-ai' });
-  assert.equal(res.status, 200);
-  assert.equal(res.json.call.qualification.status, 'review_required');
-  assert.equal(res.json.call.qualification.ai.decisionInvestment, 'Precisa ser validado');
-  assert.equal(patches[0].status, 'review_required');
+  try {
+    const res = await invoke(handler, { url: '/api/space-phone?id=call-ai' });
+    assert.equal(res.status, 200);
+    assert.equal(events[0].event, 'qualification.ai_requested');
+    assert.equal(events[0].callId, 'call-ai');
+    assert.equal(events[0].transcript, undefined);
+    assert.equal(patches[0].status, 'ai_processing');
+  } finally {
+    global.fetch = originalFetch;
+    if (previous == null) delete process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL; else process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL = previous;
+  }
 });
