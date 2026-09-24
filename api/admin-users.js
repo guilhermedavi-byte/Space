@@ -229,6 +229,70 @@ const buildAdminStatusPatch = ({ target = {}, status = "", actorId = "" }) => {
   };
 };
 
+
+const ensureCommercialRoleAsAdmin = async ({ uid, commercialRole = '', actorId = '' }) => {
+  const safeUid = String(uid || '').trim();
+  const roleToEnsure = String(commercialRole || '').trim().toLowerCase();
+  if (!safeUid) {
+    const error = new Error('missing_target');
+    error.status = 400;
+    throw error;
+  }
+  if (!['sdr', 'closer'].includes(roleToEnsure)) {
+    const error = new Error('invalid_commercial_role');
+    error.status = 400;
+    throw error;
+  }
+  let target;
+  try {
+    target = await getDocumentAsAdmin(`users/${encodeURIComponent(safeUid)}`);
+  } catch (error) {
+    if (Number(error?.status) === 404) {
+      const notFound = new Error('user_not_found');
+      notFound.status = 404;
+      throw notFound;
+    }
+    throw error;
+  }
+  const targetRole = normalizeRole(target?.tipo || target?.role || target?.type);
+  if (targetRole !== 'growth') {
+    const error = new Error('target_must_be_growth');
+    error.status = 403;
+    throw error;
+  }
+  const before = normalizeCommercialRoles(target?.commercialRoles);
+  if (before.includes(roleToEnsure)) {
+    return { ok: true, unchanged: true, role: targetRole, commercialRoles: before, before, after: before };
+  }
+  const after = normalizeCommercialRoles([...before, roleToEnsure]);
+  const now = new Date().toISOString();
+  const patch = {
+    commercialRoles: after,
+    atualizadoEm: now,
+    updatedAt: now,
+    updatedBy: String(actorId || '').trim(),
+  };
+  const writes = [
+    {
+      update: {
+        name: buildUserCommitDocumentName(safeUid),
+        fields: encodeFields(patch).fields,
+      },
+      updateMask: { fieldPaths: Object.keys(patch) },
+      currentDocument: { exists: true },
+    },
+    commercialRolesAuditWrite({ uid: safeUid, from: before, to: after, changedBy: actorId, timestamp: now }),
+  ];
+  const response = await commitWritesAsAdmin({ writes });
+  if (!response.ok) {
+    const error = new Error('firestore_patch_failed');
+    error.status = response.status || 500;
+    error.details = response.data || response.text || null;
+    throw error;
+  }
+  return { ok: true, unchanged: false, role: targetRole, commercialRoles: after, before, after };
+};
+
 const updateAdminUserAsSuperAdmin = async ({ action, uid, body, actorId = "" }) => {
   const target = await getDocumentAsAdmin(`users/${encodeURIComponent(String(uid || "").trim())}`);
   const targetRole = normalizeRole(target?.tipo || target?.role);
@@ -387,6 +451,26 @@ module.exports = async (req, res) => {
   const uid = String(body?.uid || "").trim();
   const action = String(body?.action || "").trim().toLowerCase();
 
+  if (action === "ensure_commercial_role") {
+    if (!uid) {
+      send(400, { error: "missing_target" });
+      return;
+    }
+    const permissionGuard = await requireAdminPermission(req, "comercial.users.update");
+    if (!permissionGuard.ok) {
+      send(permissionGuard.status, permissionGuard.body);
+      return;
+    }
+    try {
+      const result = await perf.measure("ensureCommercialRole", () => ensureCommercialRoleAsAdmin({ uid, commercialRole: body?.commercialRole, actorId: adminId }), { firestore: true });
+      send(200, result);
+    } catch (error) {
+      console.warn("[api] admin-users ensure commercial role failed", { uid, status: error?.status, message: error?.message });
+      send(error?.status || 500, { error: error?.message || "ensure_commercial_role_failed" });
+    }
+    return;
+  }
+
   if (action === "update_admin_profile" || action === "set_admin_status") {
     if (!uid) {
       send(400, { error: "missing_target" });
@@ -480,6 +564,7 @@ module.exports._test = {
   buildAdminProfileUpdatePatch,
   buildAdminStatusPatch,
   commercialRolesAuditWrite,
+  ensureCommercialRoleAsAdmin,
   normalizeRole,
   sanitizeUserPatch,
   updateAdminUserAsSuperAdmin,
