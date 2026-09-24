@@ -17,6 +17,26 @@ const OUTCOMES = new Set([
   'agendado',
 ]);
 
+
+const QUALIFICATION_FIELDS = ['context', 'painGoal', 'experience', 'urgency', 'decisionInvestment', 'keyPoint'];
+const QUALIFICATION_COLUMNS = {
+  context: 'context',
+  painGoal: 'pain_goal',
+  experience: 'experience',
+  urgency: 'urgency',
+  decisionInvestment: 'decision_investment',
+  keyPoint: 'key_point',
+};
+const AI_COLUMNS = {
+  context: 'ai_context',
+  painGoal: 'ai_pain_goal',
+  experience: 'ai_experience',
+  urgency: 'ai_urgency',
+  decisionInvestment: 'ai_decision_investment',
+  keyPoint: 'ai_key_point',
+};
+const REQUIRED_QUALIFICATION_FIELDS = ['context', 'painGoal', 'urgency', 'decisionInvestment', 'keyPoint'];
+
 const isSpacePhoneEnabled = () => String(process.env.SPACE_PHONE_ENABLED || '').trim().toLowerCase() === 'true';
 
 const sendJson = (res, status, body) => {
@@ -246,6 +266,146 @@ const voiceCallSelect = [
   'updated_at',
 ].join(',');
 
+
+const qualificationSelect = [
+  'id', 'voice_call_id', 'space_user_uid', 'context', 'pain_goal', 'experience', 'urgency', 'decision_investment', 'key_point',
+  'ai_context', 'ai_pain_goal', 'ai_experience', 'ai_urgency', 'ai_decision_investment', 'ai_key_point', 'final_summary',
+  'status', 'created_at', 'updated_at', 'completed_at', 'datacrazy_lead_id', 'datacrazy_note_id', 'datacrazy_synced_at', 'datacrazy_sync_status', 'datacrazy_sync_error',
+].join(',');
+
+const normalizeQualification = (row = null) => {
+  if (!row) return null;
+  const qualification = {
+    id: clean(row.id),
+    voiceCallId: clean(row.voice_call_id || row.voiceCallId),
+    spaceUserUid: clean(row.space_user_uid || row.spaceUserUid),
+    context: clean(row.context),
+    painGoal: clean(row.pain_goal || row.painGoal),
+    experience: clean(row.experience),
+    urgency: clean(row.urgency),
+    decisionInvestment: clean(row.decision_investment || row.decisionInvestment),
+    keyPoint: clean(row.key_point || row.keyPoint),
+    ai: {
+      context: clean(row.ai_context || row.ai?.context),
+      painGoal: clean(row.ai_pain_goal || row.ai?.painGoal),
+      experience: clean(row.ai_experience || row.ai?.experience),
+      urgency: clean(row.ai_urgency || row.ai?.urgency),
+      decisionInvestment: clean(row.ai_decision_investment || row.ai?.decisionInvestment),
+      keyPoint: clean(row.ai_key_point || row.ai?.keyPoint),
+    },
+    finalSummary: clean(row.final_summary || row.finalSummary),
+    status: clean(row.status) || 'draft',
+    createdAt: clean(row.created_at || row.createdAt),
+    updatedAt: clean(row.updated_at || row.updatedAt),
+    completedAt: clean(row.completed_at || row.completedAt),
+    datacrazy: {
+      leadId: clean(row.datacrazy_lead_id || row.datacrazy?.leadId),
+      noteId: clean(row.datacrazy_note_id || row.datacrazy?.noteId),
+      syncedAt: clean(row.datacrazy_synced_at || row.datacrazy?.syncedAt),
+      syncStatus: clean(row.datacrazy_sync_status || row.datacrazy?.syncStatus),
+      syncError: clean(row.datacrazy_sync_error || row.datacrazy?.syncError),
+    },
+  };
+  qualification.missingRequired = REQUIRED_QUALIFICATION_FIELDS.filter(field => !clean(qualification[field]));
+  qualification.complete = qualification.status === 'complete' || qualification.status === 'sent';
+  qualification.handoffReady = qualification.complete && !qualification.missingRequired.length;
+  return qualification;
+};
+
+const qualificationRowFromPatch = (patch = {}) => {
+  const row = {};
+  for (const field of QUALIFICATION_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(patch, field)) row[QUALIFICATION_COLUMNS[field]] = clean(patch[field]).slice(0, 4000);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'finalSummary')) row.final_summary = clean(patch.finalSummary).slice(0, 12000);
+  return row;
+};
+
+const loadQualification = async ({ request = supabaseFetch, voiceCallId }) => {
+  const id = clean(voiceCallId);
+  if (!id) return null;
+  const rows = asRows(await request(`/voice_call_qualifications?select=${qualificationSelect}&voice_call_id=eq.${encodeURIComponent(id)}&limit=1`, { timeoutMs: 12000 }));
+  return normalizeQualification(rows[0] || null);
+};
+
+const loadQualificationsMap = async ({ request = supabaseFetch, callIds = [] } = {}) => {
+  const ids = [...new Set(callIds.map(clean).filter(Boolean))];
+  const map = new Map();
+  if (!ids.length) return map;
+  try {
+    const quoted = ids.map(id => `"${id}"`).join(',');
+    const rows = asRows(await request(`/voice_call_qualifications?select=${qualificationSelect}&voice_call_id=in.(${encodeURIComponent(quoted)})&limit=${Math.min(ids.length, 1000)}`, { timeoutMs: 12000 }));
+    rows.forEach(row => map.set(clean(row.voice_call_id), normalizeQualification(row)));
+  } catch {
+    // Qualification is additive; list/history should remain available if the new table is not migrated yet.
+  }
+  return map;
+};
+
+const qualificationSummary = (q = {}) => [
+  ['Contexto', q.context],
+  ['Objetivo/Dor', q.painGoal],
+  ['Experiência', q.experience || 'Não identificado'],
+  ['Urgência', q.urgency],
+  ['Decisão/Investimento', q.decisionInvestment],
+  ['Ponto-chave', q.keyPoint],
+].map(([label, value]) => `${label}:\n${clean(value) || 'Precisa ser validado'}`).join('\n\n');
+
+const buildAiQualificationSuggestion = ({ call = {}, qualification = null } = {}) => {
+  const analysis = call.analysis && typeof call.analysis === 'object' ? call.analysis : (typeof call.analysis === 'string' ? (() => { try { return JSON.parse(call.analysis); } catch { return { summary: call.analysis }; } })() : {});
+  const summary = clean(analysis?.summary || analysis?.resumo || analysis?.call_summary || call.summary || call.analysisText);
+  const base = qualification || {};
+  const missing = 'Precisa ser validado';
+  const ai = {
+    context: clean(base.context) || summary || missing,
+    painGoal: clean(base.painGoal) || missing,
+    experience: clean(base.experience) || 'Não identificado',
+    urgency: clean(base.urgency) || missing,
+    decisionInvestment: clean(base.decisionInvestment) || missing,
+    keyPoint: clean(base.keyPoint) || summary || missing,
+  };
+  return { ...ai, finalSummary: qualificationSummary({ ...base, ...Object.fromEntries(Object.entries(ai).map(([k,v]) => [k, clean(base[k]) || v])) }) };
+};
+
+const upsertQualification = async ({ request = supabaseFetch, call, user, patch = {}, now = new Date() }) => {
+  const voiceCallId = clean(call?.id || patch.voiceCallId);
+  if (!voiceCallId) throw Object.assign(new Error('missing_call_id'), { status: 400 });
+  if (clean(call?.sdrUid || call?.space_user_uid) !== clean(user?.sub) && normalizeRole(user?.role) !== 'admin') throw Object.assign(new Error('forbidden'), { status: 403 });
+  const current = await loadQualification({ request, voiceCallId }).catch(() => null);
+  const row = qualificationRowFromPatch(patch);
+  const nowIso = now.toISOString();
+  const body = {
+    voice_call_id: voiceCallId,
+    space_user_uid: clean(call?.sdrUid || call?.space_user_uid || user?.sub),
+    ...row,
+    status: clean(current?.status) || 'draft',
+    updated_at: nowIso,
+  };
+  if (!current?.id) body.created_at = nowIso;
+  const response = await request('/voice_call_qualifications?on_conflict=voice_call_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body, timeoutMs: 12000 });
+  return normalizeQualification(asRows(response)[0] || body);
+};
+
+const completeQualification = async ({ request = supabaseFetch, call, user, now = new Date() }) => {
+  if (clean(call?.outcome) !== 'agendado') throw Object.assign(new Error('qualification_requires_agendado'), { status: 409 });
+  const current = await loadQualification({ request, voiceCallId: call.id });
+  if (!current) throw Object.assign(new Error('qualification_required'), { status: 409 });
+  const missing = REQUIRED_QUALIFICATION_FIELDS.filter(field => !clean(current[field]));
+  if (missing.length) {
+    const error = new Error('qualification_incomplete');
+    error.status = 409;
+    error.missing = missing;
+    throw error;
+  }
+  const finalSummary = clean(current.finalSummary) || qualificationSummary(current);
+  const nowIso = now.toISOString();
+  const patch = { status: 'complete', final_summary: finalSummary, completed_at: nowIso, updated_at: nowIso, datacrazy_sync_status: 'blocked_api_audit', datacrazy_sync_error: 'DATACRAZY_WRITEBACK_BLOCKED_API_AUDIT' };
+  const rows = asRows(await request(`/voice_call_qualifications?voice_call_id=eq.${encodeURIComponent(call.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: patch, timeoutMs: 12000 }));
+  const qualification = normalizeQualification(rows[0] || { ...current, ...patch });
+  const bridge = await syncQualificationToSdrActivity({ call, qualification, user }).catch(error => ({ ok: false, error: clean(error?.message) || 'qualification_bridge_failed' }));
+  return { ok: true, qualification, bridge, datacrazy: { ok: false, status: 'blocked_api_audit' } };
+};
+
 const duration = (row = {}) => {
   const explicit = number(row.duration_seconds);
   if (explicit > 0) return explicit;
@@ -263,7 +423,7 @@ const statusKind = (row = {}) => {
   return raw || 'unknown';
 };
 
-const normalizeCall = (row = {}, analysis = null, crm = null) => {
+const normalizeCall = (row = {}, analysis = null, crm = null, qualification = null) => {
   const to = clean(row.to_number || row.phone || '');
   const from = clean(row.from_number || '');
   return {
@@ -298,6 +458,7 @@ const normalizeCall = (row = {}, analysis = null, crm = null) => {
     transcript: clean(analysis?.transcript),
     analysis: analysis?.analysis || null,
     crm,
+    qualification: normalizeQualification(qualification),
   };
 };
 
@@ -457,7 +618,8 @@ const listModel = async ({ request, user, isAdmin, query = {} }) => {
   const userFilter = filterForUser({ user, isAdmin, sdr: query.sdr });
   const rows = await queryVoiceCalls({ request, range, userFilter, status: query.status, q: query.q, limit: query.limit });
   const analysisMap = await loadAnalysisMap({ request, calls: rows });
-  const calls = rows.map(row => normalizeCall(row, findAnalysis(row, analysisMap)));
+  const qualificationMap = await loadQualificationsMap({ request, callIds: rows.map(row => row.id) });
+  const calls = rows.map(row => normalizeCall(row, findAnalysis(row, analysisMap), null, qualificationMap.get(clean(row.id))));
   const callbacks = calls.filter(call => call.callbackAt && new Date(call.callbackAt).getTime() >= Date.now()).slice(0, 12);
   return { ok: true, range, scope: isAdmin ? 'admin' : 'self', analytics: summarize(calls), calls, callbacks };
 };
@@ -489,8 +651,18 @@ const detailModel = async ({ request, id, user, isAdmin }) => {
     throw error;
   }
   const analysisMap = await loadAnalysisMap({ request, calls: [row] });
+  const analysis = findAnalysis(row, analysisMap);
   const crm = await loadCrmContext({ request, phone: row.to_number || row.from_number }).catch(() => null);
-  return { ok: true, call: normalizeCall(row, findAnalysis(row, analysisMap), crm) };
+  const qualification = await loadQualification({ request, voiceCallId: row.id }).catch(() => null);
+  const call = normalizeCall(row, analysis, crm, qualification);
+  if (analysis && qualification && ['draft','ai_processing'].includes(clean(qualification.status))) {
+    const suggestion = buildAiQualificationSuggestion({ call, qualification });
+    const nowIso = new Date().toISOString();
+    const body = { ai_context: suggestion.context, ai_pain_goal: suggestion.painGoal, ai_experience: suggestion.experience, ai_urgency: suggestion.urgency, ai_decision_investment: suggestion.decisionInvestment, ai_key_point: suggestion.keyPoint, final_summary: clean(qualification.finalSummary) || suggestion.finalSummary, status: 'review_required', updated_at: nowIso };
+    await request(`/voice_call_qualifications?voice_call_id=eq.${encodeURIComponent(row.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body, timeoutMs: 12000 }).catch(() => null);
+    call.qualification = normalizeQualification({ ...qualification, ...body });
+  }
+  return { ok: true, call };
 };
 
 const syncOutcomeToSdrActivity = async ({ call, outcome, user, now = new Date(), commit = commitWritesAsAdmin } = {}) => {
@@ -524,6 +696,39 @@ const syncOutcomeToSdrActivity = async ({ call, outcome, user, now = new Date(),
   return { ok: true, id, outcome: mappedOutcome };
 };
 
+
+const syncQualificationToSdrActivity = async ({ call, qualification, user, now = new Date(), commit = commitWritesAsAdmin } = {}) => {
+  const voiceCallId = clean(call?.id);
+  if (!voiceCallId || !qualification?.complete) return { ok: false, skipped: true };
+  const time = clean(call?.endedAt || call?.ended_at || call?.startedAt || call?.started_at || call?.createdAt || call?.created_at) || now.toISOString();
+  const local = dateKeyFor(time, now);
+  const id = `space_phone_call_${voiceCallId}`;
+  const payload = {
+    id,
+    clientRequestId: id,
+    sdrUid: clean(call?.sdrUid || call?.space_user_uid || user?.sub),
+    sdrName: clean(call?.sdrName || call?.space_user_email || user?.name || user?.email || 'SDR'),
+    sdrEmail: clean(call?.sdrEmail || call?.space_user_email || user?.email),
+    dateKey: local.dateKey,
+    localTime: local.localTime,
+    eventType: 'call',
+    outcome: outcomeToSdrOutcome(clean(call?.outcome)) || 'agendou',
+    sourceOutcome: clean(call?.outcome),
+    source: 'space_phone',
+    sourceVoiceCallId: voiceCallId,
+    qualificationStatus: qualification.status,
+    qualificationComplete: true,
+    datacrazySyncStatus: qualification.datacrazy?.syncStatus || 'blocked_api_audit',
+    phone: clean(call?.toNumber || call?.to_number || call?.number),
+    durationSeconds: number(call?.durationSeconds || call?.duration_seconds),
+    time,
+    updatedAt: now.toISOString(),
+  };
+  const response = await commit({ writes: [{ update: { name: firestoreDocName('sdrActivityEvents', id, { allowTestProject: commit !== commitWritesAsAdmin }), fields: encodeFields(payload).fields } }] });
+  if (!response.ok) throw Object.assign(new Error('qualification_bridge_failed'), { status: response.status || 500 });
+  return { ok: true, id };
+};
+
 const updateCall = async ({ request, id, user, isAdmin, patch = {}, bridgeCommit } = {}) => {
   const current = (await detailModel({ request, id, user, isAdmin })).call;
   const body = {};
@@ -539,6 +744,14 @@ const updateCall = async ({ request, id, user, isAdmin, patch = {}, bridgeCommit
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'callbackAt')) body.callback_at = isoOrNull(patch.callbackAt);
   if (Object.prototype.hasOwnProperty.call(patch, 'endedReason')) body.ended_reason = clean(patch.endedReason).slice(0, 120) || null;
+  if (clean(patch.action) === 'save_qualification') {
+    const qualification = await upsertQualification({ request, call: current, user, patch: patch.qualification || patch });
+    return { ok: true, call: { ...current, qualification }, qualification };
+  }
+  if (clean(patch.action) === 'complete_qualification') {
+    const result = await completeQualification({ request, call: current, user });
+    return { ok: true, call: { ...current, qualification: result.qualification }, qualification: result.qualification, datacrazy: result.datacrazy, bridge: result.bridge };
+  }
   if (!Object.keys(body).length) return { ok: true, call: current };
   const rows = asRows(await request(`/voice_calls?id=eq.${encodeURIComponent(current.id)}`, { method: 'PATCH', body, timeoutMs: 12000 }));
   const call = normalizeCall(rows[0] || { ...current, ...body });
@@ -565,12 +778,16 @@ module.exports = {
   loadVoiceIdentity,
   mapErrorStatus,
   normalizePhoneInput,
+  normalizeQualification,
   normalizePhoneNumber,
   publicError,
   rangeForPeriod,
   sendJson,
   summarize,
   syncOutcomeToSdrActivity,
+  syncQualificationToSdrActivity,
+  upsertQualification,
+  completeQualification,
   outcomeToSdrOutcome,
   updateCall,
   updateVoiceCall,

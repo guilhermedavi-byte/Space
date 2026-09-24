@@ -80,7 +80,7 @@ test('admin SDR route boots the dedicated panel and script', async () => {
     assert.equal(res.statusCode, 200);
     assert.match(body, /data-initial-panel="admin-sdr"/);
     assert.match(body, /data-admin-sdr/);
-    assert.match(body, /src="admin-sdr\.js\?v=6"/);
+    assert.match(body, /src="admin-sdr\.js\?v=7"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
@@ -277,4 +277,18 @@ test('voice outcomes map scheduled and answered KPIs immediately', async () => {
   assert.equal(model.kpis.totalCalls, 2);
   assert.equal(model.kpis.answered, 2);
   assert.equal(model.kpis.scheduled, 1);
+});
+
+test('SDR panel shows qualification and CRM handoff status from voice_call_qualifications', async () => {
+  const model = await __private.buildModel({ period: 'today' }, {
+    activity: async () => ({ sdrs: [{ sdrUid: 'sdr-1', sdrName: 'Matheus', sdrEmail: 'm@space.test' }], events: [] }),
+    request: async (path) => {
+      if (path.startsWith('/voice_calls')) return { data: [{ id: 'vc-qual', space_user_uid: 'sdr-1', space_user_email: 'm@space.test', to_number: '+1', status: 'ended', started_at: '2026-09-18T12:00:00.000Z', outcome: 'agendado' }] };
+      if (path.startsWith('/voice_call_qualifications')) return { data: [{ voice_call_id: 'vc-qual', status: 'complete', context: 'C', pain_goal: 'P', urgency: 'U', decision_investment: 'D', key_point: 'K', datacrazy_sync_status: 'blocked_api_audit' }] };
+      if (path.startsWith('/sdr_call_scores')) return { data: [] };
+      return { data: [] };
+    },
+  });
+  assert.equal(model.calls[0].qualificationLabel, 'Completa ✓');
+  assert.equal(model.calls[0].handoffLabel, 'Datacrazy bloqueado');
 });

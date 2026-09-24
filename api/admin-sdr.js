@@ -185,6 +185,7 @@ const loadScoredCallDetail = async ({ request = supabaseFetch, recordingId } = {
 const avg = rows => { const nums = rows.map(Number).filter(Number.isFinite); return nums.length ? nums.reduce((a,b)=>a+b,0)/nums.length : null; };
 
 const VOICE_CALL_SELECT = 'id,space_user_uid,space_user_email,lead_name,from_number,to_number,telnyx_call_leg_id,telnyx_call_session_id,status,started_at,answered_at,ended_at,duration_seconds,outcome,callback_at,created_at,updated_at';
+const QUALIFICATION_SELECT = 'voice_call_id,status,completed_at,datacrazy_note_id,datacrazy_sync_status,datacrazy_sync_error,context,pain_goal,urgency,decision_investment,key_point';
 const voiceRangeParams = ({ fromKey = '', toKey = '' } = {}) => {
   const params = [];
   if (parseDateKey(fromKey)) params.push(`started_at=gte.${encodeURIComponent(`${fromKey}T00:00:00-03:00`)}`);
@@ -241,8 +242,41 @@ const normalizeVoiceCall = (row = {}) => {
     strengths: [],
     weaknesses: [],
     recommendations: [],
+    qualificationStatus: 'pending',
+    qualificationLabel: 'Pendente',
+    handoffLabel: 'Pendente',
+    datacrazyStatus: '',
   };
 };
+
+const normalizeQualificationStatus = row => {
+  if (!row) return { status: 'pending', label: 'Pendente', complete: false, handoffLabel: 'Pendente', datacrazyStatus: '' };
+  const status = clean(row.status) || 'draft';
+  const required = ['context','pain_goal','urgency','decision_investment','key_point'];
+  const complete = ['complete','sent'].includes(status) || required.every(field => clean(row[field]));
+  const datacrazyStatus = clean(row.datacrazy_sync_status);
+  return {
+    status,
+    label: complete ? 'Completa ✓' : status === 'review_required' ? 'Revisão IA' : 'Pendente',
+    complete,
+    handoffLabel: clean(row.datacrazy_note_id) ? 'Enviado ao CRM ✓' : datacrazyStatus === 'blocked_api_audit' ? 'Datacrazy bloqueado' : datacrazyStatus === 'lead_not_found' ? 'Lead não encontrado' : datacrazyStatus === 'lead_ambiguous' ? 'Lead ambíguo' : 'Pendente',
+    datacrazyStatus,
+  };
+};
+const loadQualificationMap = async ({ request = supabaseFetch, callIds = [] } = {}) => {
+  const ids = [...new Set(callIds.map(clean).filter(Boolean))];
+  const map = new Map();
+  if (!ids.length) return map;
+  try {
+    const quoted = ids.map(id => `"${id}"`).join(',');
+    const res = await request(`/voice_call_qualifications?select=${QUALIFICATION_SELECT}&voice_call_id=in.(${encodeURIComponent(quoted)})&limit=${Math.min(ids.length, 1000)}`, { timeoutMs: 12000 });
+    (Array.isArray(res.data) ? res.data : []).forEach(row => map.set(clean(row.voice_call_id), normalizeQualificationStatus(row)));
+  } catch {
+    // Qualification table is additive; SDR panel should keep loading if migration is pending.
+  }
+  return map;
+};
+
 const loadVoiceCalls = async ({ request = supabaseFetch, fromKey = '', toKey = '', limit = 500 } = {}) => {
   try {
     const res = await request(`/voice_calls?select=${VOICE_CALL_SELECT}${voiceRangeParams({ fromKey, toKey })}&order=started_at.desc.nullslast,created_at.desc&limit=${Math.max(1, Math.min(Number(limit)||500, 1000))}`, { timeoutMs: 15000 });
@@ -458,6 +492,8 @@ const buildModel = async (query = {}, deps = {}) => {
   const activity = deps.activity ? await deps.activity({ period: 'custom', from: range.fromKey, to: range.toKey, range }) : await loadAdminCommercialSdrActivity({ period: 'custom', from: range.fromKey, to: range.toKey });
   const statsSource = await loadScoredCallStats({ request, fromKey: range.fromKey, toKey: range.toKey });
   const voiceSource = await loadVoiceCalls({ request, fromKey: range.fromKey, toKey: range.toKey });
+  const qualificationMap = await loadQualificationMap({ request, callIds: voiceSource.calls.map(call => call.id) });
+  voiceSource.calls = voiceSource.calls.map(call => { const q = qualificationMap.get(clean(call.id)); return q ? { ...call, qualificationStatus: q.status, qualificationLabel: q.label, handoffLabel: q.handoffLabel, datacrazyStatus: q.datacrazyStatus } : call; });
   const operationalRows = activity.sdrs || [];
   const voiceCalls = voiceSource.calls.map(call => {
     const matched = operationalRows.find(row => clean(row.sdrUid || row.uid) && clean(row.sdrUid || row.uid) === clean(call.sdrUid));
@@ -573,4 +609,4 @@ const createHandler = ({ build = buildModel, authResolver = resolveAdminRequestA
 };
 module.exports = createHandler();
 module.exports.createHandler = createHandler;
-module.exports.__private = { resolveRange, buildModel, normalizeCall, normalizeScoredCall, normalizeVoiceCall, mergeVoiceAndScoreCalls, filterCalls, loadScoredCalls, loadVoiceCalls, namesMatch, attachScoredCallSdrs };
+module.exports.__private = { resolveRange, buildModel, normalizeCall, normalizeScoredCall, normalizeVoiceCall, mergeVoiceAndScoreCalls, filterCalls, loadScoredCalls, loadVoiceCalls, loadQualificationMap, normalizeQualificationStatus, namesMatch, attachScoredCallSdrs };

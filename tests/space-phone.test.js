@@ -157,7 +157,7 @@ test("space phone route boots the dedicated admin panel and script", async () =>
     assert.match(body, /data-initial-panel="space-phone"/);
     assert.match(body, /data-space-phone/);
     assert.match(body, /src="script\.js\?v=7"/);
-    assert.match(body, /src="space-phone\.js\?v=5"/);
+    assert.match(body, /src="space-phone\.js\?v=6"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
@@ -273,4 +273,64 @@ test('space phone outcome bridge writes deterministic SDR activity event', async
   assert.equal(writes[1].update.name, writes[0].update.name);
   assert.equal(first.json.bridge.outcome, 'atendeu');
   assert.equal(second.json.bridge.outcome, 'agendou');
+});
+
+test('space phone qualification autosaves draft and restores on refresh', async () => {
+  const store = new Map();
+  const handler = createHandler({
+    authResolver: async () => ({ ok: true, session: { role: 'growth', sub: 'sdr-1', email: 'sdr1@space.test' }, profile: { user: { commercialRoles: ['sdr'] } } }),
+    request: async (path, options = {}) => {
+      if (path.startsWith('/voice_calls')) return { data: [{ id: 'call-q1', space_user_uid: 'sdr-1', space_user_email: 'sdr1@space.test', to_number: '+16175551212', status: 'active', started_at: '2026-09-24T12:00:00Z' }] };
+      if (path.startsWith('/voice_call_qualifications') && options.method === 'POST') { const row = { id: 'qual-1', ...store.get('call-q1'), ...options.body }; store.set('call-q1', row); return { data: [row] }; }
+      if (path.startsWith('/voice_call_qualifications')) return { data: store.has('call-q1') ? [store.get('call-q1')] : [] };
+      return { data: [] };
+    },
+  });
+  const saved = await invoke(handler, { method: 'PATCH', body: { id: 'call-q1', action: 'save_qualification', qualification: { context: 'Mora nos EUA' } } });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.json.qualification.context, 'Mora nos EUA');
+  const restored = await invoke(handler, { url: '/api/space-phone?id=call-q1' });
+  assert.equal(restored.json.call.qualification.context, 'Mora nos EUA');
+});
+
+test('space phone qualification completion is gated by agendado and required fields', async () => {
+  const qualification = { id: 'qual-2', voice_call_id: 'call-q2', space_user_uid: 'sdr-1', context: 'Contexto', pain_goal: '', urgency: 'Alta', decision_investment: 'Decide sozinha', key_point: 'Autonomia', status: 'draft' };
+  const calls = [];
+  const handler = createHandler({
+    authResolver: async () => ({ ok: true, session: { role: 'growth', sub: 'sdr-1', email: 'sdr1@space.test' }, profile: { user: { commercialRoles: ['sdr'] } } }),
+    request: async (path, options = {}) => {
+      calls.push({ path, options });
+      if (path.startsWith('/voice_calls')) return { data: [{ id: 'call-q2', space_user_uid: 'sdr-1', space_user_email: 'sdr1@space.test', to_number: '+16175551212', outcome: 'agendado', status: 'ended', started_at: '2026-09-24T12:00:00Z' }] };
+      if (path.startsWith('/voice_call_qualifications') && options.method === 'PATCH') return { data: [{ ...qualification, ...options.body }] };
+      if (path.startsWith('/voice_call_qualifications')) return { data: [qualification] };
+      return { data: [] };
+    },
+  });
+  const blocked = await invoke(handler, { method: 'PATCH', body: { id: 'call-q2', action: 'complete_qualification' } });
+  assert.equal(blocked.status, 409);
+  qualification.pain_goal = 'Quer destravar comunicação';
+  const ok = await invoke(handler, { method: 'PATCH', body: { id: 'call-q2', action: 'complete_qualification' } });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.qualification.status, 'complete');
+  assert.equal(ok.json.qualification.datacrazy.syncStatus, 'blocked_api_audit');
+  assert.equal(calls.some(call => String(call.path).startsWith('/datacrazy')), false);
+});
+
+test('space phone AI suggestion marks missing fields as not validated', async () => {
+  const patches = [];
+  const handler = createHandler({
+    authResolver: async () => ({ ok: true, session: { role: 'growth', sub: 'sdr-1' }, profile: { user: { commercialRoles: ['sdr'] } } }),
+    request: async (path, options = {}) => {
+      if (options.method === 'PATCH') { patches.push(options.body); return { data: [{ voice_call_id: 'call-ai', space_user_uid: 'sdr-1', ...options.body }] }; }
+      if (path.startsWith('/voice_calls')) return { data: [{ id: 'call-ai', space_user_uid: 'sdr-1', to_number: '+1', telnyx_call_leg_id: 'leg-ai', status: 'ended', started_at: '2026-09-24T12:00:00Z' }] };
+      if (path.startsWith('/sdr_call_scores')) return { data: [{ recording_id: 'rec-ai', call_leg_id: 'leg-ai', transcript: 'SDR: Olá. Lead: quero melhorar inglês.', analysis: { summary: 'Lead quer melhorar inglês.' }, score: 80 }] };
+      if (path.startsWith('/voice_call_qualifications')) return { data: [{ voice_call_id: 'call-ai', space_user_uid: 'sdr-1', context: 'Lead mora fora', status: 'draft' }] };
+      return { data: [] };
+    },
+  });
+  const res = await invoke(handler, { url: '/api/space-phone?id=call-ai' });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.call.qualification.status, 'review_required');
+  assert.equal(res.json.call.qualification.ai.decisionInvestment, 'Precisa ser validado');
+  assert.equal(patches[0].status, 'review_required');
 });

@@ -229,3 +229,26 @@ test('post-call wrap-up persists through core idle and skip releases new call', 
   assert.ok(dom.window.document.body.textContent.includes('Pendente'));
   assert.ok(dom.window.document.querySelector('[data-sp-reset-call]'));
 });
+
+test('live qualification form autosaves without replacing focused field', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  const saved = [];
+  dom.window.fetchWithAuth = async (url, options = {}) => {
+    if (options.method === 'PATCH') { saved.push(JSON.parse(options.body)); return jsonResponse({ ok: true, qualification: { voiceCallId: 'call-1', context: 'Contexto real', status: 'draft' } }); }
+    return jsonResponse({ ok: true, analytics: {}, calls: [], callbacks: [] });
+  };
+  await dom.window.SpacePhoneModule.open();
+  dom.window.__spacePhoneTest.emit({ status: 'active', elapsedSeconds: 1, context: { phoneNumber: '+1617' }, callRecord: { id: 'call-1', to_number: '+1617' } });
+  await tick(20);
+  const field = dom.window.document.querySelector('[data-sp-qual="context"]');
+  field.focus();
+  field.value = 'Contexto real';
+  field.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  dom.window.__spacePhoneTest.emit({ elapsedSeconds: 4 });
+  await tick(800);
+  assert.equal(dom.window.document.querySelector('[data-sp-qual="context"]'), field);
+  assert.equal(dom.window.document.activeElement, field);
+  assert.equal(saved[0].action, 'save_qualification');
+  assert.equal(saved[0].qualification.context, 'Contexto real');
+});
