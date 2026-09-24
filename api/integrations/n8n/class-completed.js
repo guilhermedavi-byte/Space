@@ -32,9 +32,17 @@ const namesMatch = (a, b) => {
   const right = normalizeName(b);
   if (!left || !right) return false;
   if (left === right) return true;
+
   const lc = compact(left);
   const rc = compact(right);
-  return Boolean(lc && rc && (lc.includes(rc) || rc.includes(lc)));
+  if (lc && rc && (lc.includes(rc) || rc.includes(lc))) return true;
+
+  const leftTokens = left.split(/\s+/).filter((token) => token.length >= 3);
+  const rightTokens = new Set(right.split(/\s+/).filter((token) => token.length >= 3));
+
+  // Ex.: "David Verli" deve casar com "David Henrique Verli".
+  // Exige todos os tokens informados pelo Vexa, reduzindo falso positivo.
+  return leftTokens.length >= 2 && leftTokens.every((token) => rightTokens.has(token));
 };
 
 const getMeetCode = (value) => {
