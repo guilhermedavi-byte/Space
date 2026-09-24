@@ -23335,6 +23335,10 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .activities-description-cell{color:rgba(255,255,255,.68);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .activities-person{display:inline-flex;align-items:center;gap:8px;min-width:0}
 .activities-avatar{width:28px;height:28px;border-radius:999px;background:rgba(255,78,70,.14);border:1px solid rgba(255,78,70,.16);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex:0 0 28px}
+.user-avatar{position:relative;overflow:hidden}
+.user-avatar>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.user-avatar-fallback{display:grid;place-items:center;width:100%;height:100%;line-height:1}
+.user-avatar.has-photo .user-avatar-fallback{display:none}
 .activities-board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .activities-board-column{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:20px;padding:14px;display:grid;gap:12px;min-height:320px}
 .activities-board-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -23782,7 +23786,7 @@ body[data-page="growth"] [data-growth-crm-state="loading"] .growth-v2-rank-row .
 .actws-comment-edit-form .actws-mention-popover{bottom:auto;top:calc(100% + 6px)}
 .actws-mention-popover button{appearance:none;border:0;background:transparent;color:rgba(255,255,255,.82);display:flex;align-items:center;gap:9px;width:100%;padding:8px;border-radius:9px;text-align:left;font:inherit;cursor:pointer}
 .actws-mention-popover button:hover,.actws-mention-popover button.is-active,.actws-mention-popover button:focus-visible{background:rgba(255,86,79,.12);color:#fff;outline:none}
-.actws-mention-popover span:not(.actws-mini-avatar){display:grid;gap:2px;min-width:0}
+.actws-mention-popover button>span:not(.actws-mini-avatar){display:grid;gap:2px;min-width:0}
 .actws-mention-popover strong{font-size:.8rem;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .actws-mention-popover small{font-size:.7rem;color:rgba(255,255,255,.44);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 

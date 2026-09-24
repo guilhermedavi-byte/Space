@@ -7912,6 +7912,7 @@ let activitiesState = {
   items: [],
   users: [],
   directoryUsers: [],
+  userIdentities: {},
   searchQuery: "",
   view: "list",
   calendarView: "month",
@@ -11018,6 +11019,9 @@ const getActivityTypeOptions = () =>
 const getActivityResponsibleUser = (activity) => {
   const id = String(activity?.responsavelId || "").trim();
   if (!id) return null;
+  if (activity?.responsavelIdentity) return normalizeActivityUserIdentity(activity.responsavelIdentity);
+  const identity = activityUserIdentity(id, { name: activity?.responsavelNome });
+  if (identity) return identity;
   const assignedUsers = Array.isArray(activitiesState.users) ? activitiesState.users : [];
   const directoryUsers = Array.isArray(activitiesState.directoryUsers) ? activitiesState.directoryUsers : [];
   return assignedUsers.find((user) => String(user.id || "") === id) || directoryUsers.find((user) => String(user.id || "") === id) || null;
@@ -11064,7 +11068,8 @@ const getActivityDueMeta = (activity) => {
 const renderActivityResponsibleHtml = (activity) => {
   const responsible = getActivityResponsibleUser(activity);
   if (!responsible) return `<span class="ativv2-empty-inline">Sem responsável</span>`;
-  return `<span class="activities-person ativv2-person"><span class="activities-avatar ativv2-avatar">${escapeHtml(getInitials(responsible.nome))}</span><span class="ativv2-person-name">${escapeHtml(responsible.nome)}</span></span>`;
+  const name = responsible.name || responsible.nome || "Usuário";
+  return `<span class="activities-person ativv2-person">${userAvatarHtml(responsible, { className: "activities-avatar ativv2-avatar", fallbackName: name })}<span class="ativv2-person-name">${escapeHtml(name)}</span></span>`;
 };
 
 const renderActivityPriorityHtml = (activity) => {
@@ -11209,8 +11214,8 @@ const openActivitiesFiltersPopover = ({ triggerEl } = {}) => {
           .map(
             (user) => `
               <button class="ativv2-user-option" type="button" data-activities-add-user="${escapeHtml(user.id)}">
-                <span class="ativv2-user-option-main">
-                  <span class="activities-avatar ativv2-avatar">${escapeHtml(getInitials(user.nome))}</span>
+                  <span class="ativv2-user-option-main">
+                  ${userAvatarHtml(user, { className: "activities-avatar ativv2-avatar", fallbackName: user.nome })}
                   <span class="ativv2-user-option-copy">
                     <span class="ativv2-user-option-name">${escapeHtml(user.nome)}</span>
                     <span class="ativv2-user-option-meta">${escapeHtml(user.email || user.role || "Usuário ativo")}</span>
@@ -11360,16 +11365,95 @@ const refreshOpenStudentActivities = () => {
   [adminStudentsState.history, teacherStudentsState.history].forEach(hist => { if (hist?.profileResources) delete hist.profileResources.activities; hist?.refreshActivities?.(); });
 };
 
-const activityAvatarHtml = (name, photo = "") => {
-  const safePhoto = String(photo || "").trim();
-  if (safePhoto) return `<span class="actws-avatar"><img src="${escapeHtml(safePhoto)}" alt="" loading="lazy" /></span>`;
-  return `<span class="actws-avatar">${escapeHtml(getInitials(name || "U"))}</span>`;
+const normalizeActivityUserIdentity = (user = {}) => {
+  if (!user || typeof user !== "object") return null;
+  const id = String(user.id || user.uid || user.userId || "").trim();
+  const name = String(user.name || user.nome || user.displayName || user.email || id || "Usuário").trim();
+  return {
+    ...user,
+    id,
+    name,
+    nome: name,
+    email: String(user.email || "").trim(),
+    photoURL: String(user.photoURL || user.photoUrl || user.avatarURL || user.avatarUrl || user.picture || "").trim(),
+    avatarUpdatedAt: user.avatarUpdatedAt || user.updatedAt || user.atualizadoEm || "",
+    status: String(user.status || (user.active === false || user.ativo === false ? "inactive" : "active")),
+  };
 };
+
+const mergeActivityUserIdentities = (source = {}) => {
+  const next = { ...(activitiesState.userIdentities || {}) };
+  if (Array.isArray(source)) {
+    source.forEach((user) => {
+      const identity = normalizeActivityUserIdentity(user);
+      if (identity?.id) next[identity.id] = { ...(next[identity.id] || {}), ...identity };
+    });
+  } else if (source && typeof source === "object") {
+    Object.entries(source).forEach(([key, user]) => {
+      const identity = normalizeActivityUserIdentity({ id: key, ...(user && typeof user === "object" ? user : {}) });
+      if (identity?.id) next[identity.id] = { ...(next[identity.id] || {}), ...identity };
+    });
+  }
+  activitiesState.userIdentities = next;
+  return next;
+};
+
+const activityUserIdentity = (id, fallback = {}) => {
+  const safeId = String(id || "").trim();
+  const identities = activitiesState.userIdentities || {};
+  if (safeId && identities[safeId]) return normalizeActivityUserIdentity(identities[safeId]);
+  const users = [...(activitiesState.directoryUsers || []), ...(activitiesState.users || [])];
+  const row = users.find((user) => String(user.id || "") === safeId);
+  if (row) return normalizeActivityUserIdentity(row);
+  if (safeId || fallback.name || fallback.nome || fallback.photoURL) return normalizeActivityUserIdentity({ id: safeId, ...fallback });
+  return null;
+};
+
+const activityAvatarVersionedUrl = (photoURL = "", avatarUpdatedAt = "") => {
+  const safePhoto = String(photoURL || "").trim();
+  const safeVersion = String(avatarUpdatedAt || "").trim();
+  if (!safePhoto || !safeVersion) return safePhoto;
+  try {
+    const url = new URL(safePhoto, window.location.origin);
+    url.searchParams.set("v", safeVersion);
+    return url.href;
+  } catch {
+    return `${safePhoto}${safePhoto.includes("?") ? "&" : "?"}v=${encodeURIComponent(safeVersion)}`;
+  }
+};
+
+const userAvatarHtml = (identity = {}, { className = "actws-avatar", fallbackName = "" } = {}) => {
+  const user = normalizeActivityUserIdentity(identity) || normalizeActivityUserIdentity({ name: fallbackName });
+  const name = user?.name || fallbackName || "Usuário";
+  const initials = escapeHtml(getInitials(name || "U"));
+  const classes = `${className} user-avatar${user?.photoURL ? " has-photo" : ""}`;
+  const versionedPhoto = activityAvatarVersionedUrl(user?.photoURL || "", user?.avatarUpdatedAt || "");
+  const title = name ? ` title="${escapeHtml(name)}"` : "";
+  if (versionedPhoto) {
+    return `<span class="${escapeHtml(classes)}"${title}><img src="${escapeHtml(versionedPhoto)}" alt="" loading="lazy" decoding="async" data-user-avatar-img /><span class="user-avatar-fallback">${initials}</span></span>`;
+  }
+  return `<span class="${escapeHtml(classes)}"${title}><span class="user-avatar-fallback">${initials}</span></span>`;
+};
+
+const activityAvatarHtml = (name, photo = "", options = {}) => {
+  return userAvatarHtml({ name, photoURL: photo }, { className: "actws-avatar", fallbackName: name, ...options });
+};
+
+document.addEventListener(
+  "error",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLImageElement) || !target.matches("[data-user-avatar-img]")) return;
+    const wrapper = target.closest(".user-avatar");
+    if (wrapper instanceof HTMLElement) wrapper.classList.remove("has-photo");
+    target.remove();
+  },
+  true
+);
 
 const activityUserName = (id, fallback = "") => {
   const safeId = String(id || "").trim();
-  const users = [...(activitiesState.directoryUsers || []), ...(activitiesState.users || [])];
-  return users.find(user => String(user.id || "") === safeId)?.nome || fallback || safeId || "Sem responsável";
+  return activityUserIdentity(safeId, { name: fallback })?.name || fallback || safeId || "Sem responsável";
 };
 
 const activityStudentName = (id) => {
@@ -11473,9 +11557,10 @@ const renderActivityStudentInline = (student = null) => {
 };
 
 const renderActivityChecklistAssignee = (item = {}) => {
-  const name = String(item.assigneeNameSnapshot || activityUserName(item.assigneeId, "Sem responsável") || "Sem responsável").trim();
+  const identity = item.assigneeIdentity || activityUserIdentity(item.assigneeId, { name: item.assigneeNameSnapshot });
+  const name = String(identity?.name || item.assigneeNameSnapshot || activityUserName(item.assigneeId, "Sem responsável") || "Sem responsável").trim();
   if (!item.assigneeId && !item.assigneeNameSnapshot) return `<span>Sem responsável</span>`;
-  return `<span class="actws-check-assignee"><span class="actws-mini-avatar">${escapeHtml(getInitials(name))}</span>${escapeHtml(name)}</span>`;
+  return `<span class="actws-check-assignee">${userAvatarHtml(identity || { name }, { className: "actws-mini-avatar", fallbackName: name })}${escapeHtml(name)}</span>`;
 };
 
 const renderActivityCommentBody = (comment = {}) => {
@@ -11550,7 +11635,7 @@ const renderActivityMentionPopover = (textarea) => {
   }
   state.popover.innerHTML = state.users.map((user, index) => `
     <button type="button" class="${index === state.activeIndex ? "is-active" : ""}" data-actws-mention-select="${escapeHtml(user.id)}">
-      <span class="actws-mini-avatar">${escapeHtml(getInitials(user.displayName))}</span>
+      ${userAvatarHtml({ id: user.id, name: user.displayName, email: user.email, photoURL: user.photoURL, avatarUpdatedAt: user.avatarUpdatedAt }, { className: "actws-mini-avatar", fallbackName: user.displayName })}
       <span><strong>${escapeHtml(user.displayName)}</strong>${user.email ? `<small>${escapeHtml(user.email)}</small>` : ""}</span>
     </button>
   `).join("");
@@ -11689,11 +11774,13 @@ const renderActivityWorkspace = (workspace = {}) => {
               <div class="actws-comments" data-actws-comments>
                 ${isCreateMode ? `<div class="actws-empty actws-empty-state">Crie a atividade para iniciar a discussão.</div>` : visibleComments.length ? visibleComments.map(comment => {
                   const canManage = !comment.legacy && !comment.deletedAt && (canAdminComments || String(comment.authorId || "") === currentUserId);
+                  const authorIdentity = comment.authorIdentity || activityUserIdentity(comment.authorId, { name: comment.authorNameSnapshot, photoURL: comment.authorPhotoSnapshot });
+                  const authorName = authorIdentity?.name || comment.authorNameSnapshot || "Usuário";
                   return `
               <article class="actws-comment ${comment.deletedAt ? "is-deleted" : ""}" data-actws-comment="${escapeHtml(comment.id)}">
-                ${activityAvatarHtml(comment.authorNameSnapshot, comment.authorPhotoSnapshot)}
+                ${userAvatarHtml(authorIdentity || { name: authorName, photoURL: comment.authorPhotoSnapshot }, { className: "actws-avatar", fallbackName: authorName })}
                 <div class="actws-comment-main">
-                  <div class="actws-comment-head"><strong>${escapeHtml(comment.authorNameSnapshot || "Usuário")}</strong><time>${escapeHtml(comment.createdAt ? formatAdminHistoryStamp(comment.createdAt) : "Agora")}${comment.editedAt && !comment.deletedAt ? " · editado" : ""}</time>${canManage ? `<button type="button" class="actws-icon-action" data-actws-comment-menu="${escapeHtml(comment.id)}" aria-label="Ações do comentário">•••</button>` : ""}</div>
+                  <div class="actws-comment-head"><strong>${escapeHtml(authorName)}</strong><time>${escapeHtml(comment.createdAt ? formatAdminHistoryStamp(comment.createdAt) : "Agora")}${comment.editedAt && !comment.deletedAt ? " · editado" : ""}</time>${canManage ? `<button type="button" class="actws-icon-action" data-actws-comment-menu="${escapeHtml(comment.id)}" aria-label="Ações do comentário">•••</button>` : ""}</div>
                   <p data-actws-comment-body>${renderActivityCommentBody(comment)}</p>
                   ${canManage ? `<form class="actws-comment-edit-form" data-actws-comment-edit-form="${escapeHtml(comment.id)}" hidden><textarea name="body" rows="3" data-actws-mention-textarea>${escapeHtml(comment.body)}</textarea><div><button type="submit">Salvar</button><button type="button" data-actws-comment-cancel="${escapeHtml(comment.id)}">Cancelar</button></div></form><div class="actws-comment-menu" data-actws-comment-menu-popover="${escapeHtml(comment.id)}" hidden><button type="button" data-actws-comment-edit="${escapeHtml(comment.id)}">Editar comentário</button><button type="button" data-actws-comment-delete="${escapeHtml(comment.id)}">Excluir comentário</button></div>` : ""}
                 </div>
@@ -11759,6 +11846,9 @@ const loadActivityWorkspace = async (id) => {
   if (!res.ok) throw new Error(String(data?.error || `activity_workspace_load_failed:${res.status}`));
   activitiesState.users = Array.isArray(data?.users) ? data.users : activitiesState.users;
   activitiesState.directoryUsers = Array.isArray(data?.directoryUsers) ? data.directoryUsers : activitiesState.directoryUsers;
+  mergeActivityUserIdentities(data?.userIdentities || {});
+  mergeActivityUserIdentities(activitiesState.users);
+  mergeActivityUserIdentities(activitiesState.directoryUsers);
   activitiesState.students = Array.isArray(data?.students) ? data.students : activitiesState.students;
   return data;
 };
@@ -12029,6 +12119,10 @@ const loadActivities = async ({ force = false, silent = false } = {}) => {
     activitiesState.items = Array.isArray(data?.activities) ? data.activities : [];
     activitiesState.users = Array.isArray(data?.users) ? data.users : [];
     activitiesState.directoryUsers = Array.isArray(data?.directoryUsers) ? data.directoryUsers : Array.isArray(data?.users) ? data.users : [];
+    activitiesState.userIdentities = {};
+    mergeActivityUserIdentities(data?.userIdentities || {});
+    mergeActivityUserIdentities(activitiesState.users);
+    mergeActivityUserIdentities(activitiesState.directoryUsers);
     activitiesState.lastLoadedAt = Date.now();
     renderActivitiesPanel();
     if (!silent) setActivitiesStatus("");
@@ -21523,6 +21617,23 @@ const applyCurrentProfileAvatar = ({ context = currentProfileAvatarContext(), ph
     sessionUser.photoURL = safeUrl;
     sessionUser.photoStoragePath = safePath;
     sessionUser.avatarUpdatedAt = safeUpdatedAt;
+  }
+  const currentUserId = String(sessionUser?.id || sessionUser?.uid || "").trim();
+  if (currentUserId && activitiesState && typeof activitiesState === "object") {
+    const patchAvatar = (user) => {
+      if (!user || typeof user !== "object" || String(user.id || "") !== currentUserId) return user;
+      return { ...user, photoURL: safeUrl, photoStoragePath: safePath, avatarUpdatedAt: safeUpdatedAt };
+    };
+    activitiesState.users = (Array.isArray(activitiesState.users) ? activitiesState.users : []).map(patchAvatar);
+    activitiesState.directoryUsers = (Array.isArray(activitiesState.directoryUsers) ? activitiesState.directoryUsers : []).map(patchAvatar);
+    mergeActivityUserIdentities([{ id: currentUserId, name: sessionUser?.name || sessionUser?.nome || "", email: sessionUser?.email || "", photoURL: safeUrl, photoStoragePath: safePath, avatarUpdatedAt: safeUpdatedAt }]);
+    activitiesState.items = (Array.isArray(activitiesState.items) ? activitiesState.items : []).map((item) => {
+      if (String(item?.responsavelId || "") !== currentUserId) return item;
+      const identity = activityUserIdentity(currentUserId, { name: item?.responsavelNome || sessionUser?.name || sessionUser?.nome || "" });
+      return { ...item, responsavelIdentity: identity };
+    });
+    activitiesState.lastLoadedAt = 0;
+    renderActivitiesPanel();
   }
   if (context === "growth") {
     growthProfileState.photoURL = safeUrl;

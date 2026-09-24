@@ -49,11 +49,102 @@ const normalizeUserRole = (value) => {
 
 const isAccessRole = (role) => ["admin", "teacher", "growth"].includes(normalizeRole(role));
 const safeText = (value) => String(value || "").trim();
+const userDocId = (row = {}) => safeText(row.firestoreDocId || row.id || row.uid || row.userId);
 const normalizeOptionalDate = (value) => {
   const raw = safeText(value);
   if (!raw) return "";
   return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : "";
 };
+
+const normalizeUserIdentity = (row = {}) => {
+  const id = userDocId(row);
+  const name = safeText(row.nome || row.nomeCompleto || row.name || row.displayName || row.email || id);
+  return {
+    id,
+    name,
+    nome: name,
+    email: safeText(row.email).toLowerCase(),
+    role: normalizeUserRole(row.tipo || row.role),
+    status: row.ativo === false ? "inactive" : "active",
+    active: row.ativo !== false,
+    ativo: row.ativo !== false,
+    photoURL: safeText(row.photoURL || row.photoUrl || row.avatarURL || row.avatarUrl || row.picture || row.profileImage),
+    photoStoragePath: safeText(row.photoStoragePath || row.avatarPath),
+    avatarUpdatedAt: row.avatarUpdatedAt || row.updatedAt || row.atualizadoEm || null,
+  };
+};
+
+const buildUserIdentityMap = (rows = []) => {
+  const identities = {};
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const identity = normalizeUserIdentity(row);
+    if (identity.id) identities[identity.id] = identity;
+  });
+  return identities;
+};
+
+const fallbackUserIdentity = ({ id = "", name = "", photoURL = "" } = {}) => {
+  const safeId = safeText(id);
+  const safeName = safeText(name || safeId || "Usuário");
+  return {
+    id: safeId,
+    name: safeName,
+    nome: safeName,
+    email: "",
+    role: "",
+    status: "unknown",
+    active: false,
+    photoURL: safeText(photoURL),
+    photoStoragePath: "",
+    avatarUpdatedAt: null,
+  };
+};
+
+const resolveUserIdentity = (identities = {}, id = "", fallback = {}) => {
+  const safeId = safeText(id);
+  const canonical = safeId ? identities[safeId] : null;
+  if (canonical) return canonical;
+  if (safeId || fallback.name || fallback.photoURL) return fallbackUserIdentity({ id: safeId, ...fallback });
+  return null;
+};
+
+const decorateActivityIdentity = (activity = {}, identities = {}) => {
+  const identity = resolveUserIdentity(identities, activity.responsavelId, { name: activity.responsavelNome });
+  return {
+    ...activity,
+    responsavelNome: identity?.name || activity.responsavelNome || "",
+    responsavelIdentity: identity,
+  };
+};
+
+const decorateCommentIdentity = (comment = {}, identities = {}) => {
+  const identity = resolveUserIdentity(identities, comment.authorId, {
+    name: comment.authorNameSnapshot,
+    photoURL: comment.authorPhotoSnapshot,
+  });
+  return {
+    ...comment,
+    authorNameSnapshot: identity?.name || comment.authorNameSnapshot || "Usuário",
+    authorPhotoSnapshot: identity?.photoURL || comment.authorPhotoSnapshot || "",
+    authorIdentity: identity,
+  };
+};
+
+const decorateChecklistIdentity = (item = {}, identities = {}) => {
+  const identity = resolveUserIdentity(identities, item.assigneeId, { name: item.assigneeNameSnapshot });
+  return {
+    ...item,
+    assigneeNameSnapshot: identity?.name || item.assigneeNameSnapshot || "",
+    assigneeIdentity: identity,
+  };
+};
+
+const decorateWorkspaceIdentities = (workspace = {}, identities = {}) => ({
+  ...workspace,
+  activity: decorateActivityIdentity(workspace.activity || {}, identities),
+  comments: (Array.isArray(workspace.comments) ? workspace.comments : []).map((comment) => decorateCommentIdentity(comment, identities)),
+  checklist: (Array.isArray(workspace.checklist) ? workspace.checklist : []).map((item) => decorateChecklistIdentity(item, identities)),
+});
 
 const normalizeActivity = (row = {}) => {
   const status = ALLOWED_STATUSES.has(String(row.status || "").trim()) ? String(row.status).trim() : "Pendente";
@@ -153,15 +244,11 @@ const listVisibleUsers = (session, rows) => {
   const visibleRoles = role === "teacher" ? new Set(["teacher"]) : new Set(["admin", "growth", "FINANCE"]);
   return (Array.isArray(rows) ? rows : [])
     .map((row) => ({
-      id: safeText(row.id),
-      nome: safeText(row.nome),
-      email: safeText(row.email).toLowerCase(),
-      role: normalizeUserRole(row.tipo || row.role),
-      ativo: row.ativo !== false,
-      photoURL: safeText(row.photoURL),
+      ...normalizeUserIdentity(row),
+      id: userDocId(row),
       telefone: safeText(row.telefone),
     }))
-    .filter((row) => row.id && row.nome && row.ativo && visibleRoles.has(row.role))
+    .filter((row) => row.id && row.nome && row.active && visibleRoles.has(row.role))
     .filter((row) => (role === "admin" || role === "growth" ? true : row.id === uid))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 };
@@ -172,15 +259,11 @@ const listActivityDirectoryUsers = (session, rows) => {
   const visibleRoles = role === "teacher" ? new Set(["teacher"]) : new Set(["admin", "growth", "FINANCE"]);
   return (Array.isArray(rows) ? rows : [])
     .map((row) => ({
-      id: safeText(row.id),
-      nome: safeText(row.nome),
-      email: safeText(row.email).toLowerCase(),
-      role: normalizeUserRole(row.tipo || row.role),
-      ativo: row.ativo !== false,
-      photoURL: safeText(row.photoURL),
+      ...normalizeUserIdentity(row),
+      id: userDocId(row),
       telefone: safeText(row.telefone),
     }))
-    .filter((row) => row.id && row.nome && row.ativo)
+    .filter((row) => row.id && row.nome && row.active)
     .filter((row) => visibleRoles.has(row.role))
     .filter((row) => (role === "teacher" ? row.id === uid : true))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
@@ -550,10 +633,12 @@ module.exports = async (req, res) => {
         const existing = document ? normalizeActivity(document.row) : null;
         if (!existing) return sendJson(res, 404, { error: "not_found" });
         if (!canAccessActivity(session, existing)) return sendJson(res, 403, { error: "forbidden" });
-        const workspace = await readActivityWorkspace(existing);
         const userRows = await listCollectionAsAdmin(USERS_COLLECTION, { pageSize: 1500, decorate: false });
+        const userIdentities = buildUserIdentityMap(userRows);
+        const workspace = decorateWorkspaceIdentities(await readActivityWorkspace(existing), userIdentities);
         return sendJson(res, 200, {
           ...workspace,
+          userIdentities,
           students: userRows.filter(row => normalizeUserRole(row.tipo || row.role) === 'student').map(row => ({ id: row.firestoreDocId || row.id, nome: row.nome || row.nomeCompleto || row.name || '', email: row.email || '' })),
           users: listVisibleUsers(session, userRows),
           directoryUsers: listActivityDirectoryUsers(session, userRows),
@@ -576,6 +661,7 @@ module.exports = async (req, res) => {
         listCollectionAsAdmin(COMMENTS_COLLECTION, { pageSize: 3000 }).catch(() => []),
         listCollectionAsAdmin(CHECKLIST_COLLECTION, { pageSize: 3000 }).catch(() => []),
       ]);
+      const userIdentities = buildUserIdentityMap(userRows);
       const commentsByActivity = new Map();
       commentRows.forEach(row => {
         const activityId = safeText(row.activityId);
@@ -593,15 +679,16 @@ module.exports = async (req, res) => {
         checklistByActivity.set(activityId, current);
       });
       return sendJson(res, 200, {
+        userIdentities,
         activities: activities.map(row => {
           const checklist = checklistByActivity.get(row.id) || {};
-          return {
+          return decorateActivityIdentity({
             ...row,
             responsavelNome: userRows.find(user => (user.firestoreDocId || user.id) === row.responsavelId)?.nome || row.responsavelNome || '',
             commentsCount: (commentsByActivity.get(row.id) || 0) + (Array.isArray(row.comentarios) ? row.comentarios.length : 0),
             checklistTotal: checklist.total || 0,
             checklistDone: checklist.done || 0,
-          };
+          }, userIdentities);
         }),
         events: eventRows.filter(event => canAccessActivity(session, event.snapshot || {})),
         students: userRows.filter(row => normalizeUserRole(row.tipo || row.role) === 'student').map(row => ({ id: row.firestoreDocId || row.id, nome: row.nome || row.nomeCompleto || row.name || '', email: row.email || '' })),
@@ -737,4 +824,14 @@ module.exports = async (req, res) => {
 
   res.setHeader("Allow", "GET, POST, PATCH, DELETE");
   return sendJson(res, 405, { error: "method_not_allowed" });
+};
+
+module.exports._test = {
+  buildUserIdentityMap,
+  decorateActivityIdentity,
+  decorateChecklistIdentity,
+  decorateCommentIdentity,
+  decorateWorkspaceIdentities,
+  normalizeUserIdentity,
+  resolveUserIdentity,
 };
