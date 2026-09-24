@@ -54,8 +54,9 @@ function createModuleDom() {
 
 const tick = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-test('SDR module calls SpacePhone.call with phoneNumber contract', async () => {
+test('SDR module calls SpacePhone.call with phoneNumber contract', async (t) => {
   const dom = createModuleDom();
+  t.after(() => dom.window.close());
   await dom.window.SpacePhoneModule.open();
   const input = dom.window.document.querySelector('[data-sp-dial]');
   input.value = '+16177942141';
@@ -67,8 +68,9 @@ test('SDR module calls SpacePhone.call with phoneNumber contract', async () => {
   assert.deepEqual(JSON.parse(JSON.stringify(call.payload)), { phoneNumber: '+16177942141', source: 'sdr_phone', micId: '', speakerId: '' });
 });
 
-test('SDR module controls call the public SpacePhone adapter methods', async () => {
+test('SDR module controls call the public SpacePhone adapter methods', async (t) => {
   const dom = createModuleDom();
+  t.after(() => dom.window.close());
   await dom.window.SpacePhoneModule.open();
   dom.window.SpacePhoneModule.state.call = { ...dom.window.SpacePhoneModule.state.call, status: 'active', number: '+16177942141', id: 'call-1' };
   dom.window.SpacePhoneModule.state.normalized = '+16177942141';
@@ -95,4 +97,39 @@ test('SDR module controls call the public SpacePhone adapter methods', async () 
   assert.ok(methods.includes('unhold'));
   assert.ok(dom.window.SpacePhone.calls.some(item => item.method === 'dtmf' && item.digit === '5'));
   assert.ok(methods.includes('hangup'));
+});
+
+
+test('Space Phone V2 hides outcome during active call and shows it after hangup', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  await dom.window.SpacePhoneModule.open();
+  dom.window.SpacePhoneModule.state.call = { ...dom.window.SpacePhoneModule.state.call, status: 'active', number: '+16177942141', id: 'call-1' };
+  dom.window.SpacePhoneModule.state.normalized = '+16177942141';
+  dom.window.SpacePhoneModule.state.dial = '+16177942141';
+  await dom.window.SpacePhoneModule.open();
+  await tick(20);
+  assert.equal(dom.window.document.querySelector('[data-sp-outcome]'), null);
+  dom.window.document.querySelector('[data-sp-hangup]').click();
+  await tick(20);
+  assert.ok(dom.window.document.querySelector('[data-sp-outcome="agendado"]'));
+});
+
+test('Space Phone V2 renders AI processing and ready states without live transcript simulation', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  dom.window.fetchWithAuth = async url => {
+    const raw = String(url);
+    if (raw.includes('id=call-ready')) return jsonResponse({ ok: true, call: { id: 'call-ready', number: '+1617', score: 82, transcript: 'SDR: Olá', analysis: { summary: 'Boa descoberta.', strengths: ['Contexto'], recommendations: ['Confirmar agenda'] }, analysisStatus: 'completed', durationSeconds: 61 } });
+    if (raw.includes('id=call-processing')) return jsonResponse({ ok: true, call: { id: 'call-processing', number: '+1617', analysisStatus: 'processing', durationSeconds: 12 } });
+    return jsonResponse({ ok: true, analytics: {}, calls: [{ id: 'call-ready', number: '+1617', score: 82, analysisStatus: 'completed', durationSeconds: 61 }, { id: 'call-processing', number: '+1618', analysisStatus: 'processing', durationSeconds: 12 }], callbacks: [] });
+  };
+  await dom.window.SpacePhoneModule.open();
+  assert.ok(dom.window.document.body.textContent.includes('Pronta'));
+  assert.ok(dom.window.document.body.textContent.includes('Processando'));
+  dom.window.document.querySelector('[data-sp-detail="call-ready"]').click();
+  await tick(20);
+  assert.ok(dom.window.document.body.textContent.includes('Boa descoberta.'));
+  dom.window.document.querySelector('[data-sp-tab="transcript"]').click();
+  assert.ok(dom.window.document.body.textContent.includes('SDR: Olá'));
 });
