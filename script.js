@@ -7778,7 +7778,7 @@ const minutesFromIso = (value) => {
 
 const normalizeLiveLessonForUi = (lesson) => {
   if (!lesson || typeof lesson !== "object") return null;
-  const id = typeof lesson.id === "string" ? lesson.id : "";
+  const id = lesson.id == null ? "" : String(lesson.id).trim();
   const dateKey = typeof lesson.dateKey === "string" ? lesson.dateKey : dateKeyFromIso(lesson.inicio);
   const startMinRaw = Number.isFinite(Number(lesson.startMin)) ? Number(lesson.startMin) : minutesFromIso(lesson.inicio);
   const endMinRaw = Number.isFinite(Number(lesson.endMin)) ? Number(lesson.endMin) : minutesFromIso(lesson.fim);
