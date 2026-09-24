@@ -1,5 +1,6 @@
 const { getDocumentAsAdmin, listCollectionAsAdmin, commitWritesAsAdmin } = require("./firestore-admin");
 const { PROJECT_ID, encodeFields } = require("./firestore-rest");
+const { isUserActive } = require("../../_lib/user-status");
 
 const ACTION_LABELS = {
   view: "Visualizar",
@@ -217,6 +218,7 @@ const requireAdminPermission = async (req, permission) => {
   if (normalizeRole(session.role) !== "admin") return { ok: false, status: 403, body: { error: "forbidden" } };
   const access = await loadAdminAccessForUid(session.sub).catch(() => null);
   if (!access) return { ok: false, status: 403, body: { error: "forbidden" } };
+  if (!isUserActive(access.user)) return { ok: false, status: 403, body: { error: "user_disabled" } };
   if (!canAdminAccess(access.user, permission)) return { ok: false, status: 403, body: { error: "forbidden", permission } };
   return { ok: true, session, access };
 };
@@ -225,7 +227,9 @@ const requireResolvedAdminPermission = async (auth, permission) => {
   if (!auth?.ok) return auth;
   if (normalizeRole(auth.session?.role) !== "admin") return { ok: false, status: 403, body: { error: "forbidden" } };
   const access = await loadAdminAccessForUid(auth.session.sub).catch(() => null);
-  if (!access || !canAdminAccess(access.user, permission)) return { ok: false, status: 403, body: { error: "forbidden", permission } };
+  if (!access) return { ok: false, status: 403, body: { error: "forbidden", permission } };
+  if (!isUserActive(access.user)) return { ok: false, status: 403, body: { error: "user_disabled" } };
+  if (!canAdminAccess(access.user, permission)) return { ok: false, status: 403, body: { error: "forbidden", permission } };
   return { ...auth, access };
 };
 
@@ -340,6 +344,11 @@ const buildAdminPermissionPatchWrites = ({ targetUser, targetUid, permissions, a
 
 const saveAdminPermissions = async ({ actorUserId, targetUid, permissions }) => {
   const actor = await getDocumentAsAdmin(`users/${encodeURIComponent(String(actorUserId || "").trim())}`);
+  if (!isUserActive(actor)) {
+    const error = new Error("user_disabled");
+    error.status = 403;
+    throw error;
+  }
   if (!isSuperAdminUser(actor)) {
     const error = new Error("super_admin_only");
     error.status = 403;

@@ -3,6 +3,7 @@ const { getSessionFromRequest } = require("../_lib/session");
 const { getDocumentAsAdmin } = require("./_lib/firestore-admin");
 const { normalizeCommercialRoles } = require("./_lib/commercial-permissions");
 const { adminAccessPayloadForUser } = require("./_lib/admin-permissions");
+const { isUserActive } = require("../_lib/user-status");
 
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
@@ -33,6 +34,7 @@ module.exports = async (req, res) => {
   if (session.role === "growth" || session.role === "admin") {
     try {
       const row = await getDocumentAsAdmin(`users/${encodeURIComponent(String(session.sub || ""))}`);
+      if (!isUserActive(row)) return sendJson(res, 403, { error: "user_disabled" });
       if (session.role === "growth") commercialRoles = normalizeCommercialRoles(row?.commercialRoles);
       if (session.role === "admin") adminAccess = adminAccessPayloadForUser(row);
       profilePhoto = {

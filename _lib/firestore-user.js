@@ -1,6 +1,7 @@
 const { assertEnvironmentIsolation, getFirebaseServerConfig } = require("./runtime-env");
 const { getGoogleAccessToken } = require("./google-service-account");
 const { FIRESTORE_BASE, decodeFields, requestJson } = require("./firestore-rest");
+const { isUserActive } = require("./user-status");
 
 const DATASTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
 
@@ -120,7 +121,7 @@ const normalizeUserProfileFromFields = ({ uid, fields } = {}) => {
   const name = String(readString("nome") || readString("nomeCompleto") || readString("displayName") || readString("name") || "").trim();
   const email = String(readString("email") || "").trim().toLowerCase();
   const role = normalizeRole(readString("tipo") || readString("role") || readString("type"));
-  const active = typeof rawFields.ativo === "boolean" ? rawFields.ativo : true;
+  const active = isUserActive(rawFields);
   if (!safeUid || !name || !email || !role) return null;
   return {
     user: {

@@ -37,6 +37,13 @@ const resolveAdminRequestAuth = async (req, { logPrefix = "[api]" } = {}) => {
 
   const profile = await fetchUserProfileByUid({ uid: decoded.uid, idToken });
   const role = normalizeRole(profile?.user?.role);
+  if (profile && profile.active === false) {
+    return {
+      ok: false,
+      status: 403,
+      body: { error: "user_disabled" },
+    };
+  }
   if (!role) {
     return {
       ok: false,

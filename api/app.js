@@ -10,6 +10,7 @@ const {
   firstAllowedAdminRoute,
   permissionForAdminPanel,
 } = require("./_lib/admin-permissions");
+const { isUserActive } = require("../_lib/user-status");
 
 const ROLE_TO_SLUG = {
   student: "aluno",
@@ -271,6 +272,13 @@ module.exports = async (req, res) => {
   if (String(user.role || "") === "admin") {
     try {
       const row = await getDocumentAsAdmin(`users/${encodeURIComponent(user.id)}`);
+      if (!isUserActive(row)) {
+        res.statusCode = 403;
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.end("Usuário desativado.");
+        return;
+      }
       Object.assign(user, adminAccessPayloadForUser(row));
       const routeState = routeStateFromPath(pathParam, url.searchParams);
       const permission = permissionForAdminPanel(routeState.panel, routeState);

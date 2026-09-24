@@ -39780,8 +39780,10 @@ const normalizeAdminAccessRow = (id, raw = {}) => {
     id: String(id || raw?.id || raw?.uid || raw?.firestoreDocId || "").trim(),
     nome: nome || "Administrador",
     email,
+    telefone: String(raw?.telefone || raw?.phone || "").trim(),
     criadoEm: raw?.criadoEm || raw?.createdAt || raw?.created_at || null,
     ativo: raw?.ativo !== false,
+    status: raw?.ativo === false || String(raw?.status || "").trim().toLowerCase() === "inactive" ? "inactive" : "active",
     isSuperAdmin: raw?.isSuperAdmin === true,
     adminPermissions: Array.isArray(raw?.adminPermissions) ? raw.adminPermissions : [],
     adminPermissionsVersion: Number(raw?.adminPermissionsVersion || 0) || 0,
@@ -39857,11 +39859,13 @@ const renderAdminSettingsAccesses = () => {
                         <div class="acessos-row">
                           <div class="acessos-person">
                             <strong>${escapeHtml(row.nome)}</strong>
-                            ${row.isSuperAdmin ? `<em>Super admin</em>` : row.ativo ? `<em>Admin</em>` : `<em>Inativo</em>`}
+                            ${row.isSuperAdmin ? `<em>Super admin</em>` : row.ativo ? `<em>Admin</em>` : `<em class="is-inactive">Inativo</em>`}
                           </div>
                           <span>${escapeHtml(row.email || "—")}</span>
                           <span>${escapeHtml(formatAdminDate(row.criadoEm))}</span>
-                          <span>${row.isSuperAdmin ? "—" : `<button class="button button-outline button-small" type="button" data-acessos-manage="${escapeHtml(row.id)}">Gerenciar acessos</button>`}</span>
+                          <span class="acessos-actions-cell">
+                            ${row.isSuperAdmin ? "—" : `<button class="acessos-action-button" type="button" aria-label="Abrir ações de ${escapeHtml(row.nome)}" aria-haspopup="menu" data-acessos-actions="${escapeHtml(row.id)}">⋯</button>`}
+                          </span>
                         </div>
                       `
                     )
@@ -40287,8 +40291,170 @@ const invalidateAdminPermissionCaches = () => {
   try { window.SpaceDataCache?.invalidate?.("current-user"); } catch {}
 };
 
+let acessosActionsPopoverEl = null;
+
+const closeAcessosActionsMenu = () => {
+  if (acessosActionsPopoverEl instanceof HTMLElement) acessosActionsPopoverEl.remove();
+  acessosActionsPopoverEl = null;
+  document.querySelectorAll("[data-acessos-actions][aria-expanded='true']").forEach((button) => {
+    if (button instanceof HTMLButtonElement) button.setAttribute("aria-expanded", "false");
+  });
+};
+
+const getAdminAccessRowById = (adminId) => (Array.isArray(adminSettingsState.accessRows) ? adminSettingsState.accessRows : [])
+  .find((item) => String(item.id || "") === String(adminId || "")) || null;
+
+const submitAdminAccessUserAction = async ({ uid, action, payload = {} } = {}) => {
+  const response = await withTimeout(fetchWithAuth("/api/admin-users", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uid, action, ...payload }),
+  }), 15_000, "admin_access_user_action");
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error || "admin_user_update_failed");
+  invalidateAdminPermissionCaches();
+  await loadAdminAccessRows({ force: true });
+  renderAdminSettingsPanel();
+  return data;
+};
+
+const openAdminAccessEditModal = (adminId) => {
+  const row = getAdminAccessRowById(adminId);
+  if (!row || row.isSuperAdmin) return;
+  openModal({
+    title: "Editar usuário",
+    bodyHtml: `
+      <form class="acessos-form" data-acessos-edit-form novalidate>
+        <label class="auth-field">
+          <span>Nome</span>
+          <input class="auth-input acessos-input" type="text" autocomplete="name" value="${escapeHtml(row.nome || "")}" data-acessos-edit-name />
+        </label>
+        <label class="auth-field">
+          <span>E-mail</span>
+          <input class="auth-input acessos-input" type="email" value="${escapeHtml(row.email || "")}" readonly data-acessos-edit-email />
+          <div class="auth-inline-hint">O e-mail de login fica somente leitura para manter Firebase Auth e cadastro sincronizados.</div>
+        </label>
+        <label class="auth-field">
+          <span>Telefone</span>
+          <input class="auth-input acessos-input" type="tel" autocomplete="tel" value="${escapeHtml(row.telefone || "")}" data-acessos-edit-phone />
+        </label>
+        <div class="acessos-modal-error" data-acessos-modal-error hidden></div>
+      </form>
+    `,
+    primaryLabel: "Salvar alterações",
+    secondaryLabel: "Cancelar",
+    hideSecondary: false,
+    showTrash: false,
+    onPrimary: () => {
+      const nameEl = modalBody?.querySelector("[data-acessos-edit-name]");
+      const phoneEl = modalBody?.querySelector("[data-acessos-edit-phone]");
+      const nome = nameEl instanceof HTMLInputElement ? nameEl.value.trim().replace(/\s+/g, " ") : "";
+      const telefone = phoneEl instanceof HTMLInputElement ? phoneEl.value.trim().replace(/\s+/g, " ") : "";
+      if (nome.length < 2) {
+        if (nameEl instanceof HTMLElement) nameEl.classList.add("is-error");
+        setAcessosModalError("Informe o nome do administrador.");
+        return false;
+      }
+      (async () => {
+        const previousLabel = modalPrimary instanceof HTMLButtonElement ? modalPrimary.textContent : "";
+        try {
+          setAcessosModalError("");
+          if (modalPrimary instanceof HTMLButtonElement) {
+            modalPrimary.disabled = true;
+            modalPrimary.textContent = "Salvando…";
+          }
+          if (modalSecondary instanceof HTMLButtonElement) modalSecondary.disabled = true;
+          await submitAdminAccessUserAction({ uid: row.id, action: "update_admin_profile", payload: { nome, telefone } });
+          closeModal({ force: true });
+        } catch (error) {
+          setAcessosModalError("Não foi possível salvar este usuário agora.");
+          if (modalPrimary instanceof HTMLButtonElement) {
+            modalPrimary.disabled = false;
+            modalPrimary.textContent = previousLabel || "Salvar alterações";
+          }
+          if (modalSecondary instanceof HTMLButtonElement) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
+};
+
+const openAdminAccessStatusModal = (adminId) => {
+  const row = getAdminAccessRowById(adminId);
+  if (!row || row.isSuperAdmin) return;
+  const nextStatus = row.ativo ? "inactive" : "active";
+  const isSelf = String(row.id || "") === String(sessionUser?.id || "");
+  openModal({
+    title: row.ativo ? "Desativar usuário" : "Reativar usuário",
+    bodyHtml: `
+      <div class="acessos-form">
+        <div class="acessos-modal-person">
+          <strong>${escapeHtml(row.nome || "Administrador")}</strong>
+          <span>${escapeHtml(row.email || "—")}</span>
+        </div>
+        <p class="acessos-confirm-copy">${row.ativo ? "O usuário não poderá entrar nem acessar APIs administrativas. Histórico e permissões serão preservados." : "O usuário voltará a poder acessar a plataforma com as permissões já cadastradas."}</p>
+        ${isSelf ? `<div class="acessos-modal-error">Você não pode desativar o próprio usuário.</div>` : `<div class="acessos-modal-error" data-acessos-modal-error hidden></div>`}
+      </div>
+    `,
+    primaryLabel: row.ativo ? "Desativar usuário" : "Reativar usuário",
+    secondaryLabel: "Cancelar",
+    hideSecondary: false,
+    showTrash: false,
+    onOpen: () => {
+      if (modalPrimary instanceof HTMLButtonElement && isSelf) modalPrimary.disabled = true;
+    },
+    onPrimary: () => {
+      if (isSelf) return false;
+      (async () => {
+        const previousLabel = modalPrimary instanceof HTMLButtonElement ? modalPrimary.textContent : "";
+        try {
+          setAcessosModalError("");
+          if (modalPrimary instanceof HTMLButtonElement) {
+            modalPrimary.disabled = true;
+            modalPrimary.textContent = row.ativo ? "Desativando…" : "Reativando…";
+          }
+          if (modalSecondary instanceof HTMLButtonElement) modalSecondary.disabled = true;
+          await submitAdminAccessUserAction({ uid: row.id, action: "set_admin_status", payload: { status: nextStatus } });
+          closeModal({ force: true });
+        } catch (error) {
+          setAcessosModalError(row.ativo ? "Não foi possível desativar este usuário agora." : "Não foi possível reativar este usuário agora.");
+          if (modalPrimary instanceof HTMLButtonElement) {
+            modalPrimary.disabled = false;
+            modalPrimary.textContent = previousLabel || (row.ativo ? "Desativar usuário" : "Reativar usuário");
+          }
+          if (modalSecondary instanceof HTMLButtonElement) modalSecondary.disabled = false;
+        }
+      })();
+      return false;
+    },
+  });
+};
+
+const openAcessosActionsMenu = (button, adminId) => {
+  const row = getAdminAccessRowById(adminId);
+  if (!(button instanceof HTMLElement) || !row || row.isSuperAdmin) return;
+  closeAcessosActionsMenu();
+  const menu = document.createElement("div");
+  menu.className = "acessos-actions-menu";
+  menu.setAttribute("role", "menu");
+  menu.innerHTML = `
+    <button type="button" role="menuitem" data-acessos-edit="${escapeHtml(row.id)}">Editar usuário</button>
+    <button type="button" role="menuitem" data-acessos-manage="${escapeHtml(row.id)}">Gerenciar acessos</button>
+    <button type="button" role="menuitem" data-acessos-status="${escapeHtml(row.id)}">${row.ativo ? "Desativar usuário" : "Reativar usuário"}</button>
+  `;
+  document.body.appendChild(menu);
+  const rect = button.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
+  const left = Math.max(12, Math.min(window.innerWidth - menuRect.width - 12, rect.right - menuRect.width));
+  menu.style.left = `${left}px`;
+  menu.style.top = `${rect.bottom + window.scrollY + 8}px`;
+  acessosActionsPopoverEl = menu;
+  if (button instanceof HTMLButtonElement) button.setAttribute("aria-expanded", "true");
+};
+
 const openAdminAccessManageModal = (adminId) => {
-  const row = (Array.isArray(adminSettingsState.accessRows) ? adminSettingsState.accessRows : []).find((item) => String(item.id || "") === String(adminId || ""));
+  const row = getAdminAccessRowById(adminId);
   if (!row || row.isSuperAdmin) return;
   openModal({
     title: "Gerenciar acessos",
@@ -40488,6 +40654,7 @@ const openAdminAccessCreateModal = () => {
 const closeAllAdminActionMenus = () => {
   document.querySelectorAll("[data-admin-actions].is-open").forEach((el) => el.classList.remove("is-open"));
   closeAdminActionsPopover();
+  closeAcessosActionsMenu();
 };
 
 let adminActionsPopoverEl = null;
@@ -47691,10 +47858,36 @@ document.addEventListener("click", (event) => {
         return;
       }
 
+      const acessosActions = target.closest("[data-acessos-actions]");
+      if (acessosActions instanceof HTMLButtonElement) {
+        event.preventDefault();
+        openAcessosActionsMenu(acessosActions, acessosActions.getAttribute("data-acessos-actions") || "");
+        return;
+      }
+
+      const acessosEdit = target.closest("[data-acessos-edit]");
+      if (acessosEdit instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const adminId = acessosEdit.getAttribute("data-acessos-edit") || "";
+        closeAcessosActionsMenu();
+        openAdminAccessEditModal(adminId);
+        return;
+      }
+
       const acessosManage = target.closest("[data-acessos-manage]");
       if (acessosManage instanceof HTMLButtonElement) {
         event.preventDefault();
+        closeAcessosActionsMenu();
         openAdminAccessManageModal(acessosManage.getAttribute("data-acessos-manage") || "");
+        return;
+      }
+
+      const acessosStatus = target.closest("[data-acessos-status]");
+      if (acessosStatus instanceof HTMLButtonElement) {
+        event.preventDefault();
+        const adminId = acessosStatus.getAttribute("data-acessos-status") || "";
+        closeAcessosActionsMenu();
+        openAdminAccessStatusModal(adminId);
         return;
       }
 
@@ -49548,6 +49741,7 @@ document.addEventListener("keydown", (event) => {
       return;
     }
 
+    closeAllAdminActionMenus();
     closeAllDropdowns();
   }
 });

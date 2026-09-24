@@ -10,6 +10,7 @@ const {
   normalizeAdminPermissions,
   saveAdminPermissions,
 } = require("./_lib/admin-permissions");
+const { normalizeUserStatus } = require("../_lib/user-status");
 
 const normalizeRole = (value) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -29,7 +30,8 @@ const adminRow = (row = {}) => {
     nome: String(row?.nome || row?.name || row?.displayName || row?.email || "Administrador").trim(),
     email: String(row?.email || "").trim().toLowerCase(),
     criadoEm: row?.criadoEm || row?.createdAt || row?.created_at || null,
-    ativo: row?.ativo !== false,
+    ativo: normalizeUserStatus(row) === "active",
+    status: normalizeUserStatus(row),
     isSuperAdmin: row?.isSuperAdmin === true,
     adminPermissions: access.adminPermissions,
     adminPermissionsVersion: access.adminPermissionsVersion,

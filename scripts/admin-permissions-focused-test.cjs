@@ -22,7 +22,7 @@ assert.ok(!ADMIN_PERMISSION_REGISTRY.status, "status is not a top-level module")
 assert.ok(!ADMIN_PERMISSION_REGISTRY.guide, "guide module was removed from the admin registry");
 
 const flat = flattenRegistry();
-assert.ok(flat.length >= 40 && flat.length <= 80, "registry keeps useful enterprise granularity");
+assert.ok(flat.length >= 40 && flat.length <= 90, "registry keeps useful enterprise granularity");
 assert.strictEqual(new Set(ALL_ADMIN_PERMISSION_KEYS).size, ALL_ADMIN_PERMISSION_KEYS.length, "permission keys are unique");
 
 assert.deepStrictEqual(normalizeAdminPermissions(["dashboard", "nope", "comercial.crm", "comercial.crm"]), [

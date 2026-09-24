@@ -24295,7 +24295,7 @@ body.has-space-env-banner{padding-top:46px}
 
 .acessos-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.2fr) minmax(220px, 1fr) minmax(110px, 0.5fr);
+  grid-template-columns: minmax(180px, 1.2fr) minmax(220px, 1fr) minmax(110px, 0.5fr) 54px;
   gap: 16px;
   align-items: center;
   padding: 15px 20px;
@@ -24339,6 +24339,11 @@ body.has-space-env-banner{padding-top:46px}
   font-weight: 800;
 }
 
+.acessos-person em.is-inactive {
+  background: rgba(255, 86, 79, 0.12);
+  color: #ffb9b5;
+}
+
 .acessos-person em:first-letter {
   text-transform: uppercase;
 }
@@ -24350,6 +24355,68 @@ body.has-space-env-banner{padding-top:46px}
   font-size: 0.9rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.acessos-actions-cell {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.acessos-action-button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-main);
+  cursor: pointer;
+  font-size: 1.2rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.acessos-action-button:hover,
+.acessos-action-button:focus-visible {
+  border-color: rgba(255, 86, 79, 0.45);
+  background: rgba(255, 86, 79, 0.12);
+  outline: none;
+}
+
+.acessos-actions-menu {
+  position: absolute;
+  z-index: 10080;
+  display: grid;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: #151820;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.36);
+}
+
+.acessos-actions-menu button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-main);
+  cursor: pointer;
+  padding: 0 10px;
+  text-align: left;
+  font: 800 0.86rem "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+.acessos-actions-menu button:hover,
+.acessos-actions-menu button:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+  outline: none;
+}
+
+.acessos-confirm-copy {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
 }
 
 .acessos-loading {
