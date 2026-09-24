@@ -9,6 +9,16 @@ function createDom(html = '<body></body>') {
   return dom;
 }
 
+async function waitForRequest(requests, type, timeout = 100) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    const item = requests.find(r => r.type === type);
+    if (item) return item;
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  return requests.find(r => r.type === type);
+}
+
 function createFetch(requests = []) {
   return async (url, init = {}) => {
     requests.push({ type: 'fetch', url, method: init.method, body: init.body ? JSON.parse(init.body) : null });
@@ -85,8 +95,7 @@ test('click-to-call waits for telnyx.ready, passes remote audio element and bloc
     fetchWithAuth: createFetch(requests),
   }).mount();
   dom.window.document.querySelector('[data-space-phone-call]').click();
-  await new Promise(resolve => setTimeout(resolve, 10));
-  const newCall = requests.find(r => r.type === 'newCall');
+  const newCall = await waitForRequest(requests, 'newCall', 120);
   assert.equal(phone.getState().status, 'connecting');
   assert.equal(newCall.params.destinationNumber, '+16175551212');
   assert.equal(newCall.params.callerNumber, '+14155552671');

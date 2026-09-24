@@ -119,7 +119,7 @@ test("space phone route boots the dedicated admin panel and script", async () =>
     assert.equal(res.statusCode, 200);
     assert.match(body, /data-initial-panel="space-phone"/);
     assert.match(body, /data-space-phone/);
-    assert.match(body, /src="space-phone\.js\?v=2"/);
+    assert.match(body, /src="space-phone\.js\?v=3"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
@@ -148,4 +148,44 @@ test("space phone route boots the Growth equivalent panel", async () => {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
   }
+});
+
+test("space phone correlates post-call AI by from/to/time/duration fallback and self-heals IDs", async () => {
+  const patches = [];
+  const handler = createHandler({
+    authResolver: async () => ({ ok: true, session: { role: "growth", sub: "sdr-1" }, profile: { user: { commercialRoles: ["sdr"] } } }),
+    request: async (path, options = {}) => {
+      if (options.method === "PATCH") { patches.push({ path, body: options.body }); return { data: [] }; }
+      if (path.startsWith("/voice_calls")) return { data: [{ id: "call-space", space_user_uid: "sdr-1", space_user_email: "sdr@space.test", from_number: "+16892232696", to_number: "+5534999569129", status: "completed", started_at: "2026-09-24T18:00:00Z", duration_seconds: 72 }] };
+      if (path.startsWith("/sdr_call_scores")) return { data: [{ recording_id: "567415f8-0551-4dc6-b0a4-a1315d71a7bb", call_leg_id: "leg-real", call_session_id: "session-real", from_number: "+16892232696", to_number: "+5534999569129", started_at: "2026-09-24T18:00:45Z", duration_seconds: 72, transcript: "SDR: Olá", score: 0, analysis: { summary: "Resumo" } }] };
+      return { data: [] };
+    },
+  });
+  const res = await invoke(handler, { url: "/api/space-phone?period=today" });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.calls[0].score, 0);
+  assert.equal(res.json.calls[0].analysisStatus, "completed");
+  assert.equal(res.json.calls[0].transcriptionAvailable, true);
+  assert.equal(res.json.calls[0].recordingId, "567415f8-0551-4dc6-b0a4-a1315d71a7bb");
+  assert.deepEqual(patches[0], { path: "/voice_calls?id=eq.call-space", body: { telnyx_call_leg_id: "leg-real", telnyx_call_session_id: "session-real" } });
+});
+
+test("space phone does not correlate ambiguous fallback candidates", async () => {
+  const patches = [];
+  const handler = createHandler({
+    authResolver: async () => ({ ok: true, session: { role: "growth", sub: "sdr-1" }, profile: { user: { commercialRoles: ["sdr"] } } }),
+    request: async (path, options = {}) => {
+      if (options.method === "PATCH") { patches.push({ path, body: options.body }); return { data: [] }; }
+      if (path.startsWith("/voice_calls")) return { data: [{ id: "call-amb", space_user_uid: "sdr-1", from_number: "+16892232696", to_number: "+15550000000", status: "completed", started_at: "2026-09-24T18:00:00Z", duration_seconds: 72 }] };
+      if (path.startsWith("/sdr_call_scores")) return { data: [
+        { recording_id: "r1", call_leg_id: "leg-1", call_session_id: "sess-1", from_number: "+16892232696", to_number: "+15550000000", started_at: "2026-09-24T18:00:30Z", duration_seconds: 72, transcript: "A", score: 80 },
+        { recording_id: "r2", call_leg_id: "leg-2", call_session_id: "sess-2", from_number: "+16892232696", to_number: "+15550000000", started_at: "2026-09-24T18:00:31Z", duration_seconds: 72, transcript: "B", score: 81 },
+      ] };
+      return { data: [] };
+    },
+  });
+  const res = await invoke(handler, { url: "/api/space-phone?period=today" });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.calls[0].analysisStatus, "processing");
+  assert.equal(patches.length, 0);
 });

@@ -310,28 +310,82 @@ const queryVoiceCalls = async ({ request, range, userFilter, status = '', q = ''
     : rows;
 };
 
+const scoreAnalysisCandidate = (call = {}, analysis = {}) => {
+  if (clean(call.from_number) !== clean(analysis.from_number)) return null;
+  if (clean(call.to_number) !== clean(analysis.to_number)) return null;
+  const callStarted = Date.parse(call.started_at || call.created_at || '');
+  const analysisStarted = Date.parse(analysis.started_at || analysis.created_at || '');
+  if (!callStarted || !analysisStarted) return null;
+  const startedDeltaSeconds = Math.abs(callStarted - analysisStarted) / 1000;
+  if (startedDeltaSeconds > 90) return null;
+  const callDuration = duration(call);
+  const analysisDuration = number(analysis.duration_seconds);
+  const durationDeltaSeconds = Math.abs(callDuration - analysisDuration);
+  if (callDuration && analysisDuration && durationDeltaSeconds > 5) return null;
+  return startedDeltaSeconds + durationDeltaSeconds;
+};
+
+const indexAnalysis = (map, row, analysis) => {
+  const ids = [row.id, row.telnyx_call_leg_id, row.telnyx_call_session_id, analysis?.call_leg_id, analysis?.call_session_id]
+    .map(clean)
+    .filter(Boolean);
+  ids.forEach(id => map.set(id, analysis));
+};
+
+const maybeSelfHealVoiceCall = async ({ request, call, analysis }) => {
+  const id = clean(call.id);
+  if (!id || (!clean(analysis?.call_leg_id) && !clean(analysis?.call_session_id))) return;
+  const body = {};
+  if (!clean(call.telnyx_call_leg_id) && clean(analysis.call_leg_id)) body.telnyx_call_leg_id = clean(analysis.call_leg_id);
+  if (!clean(call.telnyx_call_session_id) && clean(analysis.call_session_id)) body.telnyx_call_session_id = clean(analysis.call_session_id);
+  if (!Object.keys(body).length) return;
+  try {
+    await request(`/voice_calls?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', body, timeoutMs: 8000 });
+  } catch {
+    // Self-heal is best-effort; analysis remains visible for this response.
+  }
+};
+
 const loadAnalysisMap = async ({ request, calls }) => {
+  const map = new Map();
+  const select = 'recording_id,call_leg_id,call_session_id,connection_id,from_number,to_number,started_at,duration_seconds,transcript,score,analysis,recording_url,created_at';
   const pairs = calls.flatMap(row => [
     ['call_leg_id', clean(row.telnyx_call_leg_id)],
     ['call_session_id', clean(row.telnyx_call_session_id)],
   ]).filter(([, value]) => value).slice(0, 80);
-  if (!pairs.length) return new Map();
-  const map = new Map();
   for (const [field, value] of pairs) {
     try {
-      const rows = asRows(await request(`/sdr_call_scores?select=recording_id,call_leg_id,call_session_id,connection_id,to_number,started_at,duration_seconds,transcript,score,analysis,recording_url,created_at&${field}=eq.${encodeURIComponent(value)}&limit=1`, { timeoutMs: 8000 }));
-      if (rows[0]) {
-        [rows[0].call_leg_id, rows[0].call_session_id].map(clean).filter(Boolean).forEach(id => map.set(id, rows[0]));
-      }
+      const rows = asRows(await request(`/sdr_call_scores?select=${select}&${field}=eq.${encodeURIComponent(value)}&limit=1`, { timeoutMs: 8000 }));
+      if (rows[0]) calls.forEach(call => {
+        if ([call.telnyx_call_leg_id, call.telnyx_call_session_id].map(clean).includes(value)) indexAnalysis(map, call, rows[0]);
+      });
     } catch {
       // Analysis is optional for first-call certification.
+    }
+  }
+  for (const call of calls.filter(row => !clean(row.telnyx_call_leg_id) && !clean(row.telnyx_call_session_id))) {
+    const from = clean(call.from_number);
+    const to = clean(call.to_number);
+    if (!from || !to) continue;
+    try {
+      const rows = asRows(await request(`/sdr_call_scores?select=${select}&from_number=eq.${encodeURIComponent(from)}&to_number=eq.${encodeURIComponent(to)}&order=created_at.desc&limit=8`, { timeoutMs: 8000 }));
+      const candidates = rows
+        .map(row => ({ row, score: scoreAnalysisCandidate(call, row) }))
+        .filter(item => item.score != null)
+        .sort((a, b) => a.score - b.score);
+      if (!candidates[0]) continue;
+      if (candidates[1] && Math.abs(candidates[0].score - candidates[1].score) <= 1) continue;
+      indexAnalysis(map, call, candidates[0].row);
+      await maybeSelfHealVoiceCall({ request, call, analysis: candidates[0].row });
+    } catch {
+      // Fallback analysis correlation is optional.
     }
   }
   return map;
 };
 
 const findAnalysis = (row, analysisMap) => {
-  const key = [row.telnyx_call_leg_id, row.telnyx_call_session_id].map(clean).find(id => analysisMap.has(id));
+  const key = [row.id, row.telnyx_call_leg_id, row.telnyx_call_session_id].map(clean).find(id => analysisMap.has(id));
   return key ? analysisMap.get(key) : null;
 };
 

@@ -133,3 +133,32 @@ test('Space Phone V2 renders AI processing and ready states without live transcr
   dom.window.document.querySelector('[data-sp-tab="transcript"]').click();
   assert.ok(dom.window.document.body.textContent.includes('SDR: Olá'));
 });
+
+test('Space Phone V2 anchors audio and keypad popovers and closes them outside/Escape', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  await dom.window.SpacePhoneModule.open();
+  dom.window.document.querySelector('[data-sp-popover="audio"]').click();
+  assert.ok(dom.window.document.querySelector('.sphone-control-wrap .sphone-audio-pop'));
+  dom.window.document.body.click();
+  assert.equal(dom.window.document.querySelector('.sphone-audio-pop'), null);
+  dom.window.document.querySelector('[data-sp-popover="dialpad"]').click();
+  assert.ok(dom.window.document.querySelector('.sphone-control-wrap .sphone-keypad-pop'));
+  dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(dom.window.document.querySelector('.sphone-keypad-pop'), null);
+});
+
+test('Space Phone V2 does not show fake live AI during active call', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  await dom.window.SpacePhoneModule.open();
+  dom.window.SpacePhoneModule.state.call = { ...dom.window.SpacePhoneModule.state.call, status: 'active', number: '+16177942141', id: 'call-1' };
+  await dom.window.SpacePhoneModule.open();
+  await tick(20);
+  const text = dom.window.document.body.textContent;
+  assert.equal(text.includes('AI Coach'), false);
+  assert.equal(text.includes('● Ouvindo'), false);
+  assert.equal(text.includes('Próxima pergunta'), false);
+  assert.equal(text.includes('Talk ratio'), false);
+  assert.ok(text.includes('Análise disponível após a ligação'));
+});
