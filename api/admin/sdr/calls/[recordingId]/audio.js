@@ -35,7 +35,7 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, permissionResol
     return sendJson(res, 405, { error: 'method_not_allowed' });
   }
 
-  const diagnostic = { path: '/api/admin/sdr/calls/:recordingId/audio', mode: new URL(req.url || '/', 'https://localhost').searchParams.get('format') === 'json' ? 'json' : 'redirect' };
+  const diagnostic = { path: '/api/admin/sdr/calls/:recordingId/audio', mode: new URL(req.url || '/', 'https://localhost').searchParams.get('format') === 'json' ? 'json' : 'stream' };
   const reply = (status, body) => {
     console.info('[admin-sdr-audio] diagnostic', { ...diagnostic, finalStatus: status });
     return sendJson(res, status, body);
@@ -44,6 +44,12 @@ const createHandler = ({ authResolver = resolveAdminRequestAuth, permissionResol
     const rawKey = String(process.env.TELNYX_API_KEY || '');
     const trimmedKey = rawKey.trim();
     const token = trimmedKey.replace(/^(?:Bearer\s+)+/i, '').trim();
+    diagnostic.keyPresent = Boolean(rawKey);
+    diagnostic.keyLength = rawKey.length;
+    diagnostic.tokenLength = token.length;
+    diagnostic.keyStartsKEY = token.startsWith('KEY');
+    diagnostic.keyHadBearer = /^(?:Bearer\s+)+/i.test(trimmedKey);
+    diagnostic.keyHadWhitespace = rawKey !== trimmedKey;
     const auth = await authResolver(req, { logPrefix: '[admin-sdr-audio]' });
     diagnostic.appAuthStatus = auth.ok ? 200 : auth.status;
     if (!auth.ok) return reply(auth.status, auth.body);
