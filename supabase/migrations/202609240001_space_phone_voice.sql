@@ -36,6 +36,9 @@ create table if not exists public.voice_calls (
   updated_at timestamptz not null default now()
 );
 
+alter table public.voice_phone_identities enable row level security;
+alter table public.voice_calls enable row level security;
+
 create index if not exists voice_calls_user_created_idx on public.voice_calls (space_user_uid, created_at desc);
 create index if not exists voice_calls_telnyx_leg_idx on public.voice_calls (telnyx_call_leg_id) where telnyx_call_leg_id is not null;
 create index if not exists voice_calls_telnyx_session_idx on public.voice_calls (telnyx_call_session_id) where telnyx_call_session_id is not null;
