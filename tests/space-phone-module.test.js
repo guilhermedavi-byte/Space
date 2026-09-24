@@ -26,6 +26,7 @@ function createModuleDom() {
     addEventListener() {},
   };
   const calls = [];
+  const fetches = [];
   let snapshot = { status: 'idle', clientReady: true, muted: false, held: false, elapsedSeconds: 0, callRecord: null, context: null, devices: { permission: 'granted' } };
   const listeners = [];
   const emit = next => { snapshot = { ...snapshot, ...next }; listeners.forEach(fn => fn(snapshot)); };
@@ -34,6 +35,7 @@ function createModuleDom() {
     getState: () => snapshot,
     subscribe(fn) { listeners.push(fn); fn(snapshot); return () => {}; },
     refreshDevices: async () => ({ permission: 'granted', inputs: [{ deviceId: 'mic-1', label: 'Mic' }], outputs: [{ deviceId: 'spk-1', label: 'Speaker' }] }),
+    normalizePhone: raw => String(raw || '').replace(/\D+/g, '').length === 10 ? `+1${String(raw || '').replace(/\D+/g, '')}` : String(raw || '').replace(/[\s().-]+/g, ''),
     call: async payload => { calls.push({ method: 'call', payload }); emit({ status: 'connecting', context: { phoneNumber: payload.phoneNumber, source: payload.source }, callRecord: { id: 'call-1', from_number: '+16892232696', to_number: payload.phoneNumber } }); return { id: 'call-1', from_number: '+16892232696' }; },
     hangup: async () => { calls.push({ method: 'hangup' }); emit({ status: 'ended' }); },
     mute: async () => { calls.push({ method: 'mute' }); emit({ muted: true }); },
@@ -45,9 +47,11 @@ function createModuleDom() {
     setAudioOutputDevice: async id => calls.push({ method: 'setAudioOutputDevice', id }),
   };
   dom.window.fetchWithAuth = async url => {
+    fetches.push(String(url));
     if (String(url).includes('normalize=')) return jsonResponse({ ok: true, raw: '+16177942141', normalized: '+16177942141' });
-    return jsonResponse({ ok: true, analytics: {}, calls: [], callbacks: [] });
+    return jsonResponse({ ok: true, analytics: { talkTimeSeconds: 60 }, calls: [], callbacks: [] });
   };
+  dom.window.__spacePhoneTest = { calls, fetches, emit };
   dom.window.eval(fs.readFileSync(path.join(__dirname, '..', 'space-phone.js'), 'utf8'));
   return dom;
 }
@@ -66,6 +70,53 @@ test('SDR module calls SpacePhone.call with phoneNumber contract', async (t) => 
   await tick(20);
   const call = dom.window.SpacePhone.calls.find(item => item.method === 'call');
   assert.deepEqual(JSON.parse(JSON.stringify(call.payload)), { phoneNumber: '+16177942141', source: 'sdr_phone', micId: '', speakerId: '' });
+});
+
+
+
+test('SDR module normalizes paste locally without network and keeps dial focus stable', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  await dom.window.SpacePhoneModule.open();
+  const input = dom.window.document.querySelector('[data-sp-dial]');
+  input.focus();
+  input.value = '(617) 794-2141';
+  input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  assert.equal(dom.window.SpacePhoneModule.state.normalized, '+16177942141');
+  assert.equal(dom.window.document.activeElement, input);
+  assert.equal(dom.window.document.querySelector('[data-sp-normalized]').textContent, 'E.164 +16177942141');
+  assert.equal(dom.window.__spacePhoneTest.fetches.some(url => url.includes('normalize=')), false);
+  dom.window.__spacePhoneTest.emit({ elapsedSeconds: 8 });
+  assert.equal(dom.window.document.querySelector('[data-sp-dial]'), input);
+});
+
+test('SDR module gives immediate call feedback before adapter promise resolves', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  let resolveCall;
+  dom.window.SpacePhone.call = payload => new Promise(resolve => { dom.window.SpacePhone.calls.push({ method: 'call', payload }); resolveCall = resolve; });
+  await dom.window.SpacePhoneModule.open();
+  const input = dom.window.document.querySelector('[data-sp-dial]');
+  input.value = '+16177942141';
+  input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  dom.window.document.querySelector('[data-sp-call]').click();
+  await tick(0);
+  assert.equal(dom.window.SpacePhoneModule.state.call.status, 'connecting');
+  assert.equal(dom.window.document.querySelector('[data-sp-call]').textContent, 'Conectando...');
+  resolveCall({ id: 'call-1' });
+});
+
+test('SDR module updates live talk time KPI without rebuilding the dial input', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  await dom.window.SpacePhoneModule.open();
+  dom.window.__spacePhoneTest.emit({ status: 'active', elapsedSeconds: 1, context: { phoneNumber: '+16177942141' }, callRecord: { id: 'call-1', from_number: '+16892232696', to_number: '+16177942141' } });
+  await tick(20);
+  const input = dom.window.document.querySelector('[data-sp-dial]');
+  dom.window.__spacePhoneTest.emit({ elapsedSeconds: 5 });
+  await tick(300);
+  assert.equal(dom.window.document.querySelector('[data-sp-talk-time]').textContent, '01:05');
+  assert.equal(dom.window.document.querySelector('[data-sp-dial]'), input);
 });
 
 test('SDR module controls call the public SpacePhone adapter methods', async (t) => {

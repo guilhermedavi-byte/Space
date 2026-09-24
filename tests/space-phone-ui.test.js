@@ -170,16 +170,46 @@ test('timer starts only when SDK reports active and hangup records talk time', a
     now: () => clock,
     timers: { setInterval(fn) { intervals.push(fn); return { unref() {} }; }, clearInterval() {}, setTimeout(fn, ms) { return setTimeout(fn, ms); }, clearTimeout(id) { clearTimeout(id); } },
   }).mount();
+  const seen = [];
+  phone.subscribe(s => seen.push(s.status));
   await phone.call({ phoneNumber: '+16175551212' });
   clock = 6000;
   intervals.forEach(fn => fn());
   assert.equal(phone.getState().elapsedSeconds, 0);
   FakeTelnyxRTC.instances[0].emit('telnyx.notification', { call: { state: 'active', call_leg_id: 'leg-1' } });
+  const eventsBeforeClock = seen.length;
   clock = 16000;
   intervals.forEach(fn => fn());
   assert.equal(phone.getState().elapsedSeconds, 10);
+  assert.equal(seen.length, eventsBeforeClock);
+  assert.equal(dom.window.document.querySelector('[data-phone-timer]').textContent, '00:10');
   await phone.hangup();
   assert.equal(requests.some(r => r.type === 'fetch' && r.method === 'PATCH' && r.body?.duration_seconds === 10 && r.body?.status === 'ended'), true);
+});
+
+
+
+test('call feedback is immediate and microphone permission is reused for same device', async () => {
+  const dom = createDom();
+  let micRequests = 0;
+  dom.window.navigator.mediaDevices.getUserMedia = async () => { micRequests += 1; return { getTracks: () => [{ stop() {} }] }; };
+  const requests = [];
+  const FakeTelnyxRTC = fakeTelnyxFactory(requests);
+  const phone = createSpacePhone({
+    window: dom.window,
+    document: dom.window.document,
+    TelnyxRTC: FakeTelnyxRTC,
+    bootstrap: { enabled: true, tokenEndpoint: '/token', callEndpoint: '/calls', defaultCountry: 'US' },
+    fetchWithAuth: createFetch(requests),
+    timers: { setInterval() {}, clearInterval() {}, setTimeout(fn, ms) { return setTimeout(fn, ms); }, clearTimeout(id) { clearTimeout(id); } },
+  }).mount();
+  const first = phone.call({ phoneNumber: '+16175551212' });
+  assert.equal(phone.getState().status, 'connecting');
+  await first;
+  FakeTelnyxRTC.instances[0].emit('telnyx.notification', { call: { state: 'active' } });
+  await phone.hangup();
+  await phone.call({ phoneNumber: '+12125550123' });
+  assert.equal(micRequests, 1);
 });
 
 test('cleanup disconnects the Telnyx client on page unload', async () => {

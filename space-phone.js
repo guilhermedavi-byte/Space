@@ -40,6 +40,7 @@
     popover: "",
     postCall: { id: "", polls: 0, status: "idle", call: null },
     noteTimers: new Map(),
+    lastTimerText: "",
   };
 
   const delay = (fn, ms) => {
@@ -62,6 +63,19 @@
   };
   const fmtDate = (value) => value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "-";
   const callSeconds = () => adapter()?.getState?.()?.elapsedSeconds || 0;
+  const liveTalkTimeSeconds = () => Number(state.data?.analytics?.talkTimeSeconds || 0) + (ACTIVE.has(state.call.status) ? callSeconds() : 0);
+  const localNormalize = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const fromAdapter = adapter()?.normalizePhone?.(raw, "US");
+    if (fromAdapter) return fromAdapter;
+    const digits = raw.replace(/\D+/g, "");
+    if (raw.startsWith("+") && /^\+[1-9]\d{7,14}$/.test(raw.replace(/[\s().-]+/g, ""))) return raw.replace(/[\s().-]+/g, "");
+    if (digits.length === 10) return `+1${digits}`;
+    if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+    if (digits.length >= 8 && digits.length <= 15 && raw.startsWith("+")) return `+${digits}`;
+    return "";
+  };
   const operationState = () => ACTIVE.has(state.call.status) ? (state.call.status === "active" || state.call.status === "hold" ? "ACTIVE" : "CALLING") : POST.has(state.call.status) ? "POST_CALL" : "IDLE";
   const saveLocal = () => {
     localStorage.setItem("spacePhoneRecents", JSON.stringify(state.recents.slice(0, 8)));
@@ -117,7 +131,7 @@
   const renderKpis = () => {
     const a = state.data?.analytics || {};
     return `<section class="sphone-kpis">
-      ${kpi("Calls", a.totalCalls || 0)}${kpi("Atendidas", a.connectedCalls || 0)}${kpi("Connect rate", `${Math.round((a.connectRate || 0) * 100)}%`)}${kpi("Talk time", fmtSec(a.talkTimeSeconds || 0))}${kpi("Agendamentos", a.scheduledCalls == null ? "-" : a.scheduledCalls)}
+      ${kpi("Calls", a.totalCalls || 0)}${kpi("Atendidas", a.connectedCalls || 0)}${kpi("Connect rate", `${Math.round((a.connectRate || 0) * 100)}%`)}<article class="sphone-kpi"><span>Talk time</span><strong data-sp-talk-time>${esc(fmtSec(liveTalkTimeSeconds()))}</strong></article>${kpi("Agendamentos", a.scheduledCalls == null ? "-" : a.scheduledCalls)}
     </section>`;
   };
 
@@ -126,9 +140,9 @@
     <section class="sphone-pane">
       <h2>Discador</h2>
       <input class="sphone-input sphone-dial-input" data-sp-dial value="${esc(state.dial)}" type="tel" autocomplete="tel" placeholder="+1 (___) ___-____" />
-      <div class="sphone-muted">${state.normalized ? `E.164 ${esc(state.normalized)}` : state.dialError ? esc(state.dialError) : "Digite ou cole um número com DDI."}</div>
+      <div class="sphone-muted" data-sp-normalized>${state.normalized ? `E.164 ${esc(state.normalized)}` : state.dialError ? esc(state.dialError) : "Digite ou cole um número com DDI."}</div>
       <div class="sphone-dial-actions">
-        <button class="sphone-btn primary" data-sp-call ${ACTIVE.has(state.call.status) ? "disabled" : ""}>Ligar</button>
+        <button class="sphone-btn primary" data-sp-call ${ACTIVE.has(state.call.status) ? "disabled" : ""}>${state.call.status === "connecting" ? "Conectando..." : "Ligar"}</button>
         <span class="sphone-control-wrap"><button class="sphone-btn" data-sp-popover="dialpad">⌨ Keypad</button>${state.popover === "dialpad" ? `<div class="sphone-keypad-pop">${renderKeypad("sp-key")}</div>` : ""}</span>
         <button class="sphone-btn ghost" data-sp-backspace>⌫</button>
       </div>
@@ -192,14 +206,23 @@
     if (period) period.value = state.period;
   };
 
-  const normalize = async () => {
-    if (!state.dial.trim()) { state.normalized = ""; state.dialError = ""; render(); return; }
-    try {
-      const res = await api({ normalize: state.dial, country: "US" });
-      state.normalized = res.ok ? res.normalized : "";
-      state.dialError = res.ok ? "" : "Telefone inválido";
-    } catch { state.normalized = ""; state.dialError = "Não foi possível validar"; }
-    render();
+  const patchDialDom = () => {
+    const input = document.querySelector("[data-sp-dial]");
+    const label = document.querySelector("[data-sp-normalized]");
+    const button = document.querySelector("[data-sp-call]");
+    if (input && input.value !== state.dial) input.value = state.dial;
+    if (label) label.textContent = state.normalized ? `E.164 ${state.normalized}` : state.dialError || "Digite ou cole um número com DDI.";
+    if (button) {
+      button.disabled = ACTIVE.has(state.call.status);
+      button.textContent = state.call.status === "connecting" ? "Conectando..." : "Ligar";
+    }
+  };
+  const normalize = () => {
+    const raw = state.dial.trim();
+    state.normalized = raw ? localNormalize(raw) : "";
+    state.dialError = raw && !state.normalized ? "Telefone inválido" : "";
+    patchDialDom();
+    return state.normalized;
   };
   const load = async ({ silent = false } = {}) => {
     if (!silent) { state.loading = true; render(); }
@@ -222,16 +245,16 @@
     catch { state.devices.permission = "denied"; }
   };
   const startCall = async () => {
-    if (!state.normalized) await normalize();
+    if (!state.normalized) normalize();
     const number = state.normalized || state.dial.trim();
     if (!/^\+[1-9]\d{7,14}$/.test(number)) { state.dialError = "Telefone inválido"; render(); return; }
-    await requestMic();
-    if (state.devices.permission === "denied" || state.devices.permission === "missing") { render(); return; }
     const a = adapter();
     if (!a || typeof (a.call || a.dial || a.startCall) !== "function") { state.call = { ...state.call, status: "failed", number, error: "Adapter Telnyx não disponível nesta sessão." }; render(); return; }
     state.call = { ...state.call, status: "connecting", number, muted: false, held: false, error: "" };
     state.postCall = { id: "", polls: 0, status: "idle", call: null };
     render();
+    if (state.devices.permission !== "granted") await requestMic();
+    if (state.devices.permission === "denied" || state.devices.permission === "missing") { state.call = { ...state.call, status: "ready" }; render(); return; }
     try { await a.call({ phoneNumber: number, source: "sdr_phone", micId: state.devices.micId, speakerId: state.devices.speakerId }); addRecent(number); syncFromCore(a.getState?.()); }
     catch (error) { state.call = { ...state.call, status: "failed", error: error?.message || "Falha ao iniciar ligação" }; }
     render();
@@ -282,10 +305,10 @@
     }
     const t = event.target.closest("[data-sp-key],[data-sp-backspace],[data-sp-call],[data-sp-fill],[data-sp-refresh],[data-sp-period],[data-sp-detail],[data-sp-close-detail],[data-sp-mute],[data-sp-hold],[data-sp-hangup],[data-sp-popover],[data-sp-dtmf-toggle],[data-sp-dtmf],[data-sp-outcome],[data-sp-reset-call],[data-sp-tab],[data-sp-test-device]");
     if (!t || !root()) return;
-    if (t.matches("[data-sp-key]")) { state.dial += t.dataset.spKey; await normalize(); return; }
-    if (t.matches("[data-sp-backspace]")) { state.dial = state.dial.slice(0, -1); await normalize(); return; }
+    if (t.matches("[data-sp-key]")) { state.dial += t.dataset.spKey; normalize(); return; }
+    if (t.matches("[data-sp-backspace]")) { state.dial = state.dial.slice(0, -1); normalize(); return; }
     if (t.matches("[data-sp-call]")) { await startCall(); return; }
-    if (t.matches("[data-sp-fill]")) { state.dial = t.dataset.spFill || ""; await normalize(); return; }
+    if (t.matches("[data-sp-fill]")) { state.dial = t.dataset.spFill || ""; normalize(); render(); return; }
     if (t.matches("[data-sp-refresh]")) { await load(); return; }
     if (t.matches("[data-sp-period]")) { state.period = t.dataset.spPeriod || "today"; await load(); return; }
     if (t.matches("[data-sp-detail]")) { state.detail = await api({ id: t.dataset.spDetail }); state.detailTab = "summary"; render(); return; }
@@ -303,7 +326,7 @@
   document.addEventListener("input", (event) => {
     const t = event.target;
     if (!root() || !(t instanceof HTMLElement)) return;
-    if (t.matches("[data-sp-dial]")) { state.dial = t.value; clearTimeout(state.normalizeTimer); state.normalizeTimer = setTimeout(normalize, 250); }
+    if (t.matches("[data-sp-dial]")) { state.dial = t.value; normalize(); }
     if (t.matches("[data-sp-search]")) { state.q = t.value; clearTimeout(state.searchTimer); state.searchTimer = setTimeout(() => load({ silent: true }), 350); }
     if (t.matches("[data-sp-notes],[data-sp-detail-notes]")) { const id = t.dataset.callId || state.detail?.call?.id || state.postCall.id || state.call.id; clearTimeout(state.noteTimers.get(t)); state.noteTimers.set(t, setTimeout(() => saveCallPatch(id, { notes: t.value }), 700)); }
   });
@@ -324,13 +347,36 @@
     if (event.key.toLowerCase() === "m") document.querySelector("[data-sp-mute]")?.click();
     if (event.key.toLowerCase() === "h") document.querySelector("[data-sp-hold]")?.click();
   });
-  every(() => { try { const timer = document.querySelector("[data-sp-timer]"); if (timer && ["active", "hold"].includes(state.call.status)) timer.textContent = fmtSec(callSeconds()); const online = document.querySelector(".sphone-online"); if (online && ACTIVE.has(state.call.status)) { const ps = phoneStatus(); online.innerHTML = `<span class="sphone-dot" data-tone="${ps.tone}"></span>${esc(ps.label)}`; } } catch {} }, 1000);
+  const patchLiveDom = () => {
+    try {
+      const seconds = callSeconds();
+      const text = fmtSec(seconds);
+      const timer = document.querySelector("[data-sp-timer]");
+      if (timer && ["active", "hold", "ending"].includes(state.call.status) && timer.textContent !== text) timer.textContent = text;
+      const talk = document.querySelector("[data-sp-talk-time]");
+      if (talk) talk.textContent = fmtSec(liveTalkTimeSeconds());
+      const online = document.querySelector(".sphone-online");
+      if (online && ACTIVE.has(state.call.status)) {
+        const ps = phoneStatus();
+        const html = `<span class="sphone-dot" data-tone="${ps.tone}"></span>${esc(ps.label)}`;
+        if (online.innerHTML !== html) online.innerHTML = html;
+      }
+    } catch {}
+  };
+  every(patchLiveDom, 250);
   navigator.mediaDevices?.addEventListener?.("devicechange", () => loadDevices().then(render));
 
   let unsub = null;
+  const snapshotKey = (snap = {}) => JSON.stringify({ status: snap.status, muted: Boolean(snap.muted), held: Boolean(snap.held), error: snap.error || "", id: snap.callRecord?.id || "", to: snap.callRecord?.to_number || snap.context?.phoneNumber || "", from: snap.callRecord?.from_number || "", name: snap.context?.leadName || snap.callRecord?.lead_name || "", ready: Boolean(snap.clientReady) });
+  let lastCoreKey = "";
   const subscribeCore = () => {
     if (unsub || typeof adapter()?.subscribe !== "function") return;
-    unsub = adapter().subscribe((snap) => { syncFromCore(snap); render(); });
+    unsub = adapter().subscribe((snap) => {
+      const nextKey = snapshotKey(snap);
+      syncFromCore(snap);
+      if (nextKey === lastCoreKey) patchLiveDom();
+      else { lastCoreKey = nextKey; render(); }
+    });
   };
   window.SpacePhoneModule = { open: async () => { subscribeCore(); await loadDevices(); syncFromCore(adapter()?.getState?.()); render(); await load({ silent: true }); }, state };
   if (document.body?.dataset.initialPanel === "space-phone") window.SpacePhoneModule.open();

@@ -78,6 +78,7 @@
       outputDeviceId: safeText(win.localStorage?.getItem?.('space_phone_output_device_id')),
       devices: { inputs: [], outputs: [], permission: 'unknown' },
       clientListeners: [],
+      micPermissionKey: '',
     };
 
     const root = createElement(document, 'section', { className: 'space-phone is-idle', 'data-space-phone': '' });
@@ -106,7 +107,7 @@
         context: state.context ? { ...state.context } : null,
         callRecord: state.callRecord ? { ...state.callRecord } : null,
         activeStartedAt: state.activeStartedAt,
-        elapsedSeconds: state.elapsedSeconds,
+        elapsedSeconds: currentElapsedSeconds(),
         clientReady: state.clientReady,
         inputDeviceId: state.inputDeviceId,
         outputDeviceId: state.outputDeviceId,
@@ -128,7 +129,7 @@
       root.querySelector('[data-phone-status]').textContent = statusLabel(state.status);
       root.querySelector('[data-phone-title]').textContent = safeText(state.context?.leadName) || 'Space Phone';
       root.querySelector('[data-phone-number]').textContent = safeText(state.context?.phoneNumber) || 'Nenhuma ligação ativa';
-      root.querySelector('[data-phone-timer]').textContent = formatDuration(state.elapsedSeconds);
+      updateTimerDom();
       root.querySelector('[data-phone-mute]').textContent = state.muted ? 'Desmutar' : 'Mutar';
       root.querySelector('[data-phone-mute]').disabled = !['active', 'ringing', 'connecting'].includes(state.status);
       root.querySelector('[data-phone-hangup]').disabled = !ACTIVE_STATUSES.has(state.status);
@@ -140,6 +141,21 @@
 
     function statusLabel(status) {
       return ({ idle: 'Pronto', connecting: 'Conectando', ringing: 'Chamando', active: 'Conectado', ending: 'Encerrando', ended: 'Encerrada', failed: 'Falhou' })[status] || 'Pronto';
+    }
+
+    function currentElapsedSeconds() {
+      if ((state.status === 'active' || state.status === 'ending') && state.activeStartedAt) {
+        return Math.max(state.elapsedSeconds, Math.floor((now() - state.activeStartedAt) / 1000));
+      }
+      return state.elapsedSeconds;
+    }
+
+    function updateTimerDom() {
+      const seconds = currentElapsedSeconds();
+      state.elapsedSeconds = seconds;
+      const timer = root.querySelector('[data-phone-timer]');
+      if (timer) timer.textContent = formatDuration(seconds);
+      return seconds;
     }
 
     function setStatus(status, extra = {}) {
@@ -154,7 +170,8 @@
         updateCallRecord({ status: 'active', answered_at: new Date().toISOString() }).catch(() => {});
       }
       if ((status === 'ended' || status === 'failed') && previous !== status) {
-        updateCallRecord({ status, ended_at: new Date().toISOString(), duration_seconds: state.elapsedSeconds }).catch(() => {});
+        const duration = updateTimerDom();
+        updateCallRecord({ status, ended_at: new Date().toISOString(), duration_seconds: duration }).catch(() => {});
       }
       if (status === 'ended' || status === 'failed' || status === 'idle') {
         state.activeStartedAt = 0;
@@ -166,10 +183,7 @@
 
     function startClock() {
       const interval = timers.setInterval(() => {
-        if (state.status === 'active' && state.activeStartedAt) {
-          state.elapsedSeconds = Math.floor((now() - state.activeStartedAt) / 1000);
-          render();
-        }
+        if ((state.status === 'active' || state.status === 'ending') && state.activeStartedAt) updateTimerDom();
       }, 1000);
       if (interval && typeof interval.unref === 'function') interval.unref();
     }
@@ -311,6 +325,17 @@
       return raw || 'Não foi possível iniciar a ligação.';
     }
 
+    async function requestMicrophoneAccess(audio) {
+      if (!win.navigator?.mediaDevices?.getUserMedia) throw new Error('Navegador sem suporte a microfone WebRTC.');
+      const key = JSON.stringify(audio || true);
+      if (state.devices.permission === 'granted' && state.micPermissionKey === key) return true;
+      const stream = await win.navigator.mediaDevices.getUserMedia({ audio });
+      state.devices.permission = 'granted';
+      state.micPermissionKey = key;
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    }
+
     async function call(input = {}) {
       if (!state.enabled) throw new Error('space_phone_disabled');
       if (ACTIVE_STATUSES.has(state.status)) throw new Error('Já existe uma ligação ativa.');
@@ -321,11 +346,8 @@
       state.elapsedSeconds = 0;
       setStatus('connecting');
       try {
-        if (!win.navigator?.mediaDevices?.getUserMedia) throw new Error('Navegador sem suporte a microfone WebRTC.');
         const audio = input.micId || input.inputDeviceId || state.inputDeviceId ? { deviceId: { exact: input.micId || input.inputDeviceId || state.inputDeviceId } } : true;
-        const stream = await win.navigator.mediaDevices.getUserMedia({ audio });
-        state.devices.permission = 'granted';
-        stream.getTracks().forEach(track => track.stop());
+        await requestMicrophoneAccess(audio);
         const created = await apiFetch(bootstrap.callEndpoint || '/api/voice/calls', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -368,7 +390,8 @@
         throw error;
       }
       const endedAt = new Date().toISOString();
-      await updateCallRecord({ status: 'ended', ended_at: endedAt, duration_seconds: state.elapsedSeconds }).catch(() => {});
+      const duration = updateTimerDom();
+      await updateCallRecord({ status: 'ended', ended_at: endedAt, duration_seconds: duration }).catch(() => {});
       setStatus('ended');
       const resetTimer = timers.setTimeout(() => setStatus('idle'), 1800);
       if (resetTimer && typeof resetTimer.unref === 'function') resetTimer.unref();
@@ -455,9 +478,7 @@
       if (!win.navigator?.mediaDevices?.enumerateDevices) return state.devices;
       if (requestPermission && win.navigator.mediaDevices.getUserMedia) {
         try {
-          const stream = await win.navigator.mediaDevices.getUserMedia({ audio: true });
-          stream.getTracks().forEach(track => track.stop());
-          state.devices.permission = 'granted';
+          await requestMicrophoneAccess(true);
         } catch {
           state.devices.permission = 'denied';
         }
