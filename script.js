@@ -35535,6 +35535,7 @@ const normalizePedov2Records = (records, legacyOccurrenceMap = null) => {
     if (!lessonId && !occurrenceId) return;
     const ts = parseFirestoreDateToMs(record.updated_at || record.updatedAt || record.created_at || record.createdAt);
     const normalized = {
+      ...record,
       id: String(record.id || "").trim(),
       aulaId: lessonId,
       occurrenceId,
