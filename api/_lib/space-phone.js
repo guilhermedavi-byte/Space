@@ -408,9 +408,10 @@ const completeQualification = async ({ request = supabaseFetch, call, user, now 
   const nowIso = now.toISOString();
   const patch = { status: 'complete', final_summary: finalSummary, completed_at: nowIso, updated_at: nowIso, datacrazy_sync_status: current.datacrazy.syncStatus === 'sent' ? 'sent' : 'blocked', datacrazy_sync_error: current.datacrazy.syncStatus === 'sent' ? null : DATACRAZY_BLOCKED };
   const rows = asRows(await request(`/voice_call_qualifications?voice_call_id=eq.${encodeURIComponent(call.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: patch, timeoutMs: 12000 }));
-  const qualification = normalizeQualification(rows[0] || { ...current, ...patch });
-  const bridge = await syncQualificationToSdrActivity({ call, qualification, user }).catch(error => ({ ok: false, error: clean(error?.message) || 'qualification_bridge_failed' }));
+  if (!rows[0] || rows[0].status !== 'complete' || !rows[0].completed_at) throw Object.assign(new Error('qualification_completion_not_persisted'), { status: 409 });
+  const qualification = normalizeQualification(rows[0]);
   const eventDispatch = await dispatchQualificationEvent({ event: 'qualification.completed', callId: call.id }).catch(error => ({ ok: false, error: clean(error?.message) || 'n8n_dispatch_failed' }));
+  const bridge = await syncQualificationToSdrActivity({ call, qualification, user }).catch(error => ({ ok: false, error: clean(error?.message) || 'qualification_bridge_failed' }));
   return { ok: true, qualification, bridge, n8n: eventDispatch, datacrazy: { ok: qualification.datacrazy.syncStatus === 'sent', status: qualification.datacrazy.syncStatus } };
 };
 

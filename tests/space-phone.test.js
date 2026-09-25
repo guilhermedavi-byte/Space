@@ -373,3 +373,42 @@ test('manual qualification completes before unavailable n8n, without rollback', 
     if (previous === undefined) delete process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL; else process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL = previous;
   }
 });
+
+for (const persisted of [true, false]) test(`completed dispatch requires persisted human confirmation: ${persisted}`, async () => {
+  const previous = process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL;
+  const originalFetch = global.fetch;
+  process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL = 'https://n8n.test/production-workflow';
+  const q = { id: 'q-second', voice_call_id: 'call-second', context: 'Reviewed', pain_goal: 'English', urgency: 'Now', decision_investment: 'Decider', key_point: 'Work', status: 'review_required' };
+  const events = [];
+  global.fetch = async (url, options) => {
+    if (url !== 'https://n8n.test/production-workflow') throw new Error('unconfigured_external_bridge');
+    assert.equal(q.status, 'complete');
+    assert.ok(Number.isFinite(Date.parse(q.completed_at)));
+    const event = JSON.parse(options.body);
+    assert.deepEqual(Object.keys(event).sort(), ['callId', 'event', 'occurredAt']);
+    assert.equal(event.event, 'qualification.completed');
+    assert.equal(event.callId, 'call-second');
+    assert.ok(Number.isFinite(Date.parse(event.occurredAt)));
+    events.push(event);
+    return { ok: true, status: 200 };
+  };
+  const handler = createHandler({
+    authResolver: async () => ({ ok: true, session: { role: 'growth', sub: 'sdr-1' }, profile: { user: { commercialRoles: ['sdr'] } } }),
+    request: async (path, options = {}) => {
+      if (path.startsWith('/voice_calls')) return { data: [{ id: 'call-second', space_user_uid: 'sdr-1', outcome: 'agendado', status: 'ended' }] };
+      if (options.method === 'PATCH') {
+        if (!persisted) return { data: [] };
+        Object.assign(q, options.body);
+      }
+      return { data: [q] };
+    },
+  });
+  try {
+    const result = await invoke(handler, { method: 'PATCH', body: { id: 'call-second', action: 'complete_qualification' } });
+    assert.equal(result.status, persisted ? 200 : 409);
+    assert.equal(events.length, persisted ? 1 : 0);
+  } finally {
+    global.fetch = originalFetch;
+    if (previous === undefined) delete process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL; else process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL = previous;
+  }
+});

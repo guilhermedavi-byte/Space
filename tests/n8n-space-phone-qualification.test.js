@@ -33,7 +33,7 @@ const installSupabaseStub = (request) => {
 
 const fixtures = () => ({
   call: { id: 'call-1', space_user_uid: 'sdr-1', space_user_email: 'sdr@space.test', lead_id: 'contact-known', opportunity_id: 'deal-known', lead_name: 'Lead', from_number: '+16892232696', to_number: '+14077511479', telnyx_call_leg_id: 'leg-1', outcome: 'agendado', status: 'ended', started_at: '2026-09-24T12:00:00Z' },
-  qualification: { id: 'q1', voice_call_id: 'call-1', space_user_uid: 'sdr-1', context: 'Mora nos EUA', pain_goal: 'Autonomia', experience: 'Não identificado', urgency: 'Alta', decision_investment: 'Decide sozinha', key_point: 'Autonomia nos EUA', final_summary: 'Resumo', status: 'complete' },
+  qualification: { id: 'q1', voice_call_id: 'call-1', space_user_uid: 'sdr-1', context: 'Mora nos EUA', pain_goal: 'Autonomia', experience: 'Não identificado', urgency: 'Alta', decision_investment: 'Decide sozinha', key_point: 'Autonomia nos EUA', final_summary: 'Resumo', status: 'complete', completed_at: '2026-09-24T12:10:00Z' },
   score: { recording_id: 'rec-1', call_leg_id: 'leg-1', transcript: 'SDR: Olá\nLead: Quero inglês.', analysis: { summary: 'Resumo IA' }, score: 80 },
 });
 
@@ -184,4 +184,38 @@ test('blocked Datacrazy write persists only handoff fields', async () => {
   const write = seen.find(r => r.options.method === 'PATCH');
   assert.equal(write.options.body.datacrazy_sync_status, 'blocked');
   assert.equal(write.options.body.status, undefined);
+});
+
+
+test('ai_requested callback ends at review_required without starting Datacrazy', async () => {
+  const fx = fixtures(); fx.qualification.status = 'ai_processing'; fx.qualification.completed_at = null;
+  const seen = [];
+  const { requestAiQualification, saveAiQualification, handoffEligible } = require('../api/_lib/space-phone-n8n');
+  const events = [];
+  await requestAiQualification({ call: fx.call, request: makeRequest(fx, seen), dispatch: async event => { events.push(event.event); return { ok: true }; } });
+  assert.deepEqual(events, ['qualification.ai_requested']);
+  const result = await saveAiQualification({ callId: fx.call.id, qualification: { context: 'AI suggestion' }, request: makeRequest(fx, seen) });
+  assert.equal(result.qualification.status, 'review_required');
+  assert.equal(handoffEligible(fx.call, result.qualification), false);
+  assert.equal(seen.some(r => r.path.split('?')[0].includes('datacrazy') || r.path.includes('n8n_estado')), false);
+});
+
+for (const [name, status, outcome, confirmed, allowed] of [
+  ['completed before complete', 'review_required', 'agendado', false, false],
+  ['completed + complete + agendado + confirmation', 'complete', 'agendado', true, true],
+  ['completed + complete + non-agendado', 'complete', 'interessado', true, false],
+  ['complete without persisted human confirmation', 'complete', 'agendado', false, false],
+]) test(`handoff gate: ${name}`, async () => {
+  const fx = fixtures(); fx.call.outcome = outcome; fx.qualification.status = status;
+  fx.qualification.completed_at = confirmed ? '2026-09-24T12:10:00Z' : null;
+  const seen = [];
+  const { getQualificationPayload, datacrazyNote, markDatacrazySynced } = require('../api/_lib/space-phone-n8n');
+  const request = makeRequest(fx, seen);
+  const payload = await getQualificationPayload({ callId: fx.call.id, request });
+  assert.equal(payload.handoffEligible, allowed);
+  const result = await datacrazyNote({ callId: fx.call.id, request });
+  // A passing gate reaches the existing handoff implementation, which still blocks uncertified writes.
+  assert.equal(result.error, allowed ? 'DATACRAZY_NOTE_WRITE_BLOCKED_API_ENDPOINT' : 'datacrazy_gate_not_satisfied');
+  assert.equal(seen.some(r => r.options.method === 'PATCH'), allowed);
+  if (!allowed) await assert.rejects(() => markDatacrazySynced({ callId: fx.call.id, request, sync: { noteId: 'note-1' } }), /datacrazy_sync_not_confirmed/);
 });

@@ -77,9 +77,12 @@ const normalizeQualificationPayload = row => ({
   decisionInvestment: clean(row?.decision_investment),
   keyPoint: clean(row?.key_point),
   status: clean(row?.status) || 'draft',
-  confirmedBySdr: ['complete', 'sent'].includes(clean(row?.status)),
+  confirmedBySdr: ['complete', 'sent'].includes(clean(row?.status)) && Number.isFinite(Date.parse(row?.completed_at)),
+  confirmedAt: clean(row?.completed_at),
   finalSummary: clean(row?.final_summary),
 });
+
+const handoffEligible = (call, qualification) => clean(call?.outcome) === 'agendado' && normalizeQualificationPayload(qualification).confirmedBySdr;
 
 const getQualificationPayload = async ({ callId, request = supabaseFetch }) => {
   const call = await getCall(callId, request);
@@ -91,6 +94,7 @@ const getQualificationPayload = async ({ callId, request = supabaseFetch }) => {
     outcome: clean(call.outcome),
     transcript: clean(score?.transcript),
     qualification: normalizeQualificationPayload(qualification),
+    handoffEligible: handoffEligible(call, qualification),
     datacrazy: {
       contactId: clean(qualification?.datacrazy_lead_id || call.lead_id),
       dealId: clean(call.opportunity_id),
@@ -135,7 +139,7 @@ const markDatacrazySynced = async ({ callId, sync = {}, request = supabaseFetch 
   const call = await getCall(callId, request);
   const current = await getQualification(call.id, request).catch(() => null);
   if (clean(current?.datacrazy_note_id) && clean(current?.datacrazy_sync_status) === 'sent') return { ok: true, duplicate: true, qualification: current };
-  if (!current || !['complete', 'sent'].includes(current.status) || !clean(sync.datacrazyNoteId || sync.noteId)) throw Object.assign(new Error('datacrazy_sync_not_confirmed'), { status: 409 });
+  if (!handoffEligible(call, current) || !clean(sync.datacrazyNoteId || sync.noteId)) throw Object.assign(new Error('datacrazy_sync_not_confirmed'), { status: 409 });
   const now = new Date().toISOString();
   const body = {
     datacrazy_lead_id: clean(sync.datacrazyLeadId || sync.leadId || sync.contactId || sync.datacrazyId).slice(0, 240) || null,
@@ -252,7 +256,7 @@ const datacrazyNote = async ({ callId, datacrazyId, note = '', request = supabas
   const qualification = await getQualification(call.id, request);
   if (!qualification) return { ok: false, status: 409, error: 'qualification_required' };
   if (clean(qualification.datacrazy_note_id) || clean(qualification.datacrazy_sync_status) === 'sent') return { ok: true, duplicate: true, noteId: clean(qualification.datacrazy_note_id), status: 'sent' };
-  if (clean(call.outcome) !== 'agendado' || clean(qualification.status) !== 'complete') return { ok: false, status: 409, error: 'datacrazy_gate_not_satisfied' };
+  if (!handoffEligible(call, qualification)) return { ok: false, status: 409, error: 'datacrazy_gate_not_satisfied' };
   const target = clean(datacrazyId || qualification.datacrazy_lead_id || call.lead_id || call.opportunity_id);
   if (!target) return { ok: false, status: 409, error: 'datacrazy_match_required' };
   // No certified write endpoint: persist the handoff blocker independently of qualification.
@@ -274,6 +278,7 @@ module.exports = {
   getCall,
   getQualification,
   getQualificationPayload,
+  handoffEligible,
   markDatacrazySynced,
   markDatacrazyFailed,
   normalizePhone,
