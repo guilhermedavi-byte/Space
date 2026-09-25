@@ -8,7 +8,7 @@ function harness(){
     requests.push({path,...options});
     if(path.startsWith('/voice_calls'))return {data:[{id:callId,space_user_uid:'sdr-1',lead_id:'lead-1'}]};
     if(path.startsWith('/commercial_booking_contexts'))return {data:[{id:ctxId,sdr_uid:'sdr-1',voice_call_id:callId,lead_id:'lead-1'}]};
-    if(path==='/rpc/space_resolve_booking_meeting')return {data:{meeting_id:null,meeting_status:'unresolved',match_method:'unresolved'}};
+    if(path==='/rpc/space_produce_calcom_meeting')return {data:{meeting_id:null,meeting_status:'unresolved',match_method:'unresolved'}};
     if(path.startsWith('/rpc/')){const b=options.body.p_booking;const old=store.get(b.calcom_booking_id);if(!old||old.provider_updated_at<b.provider_updated_at)store.set(b.calcom_booking_id,{...b,id:'stored'});return {data:store.get(b.calcom_booking_id)};}
     if(path.includes('calcom_booking_id=eq.')){const uid=new URLSearchParams(path.split('?')[1]).get('calcom_booking_id').slice(3);return {data:store.has(uid)?[store.get(uid)]:[]};}
     return {data:[...store.values()].filter(b=>!path.includes('sdr_uid=eq.')||path.includes(`sdr_uid=eq.${b.sdr_uid}`))};
@@ -58,4 +58,23 @@ test('webhook rejects invalid signature and never accepts supplied status/PII',a
 });
 test('cross-origin write blocked before context creation',async()=>{
   const h=harness();const r=res(),input=req('POST',{action:'context',callId});input.headers.origin='https://evil.test';await handler({...h,authResolver})(input,r);assert.equal(r.statusCode,403);assert.equal(h.requests.length,0);
+});
+test('producer receives only a unique provider Google event reference and canonical Meet URL',async()=>{
+  const h=harness();const base=h.fetcher;
+  h.fetcher=async url=>url.includes('/references?')?{ok:true,json:async()=>({status:'success',data:[{type:'google_calendar',eventUid:'google-event'}]})}:base(url);
+  h.set({meetingUrl:'https://meet.google.com/abc-defg-hij'});
+  await lib.reconcile({...h,uid:booking.uid});
+  const p=h.requests.find(r=>r.path==='/rpc/space_produce_calcom_meeting');
+  assert.deepEqual(p.body,{p_booking_id:'stored',p_google_event_id:'google-event',p_meet_link:'https://meet.google.com/abc-defg-hij'});
+});
+test('ambiguous calendar references never select one arbitrarily',async()=>{
+  const h=harness();const base=h.fetcher;
+  h.fetcher=async url=>url.includes('/references?')?{ok:true,json:async()=>({status:'success',data:[{type:'google_calendar',eventUid:'a'},{type:'google_calendar',eventUid:'b'}]})}:base(url);
+  await lib.reconcile({...h,uid:booking.uid});
+  assert.equal(h.requests.find(r=>r.path==='/rpc/space_produce_calcom_meeting').body.p_google_event_id,null);
+});
+test('meeting producer failure is not converted to booking success',async()=>{
+  const h=harness();const base=h.request;
+  h.request=async(p,o)=>{if(p==='/rpc/space_produce_calcom_meeting')throw Error('producer_failed');return base(p,o);};
+  await assert.rejects(lib.reconcile({...h,uid:booking.uid}),/producer_failed/);
 });

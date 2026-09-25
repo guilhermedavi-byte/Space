@@ -30,3 +30,11 @@ test('source failure never writes and records fail-closed audit',async()=>{const
 test('uncertain remote timeout is never automatically retried',async()=>{const x=setup();x.timeout();await assert.rejects(executeCommercialAction(x.body,x.deps));await executeCommercialAction(x.body,x.deps);assert.equal(x.writes.length,1);});
 test('preview records decision but cannot claim or mutate',async()=>{const x=setup();await executeCommercialAction({...x.body,preview:true},x.deps);assert.equal(x.writes.length,0);assert.equal(x.claims.size,0);});
 test('existing student blocks all CRM writes',async()=>{const x=setup();x.business.lead.tags=['ALUNO ATIVO'];assert.equal((await executeCommercialAction(x.body,x.deps)).performed,false);assert.equal(x.writes.length,0);});
+test('canonical booking UID is preferred over Meet URL and missing explicit match cannot fall back',async()=>{
+ const x=setup(),base=x.deps.request,paths=[];
+ x.body.meeting.calcom_booking_id='cal-uid';
+ x.deps.request=async(path,o)=>{if(path.startsWith('/sdr_meetings?')){paths.push(path);return {data:[]};}return base(path,o);};
+ const result=await executeCommercialAction(x.body,x.deps);
+ assert.equal(result.performed,false);assert.equal(x.writes.length,0);
+ assert.equal(paths.length,1);assert.match(paths[0],/calcom_booking_id=eq.cal-uid/);assert.doesNotMatch(paths[0],/meet_link=eq/);
+});

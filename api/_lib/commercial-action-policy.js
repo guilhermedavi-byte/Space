@@ -38,7 +38,8 @@ function evaluateCommercialAction(input, now = Date.now()) {
   const checkedStudent = evidence.student_lookup_complete===true && evidence.crm_lookup_complete===true;
   const scheduled = Date.parse(appointment?.starts_at || '');
   const sameOccurrence = appointment && Number.isFinite(scheduled) && scheduled===Date.parse(meeting.scheduled_at || '') &&
-    ((clean(appointment.google_event_id) && clean(appointment.google_event_id)===clean(meeting.calendar_uid)) ||
+    ((clean(appointment.calcom_booking_id) && clean(appointment.calcom_booking_id)===clean(meeting.calcom_booking_id)) ||
+     (clean(appointment.google_event_id) && clean(appointment.google_event_id)===clean(meeting.calendar_uid)) ||
       (clean(appointment.meet_link) && clean(appointment.meet_link)===clean(meeting.meet_link)));
   // Negative classifications override the existence of any sales record.
   const declaredType = ['lesson','internal','support'].includes(meeting.type) ? meeting.type : null;

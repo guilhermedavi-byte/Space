@@ -33,9 +33,9 @@ async function executeCommercialAction(body,{request=supabaseFetch,crm=crmReques
   const businesses=await allBusinesses(crm);
   let appointment=null;
   const scheduled=Date.parse(meeting.scheduled_at||'');
-  if(Number.isFinite(scheduled)&&clean(meeting.meet_link)){
-   const candidates=rows(await request(`/sdr_meetings?select=*&meet_link=eq.${enc(meeting.meet_link)}&starts_at=eq.${enc(new Date(scheduled).toISOString())}&limit=2`));
-   if(candidates.length===1)appointment=candidates[0];
+  if(Number.isFinite(scheduled)){
+   const explicit=clean(meeting.calcom_booking_id)?`calcom_booking_id=eq.${enc(meeting.calcom_booking_id)}`:clean(meeting.calendar_uid)?`google_event_id=eq.${enc(meeting.calendar_uid)}`:clean(meeting.meet_link)?`meet_link=eq.${enc(meeting.meet_link)}`:null;
+   if(explicit){const candidates=rows(await request(`/sdr_meetings?select=*&${explicit}&starts_at=eq.${enc(new Date(scheduled).toISOString())}&limit=2`));if(candidates.length===1)appointment=candidates[0];}
   }
   const business=businesses.find(b=>clean(b.id)===businessId)||null;
   const contact=business?.lead||{};

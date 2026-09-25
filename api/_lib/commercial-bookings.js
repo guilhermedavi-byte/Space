@@ -10,7 +10,7 @@ const uuid = x => /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.t
 const bookingUid = x => /^[A-Za-z0-9_-]{6,100}$/.test(clean(x));
 const iso = x => Number.isFinite(Date.parse(x)) ? new Date(x).toISOString() : null;
 const fields = 'id,calcom_booking_id,status,start_at,end_at,timezone,attendee_name,attendee_email,attendee_phone,host_name,sdr_uid,voice_call_id,lead_id,opportunity_id,updated_at,rescheduled_from,rescheduled_to,meeting_id,meeting_status,meeting_completed_at,match_method';
-const model = b => ({ id:b.id, bookingExternalId:b.calcom_booking_id, bookingConfirmed:b.status === 'confirmed', status:b.status, bookingStartAt:b.start_at, bookingEndAt:b.end_at, timezone:b.timezone, attendeeName:b.attendee_name, attendeeEmail:b.attendee_email, attendeePhone:b.attendee_phone, hostName:b.host_name, sdrUid:b.sdr_uid, voiceCallId:b.voice_call_id, leadId:b.lead_id, opportunityId:b.opportunity_id });
+const model = b => ({ id:b.id, bookingExternalId:b.calcom_booking_id, bookingConfirmed:b.status === 'confirmed', status:b.status, bookingStartAt:b.start_at, bookingEndAt:b.end_at, timezone:b.timezone, attendeeName:b.attendee_name, attendeeEmail:b.attendee_email, attendeePhone:b.attendee_phone, hostName:b.host_name, sdrUid:b.sdr_uid, voiceCallId:b.voice_call_id, leadId:b.lead_id, opportunityId:b.opportunity_id,meetingId:b.meeting_id,meetingStatus:b.meeting_status,meetingCompletedAt:b.meeting_completed_at,matchMethod:b.match_method });
 async function callInScope(request, id, user, isAdmin) {
   if (!uuid(id)) throw fail('invalid_call');
   const c = rows(await request(`/voice_calls?id=eq.${encodeURIComponent(id)}&select=id,space_user_uid,lead_id,opportunity_id,lead_name,to_number&limit=1`))[0];
@@ -78,7 +78,17 @@ async function reconcile({uid,request=supabaseFetch,fetcher=fetch,env=process.en
   const row={calcom_booking_id:uid,calcom_event_type_id:b.eventTypeId,status:b.rescheduledToUid?'rescheduled':status==='accepted'?'confirmed':['cancelled','rejected'].includes(status)?'cancelled':'pending',start_at:start,end_at:end,timezone:attendee.timeZone||host.timeZone||null,attendee_name:clean(attendee.name),attendee_email:clean(attendee.email),attendee_phone:clean(attendee.phoneNumber),host_name:clean(host.name),host_email:clean(host.email),sdr_uid:owner||null,voice_call_id:existing?.voice_call_id||ctx?.voice_call_id||null,lead_id:existing?.lead_id||ctx?.lead_id||null,opportunity_id:existing?.opportunity_id||ctx?.opportunity_id||null,booking_context_id:existing?.booking_context_id||ctx?.id||null,provider_updated_at:updated,cancelled_at:['cancelled','rejected'].includes(status)?updated:null,rescheduled_from:b.rescheduledFromUid||null,rescheduled_to:b.rescheduledToUid||null};
   const saved=await request('/rpc/space_upsert_commercial_booking',{method:'POST',body:{p_booking:row}});
   const persisted=Array.isArray(saved.data)?saved.data[0]:saved.data;
-  const link=await request('/rpc/space_resolve_booking_meeting',{method:'POST',body:{p_booking_id:persisted.id}});
+  let googleEventId=null;
+  try {
+    const references=await calGet(`bookings/${encodeURIComponent(uid)}/references?type=google_calendar`,{fetcher,env});
+    if(Array.isArray(references)) {
+      const ids=[...new Set(references.filter(r=>r.type==='google_calendar').map(r=>clean(r.eventUid)).filter(Boolean))];
+      if(ids.length===1)googleEventId=ids[0];
+    }
+  } catch { console.info('[calcom-meeting]',{code:'calendar_reference_unavailable',bookingId:persisted.id}); }
+  let meetingUrl=null;
+  try { const url=new URL(b.meetingUrl || b.location); if(url.protocol==='https:' && url.hostname==='meet.google.com')meetingUrl=url.href; } catch {}
+  const link=await request('/rpc/space_produce_calcom_meeting',{method:'POST',body:{p_booking_id:persisted.id,p_google_event_id:googleEventId,p_meet_link:meetingUrl}});
   // Reconcile predecessor too; a failure returns non-2xx so provider retries, safely.
   if(depth===0 && bookingUid(b.rescheduledFromUid)) await reconcile({uid:b.rescheduledFromUid,request,fetcher,env,user,isAdmin,depth:depth+1});
   if(bookingUid(b.rescheduledToUid)) return reconcile({uid:b.rescheduledToUid,request,fetcher,env,user,isAdmin,depth:depth+1});
