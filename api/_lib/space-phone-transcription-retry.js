@@ -10,6 +10,7 @@ async function requeueTranscription({ call, score, request, fetchImpl = global.f
   const response = await fetchImpl(`https://api.telnyx.com/v2/recordings/${encodeURIComponent(score.recording_id)}`, {
     headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(15000),
   });
+  console.info('[space-phone] recording lookup', { recordingId: score.recording_id, httpStatus: response.status });
   const recording = (await response.json().catch(() => ({})))?.data;
   if (!response.ok || !recording) return { ok: false, aiStatus: 'failed', reason: 'recording_lookup_failed' };
   if (String(recording.id) !== String(score.recording_id) || ['call_leg_id', 'call_session_id'].some(field => call[`telnyx_${field}`] && String(recording[field] || '') !== String(call[`telnyx_${field}`]))) return { ok: false, aiStatus: 'failed', reason: 'recording_identity_mismatch' };

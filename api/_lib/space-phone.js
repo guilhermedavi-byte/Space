@@ -739,6 +739,7 @@ const updateCall = async ({ request, id, user, isAdmin, patch = {}, bridgeCommit
   if (clean(patch.action) === 'retry_ai_qualification') {
     const call = { id: current.id, space_user_uid: current.sdrUid, from_number: current.fromNumber, to_number: current.toNumber, started_at: current.startedAt, duration_seconds: current.durationSeconds, outcome: current.outcome, telnyx_call_leg_id: current.callLegId, telnyx_call_session_id: current.callSessionId };
     const result = await requestAiQualification({ call, request, retry: true });
+    console.info('[space-phone] transcription retry', { callId: call.id, aiStatus: result.aiStatus, queued: Boolean(result.queued), reason: result.reason || null });
     return { ok: true, ...result };
   }
   if (clean(patch.action) === 'save_qualification') {
