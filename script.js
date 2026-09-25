@@ -32498,6 +32498,7 @@ const renderAdminPedagogicoRetentionPanel = () => {
   renderAdminPedagogicoRetentionOperations();
   if (adminPedRetention instanceof HTMLElement && globalThis.SpaceRetentionIntelligence) {
     globalThis.SpaceRetentionIntelligence.mount(adminPedRetention, {
+      currentUserId: String(sessionUser?.id || sessionUser?.uid || ""),
       fetch: fetchWithAuth,
       openStudent: id => openStudentSimpleCard({ alunoId: id }),
       openActivity: async draft => { await loadActivities({ force: false, silent: true }); openActivityCreateWorkspace(draft); },
@@ -33553,6 +33554,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
                   <span class="admin-ped-pill ${getAdminStudentPlanToneClass(r.plan)}">${escapeHtml(r.plan)}</span>
                   ${r.teacherName ? `<span class="admin-ped-pill">${escapeHtml(r.teacherName)}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
                   ${r.lifecycleLabel ? `<span class="admin-ped-pill is-${escapeHtml(r.lifecycleTone || "muted")}">${escapeHtml(r.lifecycleLabel)}</span>` : ""}
+                  <span data-ri-directory-health="${escapeHtml(r.id)}" class="ri-directory-slot">Health —</span>
                 </div>
               </div>
             </div>
@@ -33567,6 +33569,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
       ${rowsHtml}
     </div>
   `;
+  globalThis.SpaceRetentionIntelligence?.hydrateDirectory(adminPedStudents, fetchWithAuth);
   if (adminPedagogicoState.studentsTable.lastRenderFromSearch) {
     adminPedagogicoState.studentsTable.lastRenderFromSearch = false;
     window.requestAnimationFrame(() => adminPedFocusTableSearch("students"));
