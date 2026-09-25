@@ -36,7 +36,7 @@ test('missing context does not guess SDR from phone/email',async()=>{
 });
 test('wrong event, missing key, invalid response and provider failures fail closed',async()=>{
   const h=harness();await assert.rejects(()=>lib.reconcile({...h,uid:booking.uid,env:{}}),/calcom_not_configured/);assert.equal(h.store.size,0);
-  await assert.rejects(()=>lib.reconcile({...h,uid:booking.uid,fetcher:async()=>({ok:false})}),/calcom_provider_failed/);
+  await assert.rejects(()=>lib.reconcile({...h,uid:booking.uid,fetcher:async()=>({ok:false,status:401,json:async()=>({})})}),/calcom_provider_failed/);
   await assert.rejects(()=>lib.reconcile({...h,uid:booking.uid,fetcher:async url=>({ok:true,json:async()=>({status:'success',data:url.includes('event-types')?{bookingUrl:'https://cal.com/other/event'}:booking})})}),/booking_event_not_allowed/);assert.equal(h.store.size,0);
 });
 test('Growth cannot create context or read bookings for another call owner',async()=>{

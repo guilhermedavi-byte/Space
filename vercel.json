@@ -1,5 +1,7 @@
 {
   "functions": {
+    "api/webhooks/calcom.js": {"maxDuration": 120},
+    "api/commercial-bookings.js": {"maxDuration": 120},
     "api/attendance/meta/process.js": {
       "maxDuration": 120
     },

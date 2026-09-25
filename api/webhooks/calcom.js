@@ -19,8 +19,9 @@ const createHandler=({request,fetcher,env=process.env}={})=>async(req,res)=>{
     // every field/ownership/status is independently read from Cal's fixed API origin.
     // Never persist the supplied payload, and never return booking/attendee data here.
     await booking.reconcile({uid:event.payload.uid,request,fetcher,env});
+    console.info('[calcom-webhook]',JSON.stringify({event:event.triggerEvent,bookingUid:event.payload.uid,status:'synced'}));
     return sendJson(res,200,{ok:true});
-  }catch(e){return sendJson(res,e.status||500,{error:e.status&&e.status<500?e.message:'booking_sync_failed'});}
+  }catch(e){console.warn('[calcom-webhook]',JSON.stringify({code:e.status?e.message:'internal_error',status:e.status||500}));return sendJson(res,e.status||500,{error:e.status&&e.status<500?e.message:'booking_sync_failed'});}
 };
 module.exports=createHandler();module.exports.createHandler=createHandler;
 module.exports.config={api:{bodyParser:false}};

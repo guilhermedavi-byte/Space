@@ -34,7 +34,12 @@ async function calGet(path,{fetcher=fetch,env=process.env,version='2026-02-25'}=
   let res;
   try { res=await fetcher(`https://api.cal.com/v2/${path}`,{headers:{Authorization:`Bearer ${key}`,'cal-api-version':version},redirect:'error',signal:AbortSignal.timeout(12000)}); }
   catch { throw fail('calcom_transport_failed',502); }
-  if (!res.ok) throw fail('calcom_provider_failed',502);
+  if (!res.ok) {
+    const body=await res.json().catch(()=>({}));
+    const code=clean(body?.error?.code || body?.error?.type || body?.message || body?.error?.message).split(key).join('[REDACTED]').slice(0,180);
+    console.warn('[calcom-provider]',JSON.stringify({operation:path.startsWith('bookings/')?'get_booking':'get_event_type',status:res.status,code}));
+    throw fail('calcom_provider_failed',502);
+  }
   const data=await res.json().catch(()=>null);
   if (data?.status !== 'success' || !data.data) throw fail('calcom_invalid_response',502);
   return data.data;
