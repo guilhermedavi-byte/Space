@@ -263,6 +263,132 @@ const listRegisters = ({ limit = 1000 } = {}) => {
   return fetchRows(`/${TABLES.registers}?select=*&order=created_at.desc.nullslast&limit=${max}`, { optional: true });
 };
 
+const getAuditReportLessonId = (report) =>
+  String(report?.payload?.lesson_id || "").trim();
+
+const getAuditCreatedAtMs = (report) =>
+  Date.parse(String(report?.created_at || report?.updated_at || "")) || 0;
+
+const buildAuditObservationSummary = (analysis = {}) => {
+  const quality = analysis?.qualidade_dados && typeof analysis.qualidade_dados === "object" ? analysis.qualidade_dados : {};
+  const type = analysis?.tipo_aula && typeof analysis.tipo_aula === "object" ? analysis.tipo_aula : {};
+  const talk = analysis?.tempo_fala_aluno && typeof analysis.tempo_fala_aluno === "object" ? analysis.tempo_fala_aluno : {};
+  const summary = analysis?.resumo && typeof analysis.resumo === "object" ? analysis.resumo : {};
+
+  const parts = [];
+  const typeLabel = [type.tipo, type.estrutura_ou_tema]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(" — ");
+  if (typeLabel) parts.push(`Tipo: ${typeLabel}`);
+
+  const coverage = Number(quality.cobertura_percentual);
+  if (Number.isFinite(coverage)) parts.push(`Cobertura: ${coverage.toFixed(1)}%`);
+
+  const studentTalk = Number(talk.percentual);
+  const teacherTalk = Number(talk.percentual_professor);
+  if (Number.isFinite(studentTalk)) parts.push(`Fala aluno: ${studentTalk.toFixed(1)}%`);
+  if (Number.isFinite(teacherTalk)) parts.push(`Fala professor: ${teacherTalk.toFixed(1)}%`);
+
+  const attended = Array.isArray(summary.pontos_atendidos)
+    ? summary.pontos_atendidos.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const missed = Array.isArray(summary.pontos_nao_atendidos)
+    ? summary.pontos_nao_atendidos.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const insufficient = Array.isArray(summary.dados_insuficientes)
+    ? summary.dados_insuficientes.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+
+  if (attended.length) parts.push(`Pontos atendidos: ${attended.join("; ")}`);
+  if (missed.length) parts.push(`Pontos não atendidos: ${missed.join("; ")}`);
+  if (insufficient.length) parts.push(`Dados insuficientes: ${insufficient.join("; ")}`);
+
+  return parts.join(" | ");
+};
+
+const enrichLessonRegistersWithAiAudits = ({ registers = [], reports = [] } = {}) => {
+  const latestAuditByLessonId = new Map();
+
+  (Array.isArray(reports) ? reports : []).forEach((report) => {
+    if (String(report?.tipo_relatorio || "").trim() !== "auditoria_aula_ia") return;
+    const lessonId = getAuditReportLessonId(report);
+    if (!lessonId) return;
+
+    const current = latestAuditByLessonId.get(lessonId);
+    if (!current || getAuditCreatedAtMs(report) > getAuditCreatedAtMs(current)) {
+      latestAuditByLessonId.set(lessonId, report);
+    }
+  });
+
+  return (Array.isArray(registers) ? registers : []).map((row) => {
+    const lessonId = String(row?.aula_id || "").trim();
+    const report = lessonId ? latestAuditByLessonId.get(lessonId) : null;
+    if (!report) return row;
+
+    const payload = report?.payload && typeof report.payload === "object" ? report.payload : {};
+    const analysis = payload?.analysis && typeof payload.analysis === "object" ? payload.analysis : {};
+    const type = analysis?.tipo_aula && typeof analysis.tipo_aula === "object" ? analysis.tipo_aula : {};
+    const structure = analysis?.estrutura && typeof analysis.estrutura === "object" ? analysis.estrutura : {};
+    const vocabulary = analysis?.vocabulario && typeof analysis.vocabulario === "object" ? analysis.vocabulario : {};
+    const homework = analysis?.tarefa_casa && typeof analysis.tarefa_casa === "object" ? analysis.tarefa_casa : {};
+
+    const contentWorked = [type.tipo, type.estrutura_ou_tema]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .join(" — ");
+
+    const grammar = String(structure.estrutura_estudada || "").trim();
+    const vocabularyList = Array.isArray(vocabulary.palavras_expressoes)
+      ? vocabulary.palavras_expressoes.map((value) => String(value || "").trim()).filter(Boolean)
+      : [];
+
+    const homeworkResult = String(homework.resultado || "").trim().toUpperCase();
+    const homeworkText =
+      homeworkResult === "SIM"
+        ? String(homework.descricao || "Sim").trim()
+        : "";
+
+    const auditObservation = buildAuditObservationSummary(analysis);
+
+    return {
+      ...row,
+
+      conteudo_trabalhado:
+        String(row?.conteudo_trabalhado || "").trim() ||
+        contentWorked,
+
+      conteudo_aula:
+        String(row?.conteudo_aula || "").trim() ||
+        contentWorked,
+
+      gramaticaTrabalhada:
+        String(row?.gramaticaTrabalhada || "").trim() ||
+        grammar,
+
+      vocabularioTrabalhado:
+        String(row?.vocabularioTrabalhado || "").trim() ||
+        vocabularyList.join(", "),
+
+      homework:
+        String(row?.homework || "").trim() ||
+        homeworkText,
+
+      observacoes:
+        String(row?.observacoes || "").trim() ||
+        auditObservation,
+
+      observacoesInternas:
+        String(row?.observacoesInternas || "").trim() ||
+        auditObservation,
+
+      aiAuditAvailable: true,
+      aiAuditReportId: report?.id ?? null,
+      aiAuditPayload: payload,
+    };
+  });
+};
+
 const statusOpen = (value) => !["resolvida", "resolvido", "fechada", "fechado"].includes(String(value || "").toLowerCase());
 const SAO_PAULO_TIME_ZONE = "America/Sao_Paulo";
 const dateKey = (value) => {
@@ -615,9 +741,10 @@ const loadAdminDashboard = async ({ session, perf = null } = {}) => {
       : [],
   ]);
   const students = mergePedagogicalStudents({ onboarding, financeStudents, preferences });
+  const enrichedRegisters = enrichLessonRegistersWithAiAudits({ registers, reports });
 
   const today = dateKey(new Date());
-  const registeredIds = new Set(registers.map((row) => String(row?.aula_id || "")).filter(Boolean));
+  const registeredIds = new Set(enrichedRegisters.map((row) => String(row?.aula_id || "")).filter(Boolean));
   const pendingLessons = lessons.filter((row) => {
     const status = String(row?.status_aula || "").toLowerCase();
     const ended = row?.fim ? Date.parse(row.fim) < Date.now() : row?.inicio ? Date.parse(row.inicio) < Date.now() : false;
@@ -655,7 +782,7 @@ const loadAdminDashboard = async ({ session, perf = null } = {}) => {
     studentPreferences: preferences,
     onboarding,
     lessons,
-    registers,
+    registers: enrichedRegisters,
     pendingLessons,
     alerts,
     satisfaction,
