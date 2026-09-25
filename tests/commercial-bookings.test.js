@@ -8,6 +8,7 @@ function harness(){
     requests.push({path,...options});
     if(path.startsWith('/voice_calls'))return {data:[{id:callId,space_user_uid:'sdr-1',lead_id:'lead-1'}]};
     if(path.startsWith('/commercial_booking_contexts'))return {data:[{id:ctxId,sdr_uid:'sdr-1',voice_call_id:callId,lead_id:'lead-1'}]};
+    if(path==='/rpc/space_resolve_booking_meeting')return {data:{meeting_id:null,meeting_status:'unresolved',match_method:'unresolved'}};
     if(path.startsWith('/rpc/')){const b=options.body.p_booking;const old=store.get(b.calcom_booking_id);if(!old||old.provider_updated_at<b.provider_updated_at)store.set(b.calcom_booking_id,{...b,id:'stored'});return {data:store.get(b.calcom_booking_id)};}
     if(path.includes('calcom_booking_id=eq.')){const uid=new URLSearchParams(path.split('?')[1]).get('calcom_booking_id').slice(3);return {data:store.has(uid)?[store.get(uid)]:[]};}
     return {data:[...store.values()].filter(b=>!path.includes('sdr_uid=eq.')||path.includes(`sdr_uid=eq.${b.sdr_uid}`))};

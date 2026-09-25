@@ -77,9 +77,11 @@ async function reconcile({uid,request=supabaseFetch,fetcher=fetch,env=process.en
   const attendee=b.attendees?.[0]||{},host=b.hosts?.[0]||{};
   const row={calcom_booking_id:uid,calcom_event_type_id:b.eventTypeId,status:b.rescheduledToUid?'rescheduled':status==='accepted'?'confirmed':['cancelled','rejected'].includes(status)?'cancelled':'pending',start_at:start,end_at:end,timezone:attendee.timeZone||host.timeZone||null,attendee_name:clean(attendee.name),attendee_email:clean(attendee.email),attendee_phone:clean(attendee.phoneNumber),host_name:clean(host.name),host_email:clean(host.email),sdr_uid:owner||null,voice_call_id:existing?.voice_call_id||ctx?.voice_call_id||null,lead_id:existing?.lead_id||ctx?.lead_id||null,opportunity_id:existing?.opportunity_id||ctx?.opportunity_id||null,booking_context_id:existing?.booking_context_id||ctx?.id||null,provider_updated_at:updated,cancelled_at:['cancelled','rejected'].includes(status)?updated:null,rescheduled_from:b.rescheduledFromUid||null,rescheduled_to:b.rescheduledToUid||null};
   const saved=await request('/rpc/space_upsert_commercial_booking',{method:'POST',body:{p_booking:row}});
+  const persisted=Array.isArray(saved.data)?saved.data[0]:saved.data;
+  const link=await request('/rpc/space_resolve_booking_meeting',{method:'POST',body:{p_booking_id:persisted.id}});
   // Reconcile predecessor too; a failure returns non-2xx so provider retries, safely.
   if(depth===0 && bookingUid(b.rescheduledFromUid)) await reconcile({uid:b.rescheduledFromUid,request,fetcher,env,user,isAdmin,depth:depth+1});
   if(bookingUid(b.rescheduledToUid)) return reconcile({uid:b.rescheduledToUid,request,fetcher,env,user,isAdmin,depth:depth+1});
-  return model(Array.isArray(saved.data)?saved.data[0]:saved.data);
+  return model({...persisted,...link.data});
 }
 module.exports={CAL_LINK,CAL_EVENT_TYPE_ID,list,context,reconcile,verifySignature,bookingUid,fail};
