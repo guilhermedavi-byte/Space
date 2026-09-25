@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const {unwrap,remoteIdentity,transportStatus,quotedId}=require('../../_lib/attendance-provider-message');
 const { readJsonBody, sendJson } = require('../../../_lib/http');
 const { supabaseFetch } = require('../../_lib/supabase-rest');
 
@@ -28,7 +29,7 @@ const kindOf = message => {
   return 'text';
 };
 const stampOf = value => {
-  const n = Number(value);
+  const n = Number(value?.low ?? value);
   const d = Number.isFinite(n) && n > 0 ? new Date(n > 1e12 ? n : n * 1000) : new Date();
   return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
 };
@@ -49,6 +50,7 @@ const mediaOf = message => {
     filename: String(src.fileName || src.title || '').slice(0, 220) || null,
     size: Number.isFinite(size) && size > 0 ? Math.min(size, 100 * 1024 * 1024) : null,
     duration: Number.isFinite(duration) && duration >= 0 ? Math.min(duration, 24 * 60 * 60) : null,
+    ptt: src.ptt === true,
     caption: textOf(message) || null
   };
 };
@@ -59,21 +61,21 @@ const refreshAvatar = ({ connectionId, externalIdentifier, identifierType }) => 
   connection_id: connectionId, identifier_type: identifierType, external_identifier: externalIdentifier
 });
 
-module.exports = async (req, res) => {
+const createHandler=({request=supabaseFetch,refresh=refreshAvatar,env=process.env}={})=>async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
   try {
-    const expected = String(process.env.EVOLUTION_WEBHOOK_SECRET || process.env.EVOLUTION_API_KEY || '').trim();
+    const expected = String(env.EVOLUTION_WEBHOOK_SECRET || env.EVOLUTION_API_KEY || '').trim();
     const supplied = String(req.headers['x-space-evolution-secret'] || '').trim();
     if (!expected || expected.length < 24 || !equal(expected, supplied)) return sendJson(res, 401, { error: 'unauthorized' });
 
     const payload = await readJsonBody(req);
     const instance = String(payload?.instance || '').trim();
-    const event = String(payload?.event || '').trim().toLowerCase();
+    const event = String(payload?.event || '').trim().toLowerCase().replace(/_/g,'.');
     if (!/^[a-zA-Z0-9_-]{1,100}$/.test(instance)) return sendJson(res, 202, { ok: true });
     if (event === 'ping') return sendJson(res, 200, { ok: true, ignored: 'ping' });
 
-    const resolved = (await supabaseFetch('/rpc/attendance_evolution_resolve_instance', {
+    const resolved = (await request('/rpc/attendance_evolution_resolve_instance', {
       method: 'POST',
       body: { p_instance_name: instance }
     })).data || {};
@@ -92,37 +94,41 @@ module.exports = async (req, res) => {
 
     if (event === 'messages.upsert') {
       const d = payload.data || {};
-      if (d?.key?.fromMe === true) return sendJson(res, 200, { ok: true, ignored: 'from_me' });
-      const remoteJid = String(d?.key?.remoteJid || d?.key?.remoteJidAlt || '');
-      if (!remoteJid || /@g\.us$|status@broadcast$/i.test(remoteJid)) return sendJson(res, 200, { ok: true, ignored: 'non_direct' });
-      const phone = normalizePhone(remoteJid);
-      const externalMessageId = String(d?.key?.id || '').trim();
-      if (!phone || !externalMessageId) return sendJson(res, 200, { ok: true, ignored: 'invalid_message' });
-
+      const outbound=d?.key?.fromMe===true;
+      const identity=remoteIdentity(d.key);
+      const externalMessageId=String(d?.key?.id||'').trim();
+      if(!identity||!externalMessageId)return sendJson(res,200,{ok:true,ignored:'non_direct_or_invalid'});
+      const remoteJid=identity.jid,phone=identity.phone;
+      d.message=unwrap(d.message);
+      if(outbound)console.info('[attendance-provider]',{event:'provider_outbound_received',from_me:true,has_id:!!externalMessageId,has_remote_jid:!!d.key.remoteJid,has_remote_jid_alt:!!d.key.remoteJidAlt,has_participant:!!d.key.participant,has_timestamp:!!d.messageTimestamp,message_type:kindOf(d.message)});
       const text = textOf(d.message);
       const kind = kindOf(d.message);
       const media = mediaOf(d.message);
+      if(kind==='text'&&!text)return sendJson(res,200,{ok:true,ignored:'unsupported_message'});
       const content = text ? { text } : {};
       if (media) content.media = { ...media, fetch_status: 'pending' };
-      await supabaseFetch('/rpc/attendance_ingest_message', {
+      const ingested=await request('/rpc/attendance_ingest_provider_message', {
         method: 'POST',
         body: {
           p_event: {
             provider: 'evolution_whatsapp',
+            direction:outbound?'outbound':'inbound',
+            transport_status:outbound?(transportStatus(d.status)||'sent'):'received',
+            identity_aliases:identity.aliases,
             connection_id: connection.connection_id,
             channel_id: channel.channel_id,
             external_event_id: externalMessageId,
             external_message_id: externalMessageId,
             external_contact_id: remoteJid,
             identifier_type: 'whatsapp_jid',
-            display_name: String(d.pushName || phone).slice(0, 200),
-            phone_raw: '+' + phone,
+            display_name: String(outbound ? phone || 'Contato WhatsApp' : d.pushName || phone || 'Contato WhatsApp').slice(0,200),
+            phone_raw: phone ? '+' + phone : null,
             country_calling_code: null,
             external_conversation_id: remoteJid,
             kind,
             content,
             provider_timestamp: stampOf(d.messageTimestamp),
-            external_reply_to_id: d?.message?.extendedTextMessage?.contextInfo?.stanzaId || null,
+            external_reply_to_id: quotedId(d.message),
             metadata: {
               provider: 'evolution_whatsapp',
               instance,
@@ -132,17 +138,17 @@ module.exports = async (req, res) => {
           }
         }
       });
-      refreshAvatar({ instance, connectionId: connection.connection_id, externalIdentifier: remoteJid, identifierType: 'whatsapp_jid', phone }).catch(logAvatarFailure);
+      if(outbound)console.info('[attendance-provider]',{event:ingested.data?.deferred?'provider_outbound_deferred':'provider_outbound_'+(ingested.data?.outcome||'inserted'),deferred:!!ingested.data?.deferred});
+      refresh({ instance, connectionId: connection.connection_id, externalIdentifier: remoteJid, identifierType: 'whatsapp_jid', phone }).catch(logAvatarFailure);
       return sendJson(res, 200, { ok: true });
     }
 
     if (event === 'messages.update') {
       const d = payload.data || {};
       const externalId = String(d.keyId || d?.key?.id || '').trim();
-      const map = { READ: 'read', PLAYED: 'read', DELIVERY_ACK: 'delivered', DELIVERED: 'delivered', SERVER_ACK: 'sent', SENT: 'sent', ERROR: 'failed', FAILED: 'failed' };
-      const status = map[String(d.status || '').toUpperCase()];
+      const status = transportStatus(d.status ?? d.update?.status);
       if (externalId && status) {
-        await supabaseFetch('/rpc/attendance_set_transport_by_external', {
+        await request('/rpc/attendance_set_transport_by_external', {
           method: 'POST',
           body: { p_channel_id: channel.channel_id, p_external_message_id: externalId, p_status: status }
         });
@@ -154,7 +160,7 @@ module.exports = async (req, res) => {
       const raw = String(payload?.data?.state || payload?.data?.status || '').toLowerCase();
       const state = raw === 'open' ? 'open' : raw === 'connecting' ? 'connecting' : ['close','closed','refused'].includes(raw) ? 'disconnected' : null;
       if (state) {
-        await supabaseFetch('/rpc/attendance_evolution_connection', {
+        await request('/rpc/attendance_evolution_connection', {
           method: 'POST',
           body: {
             p_actor_uid: 'evolution_webhook',
@@ -170,7 +176,10 @@ module.exports = async (req, res) => {
 
     return sendJson(res, 200, { ok: true, ignored: event || 'unknown' });
   } catch (error) {
-    console.warn('[attendance-evolution-webhook]', { status: Number(error.status) || 0, code: String(error.code || error.message || 'unknown').slice(0, 80) });
+    console.warn('[attendance-evolution-webhook]', { event:'provider_outbound_failed', status:Number(error.status)||0, code:/^[0-9A-Z]{5}$/.test(error.code||'')?error.code:'attendance_provider_failed' });
     return sendJson(res, 503, { error: 'attendance_unavailable' });
   }
 };
+
+module.exports=createHandler();
+module.exports.createHandler=createHandler;

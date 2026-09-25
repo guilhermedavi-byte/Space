@@ -21,7 +21,7 @@ function compactEvolutionMessage(data,message) {
     return Number.isFinite(n)&&n>=0&&n<=100*1024*1024?n:undefined;
   };
   const str=(v,max)=>typeof v==='string'?v.slice(0,max):undefined;
-  return {key:{id:str(data?.key?.id,256),remoteJid:str(data?.key?.remoteJid || data?.key?.remoteJidAlt,256),fromMe:data?.key?.fromMe===true,participant:str(data?.key?.participant,256)},
+  return {key:{id:str(data?.key?.id,256),remoteJid:str(data?.key?.remoteJid || data?.key?.remoteJidAlt,256),remoteJidAlt:str(data?.key?.remoteJidAlt,256),fromMe:data?.key?.fromMe===true,participant:str(data?.key?.participant,256)},
     messageType:`${type}Message`,message:{[`${type}Message`]:{
       url:str(src.url,2048),directPath:str(src.directPath,2048),mediaKey:binaryBase64(src.mediaKey),
       fileSha256:binaryBase64(src.fileSha256),fileEncSha256:binaryBase64(src.fileEncSha256),
