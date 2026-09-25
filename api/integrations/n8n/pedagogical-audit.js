@@ -3,7 +3,6 @@ const { readJsonBody, sendJson } = require("../../_lib/http");
 const { supabaseFetch } = require("../../_lib/supabase-rest");
 
 const LESSONS_TABLE = "n8n_aulas_pedagogicas_space";
-const REPORTS_TABLE = "n8n_relatorios_pedagogicos_space";
 
 const safeEncode = (value) => encodeURIComponent(String(value || ""));
 
@@ -20,53 +19,29 @@ const getMeetCode = (value) => {
   return match?.[1]?.toLowerCase() || "";
 };
 
+// Calendar UIDs and Meet rooms repeat. Only a scheduled occurrence is unique.
 const findLesson = async (body) => {
-  const occurrenceId = String(body.calendar_uid || body.occurrence_id || "").trim();
-  if (occurrenceId) {
-    const { data } = await supabaseFetch(
-      `/${LESSONS_TABLE}?select=*&occurrence_id=eq.${safeEncode(occurrenceId)}&limit=1`
-    ).catch(() => ({ data: [] }));
-    const row = Array.isArray(data) ? data[0] : null;
-    if (row) return row;
-  }
-
-  const meetCode = getMeetCode(body.native_meeting_id || body.meeting_url);
-  if (meetCode) {
-    const { data } = await supabaseFetch(
-      `/${LESSONS_TABLE}?select=*&google_meet_url=ilike.${safeEncode(`*${meetCode}*`)}&limit=1`
-    ).catch(() => ({ data: [] }));
-    const row = Array.isArray(data) ? data[0] : null;
-    if (row) return row;
-  }
-
-  const referenceRaw = body.scheduled_at || body.meeting_start_time || body.started_at || "";
-  const referenceMs = Date.parse(String(referenceRaw || ""));
-  const studentName = String(body.student_name || body.student_name_guess || "").trim();
-
-  if (Number.isFinite(referenceMs) && studentName) {
-    const from = new Date(referenceMs - 2 * 60 * 60 * 1000).toISOString();
-    const to = new Date(referenceMs + 2 * 60 * 60 * 1000).toISOString();
-    const { data } = await supabaseFetch(
-      `/${LESSONS_TABLE}?select=*&aluno_nome=ilike.${safeEncode(`*${studentName}*`)}&inicio=gte.${safeEncode(from)}&inicio=lte.${safeEncode(to)}&order=inicio.asc.nullslast&limit=10`
-    ).catch(() => ({ data: [] }));
-
-    const rows = Array.isArray(data) ? data : [];
-    if (rows.length === 1) return rows[0];
-  }
-
-  return null;
+  const explicitId = String(body.lesson_id || "").trim();
+  const scheduled = Date.parse(body.scheduled_at || body.timing_metrics?.scheduled_start || "");
+  const occurrence = String(body.calendar_uid || body.occurrence_id || "").trim();
+  const meet = getMeetCode(body.native_meeting_id || body.meeting_url);
+  if (!explicitId && (!Number.isFinite(scheduled) || (!occurrence && !meet))) return null;
+  const filter = explicitId
+    ? `id=eq.${safeEncode(explicitId)}`
+    : `${occurrence ? `occurrence_id=eq.${safeEncode(occurrence)}` : `google_meet_url=ilike.${safeEncode(`*${meet}*`)}`}&inicio=eq.${safeEncode(new Date(scheduled).toISOString())}`;
+  const { data } = await supabaseFetch(`/${LESSONS_TABLE}?select=*&${filter}&limit=2`);
+  if (!Array.isArray(data) || data.length !== 1) return null;
+  const row = data[0];
+  if (Number.isFinite(scheduled) && Date.parse(row.inicio || row.data_aula) !== scheduled) return null;
+  if (occurrence && String(row.occurrence_id || "") !== occurrence) return null;
+  if (meet && getMeetCode(row.google_meet_url) !== meet) return null;
+  if (body.student_id && String(row.aluno_id) !== String(body.student_id)) return null;
+  if ((body.professor_id || body.teacher_id) && String(row.professor_id) !== String(body.professor_id || body.teacher_id)) return null;
+  return row;
 };
 
-const findExistingAudit = async ({ alunoId, meetingId }) => {
-  if (!alunoId || meetingId == null) return null;
-
-  const { data } = await supabaseFetch(
-    `/${REPORTS_TABLE}?select=*&aluno_id=eq.${safeEncode(alunoId)}&tipo_relatorio=eq.auditoria_aula_ia&order=created_at.desc.nullslast&limit=30`
-  ).catch(() => ({ data: [] }));
-
-  const rows = Array.isArray(data) ? data : [];
-  return rows.find((row) => String(row?.payload?.meeting_id ?? "") === String(meetingId)) || null;
-};
+const observe = (event, meetingId, lessonId = null) =>
+  console.info("[n8n-pedagogical-audit]", { event, meeting_id: meetingId, lesson_id: lessonId });
 
 module.exports = async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
@@ -92,39 +67,17 @@ module.exports = async (req, res) => {
     return sendJson(res, 400, { error: "invalid_json" });
   }
 
-  if (body.meeting_id == null || !body.analysis || typeof body.analysis !== "object") {
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(String(body.meeting_id || "")) || !body.analysis || typeof body.analysis !== "object" || Array.isArray(body.analysis) || (body.transcript != null && typeof body.transcript !== "string")) {
+    observe("TRANSCRIPTION_INVALID_PAYLOAD", null);
     return sendJson(res, 400, { error: "missing_audit_payload" });
   }
 
   try {
+    observe("TRANSCRIPTION_RECEIVED", body.meeting_id);
     const lesson = await findLesson(body);
-
-    if (!lesson) {
-      return sendJson(res, 404, {
-        error: "lesson_not_found_for_audit",
-        meeting_id: body.meeting_id,
-      });
-    }
-
-    const alunoId = String(lesson.aluno_id || lesson.firestore_doc_id || "").trim();
-    const alunoNome = String(lesson.aluno_nome || body.student_name_guess || "Aluno").trim();
-
-    const existing = await findExistingAudit({
-      alunoId,
-      meetingId: body.meeting_id,
-    });
-
-    if (existing) {
-      return sendJson(res, 200, {
-        ok: true,
-        saved: false,
-        duplicate: true,
-        report_id: existing.id,
-        lesson_id: lesson.id,
-        aluno_id: alunoId || null,
-        aluno_nome: alunoNome,
-      });
-    }
+    observe(lesson ? "TRANSCRIPTION_MATCHED_TO_LESSON" : "TRANSCRIPTION_LESSON_NOT_FOUND", body.meeting_id, lesson?.id);
+    const alunoId = String(lesson?.aluno_id || "").trim();
+    const alunoNome = String(lesson?.aluno_nome || "").trim();
 
     const now = new Date().toISOString();
     const reportPayload = {
@@ -135,7 +88,13 @@ module.exports = async (req, res) => {
       teacher_name: body.teacher_name || null,
       teacher_email: body.teacher_email || null,
       student_name_guess: body.student_name_guess || null,
-      lesson_id: String(lesson.id || ""),
+      lesson_id: lesson ? String(lesson.id) : null,
+      professor_id: lesson?.professor_id || null,
+      scheduled_at: body.scheduled_at || body.timing_metrics?.scheduled_start || null,
+      recording_id: body.recording_id || null,
+      linkage_status: lesson ? "matched" : "pending",
+      transcript: typeof body.transcript === "string" ? body.transcript.trim() : "",
+      segments: Array.isArray(body.segments) ? body.segments.map(({ text, speaker, start, end }) => ({ text, speaker, start, end })) : [],
       audit_generated_at: body.audit_generated_at || now,
       transcript_quality: body.transcript_quality || null,
       timing_metrics: body.timing_metrics || null,
@@ -159,37 +118,40 @@ module.exports = async (req, res) => {
       periodo_fim: body.meeting_end_time || body.timing_metrics?.actual_class_end || null,
       resumo: String(body.report || "").trim() || "Auditoria pedagógica gerada automaticamente.",
       metricas,
-      status: "concluido",
-      canal: "n8n_vexa_openai",
+      status: lesson ? "concluido" : "aguardando_vinculo",
+      canal: "n8n_pedagogical_audit",
       enviado_em: null,
       payload: reportPayload,
       aluno_id: alunoId || null,
       aluno_nome: alunoNome,
-      onboarding_id: String(lesson.onboarding_id || "").trim() || null,
+      onboarding_id: String(lesson?.onboarding_id || "").trim() || null,
       created_at: now,
       updated_at: now,
     };
 
-    const { data } = await supabaseFetch(`/${REPORTS_TABLE}`, {
+    const { data } = await supabaseFetch("/rpc/upsert_pedagogical_audit", {
       method: "POST",
-      body: row,
+      body: { p_report: row },
     });
 
     const saved = Array.isArray(data) ? data[0] : data;
 
-    return sendJson(res, 200, {
+    observe("TRANSCRIPTION_SAVED", body.meeting_id, lesson?.id);
+    if (lesson && saved?.payload?.transcript) observe("TRANSCRIPTION_AVAILABLE", body.meeting_id, lesson.id);
+    return sendJson(res, lesson ? 200 : 202, {
       ok: true,
+      linked: Boolean(lesson),
+      transcription_available: Boolean(lesson && saved?.payload?.transcript),
       saved: true,
-      duplicate: false,
       report_id: saved?.id ?? null,
-      lesson_id: lesson.id,
+      lesson_id: lesson?.id || null,
       aluno_id: alunoId || null,
       aluno_nome: alunoNome,
     });
   } catch (error) {
     console.error("[n8n-pedagogical-audit]", {
-      code: error?.code || "",
-      message: String(error?.message || "").slice(0, 200),
+      event: "TRANSCRIPTION_SAVE_FAILED",
+      code: /^[A-Z0-9_]+$/i.test(error?.code || "") ? error.code : "save_failed",
     });
 
     return sendJson(res, 500, {

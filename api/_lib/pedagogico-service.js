@@ -313,7 +313,7 @@ const enrichLessonRegistersWithAiAudits = ({ registers = [], reports = [] } = {}
   (Array.isArray(reports) ? reports : []).forEach((report) => {
     if (String(report?.tipo_relatorio || "").trim() !== "auditoria_aula_ia") return;
     const lessonId = getAuditReportLessonId(report);
-    if (!lessonId) return;
+    if (!lessonId || report?.payload?.linkage_status !== "matched") return;
 
     const current = latestAuditByLessonId.get(lessonId);
     if (!current || getAuditCreatedAtMs(report) > getAuditCreatedAtMs(current)) {

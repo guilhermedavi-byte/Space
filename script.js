@@ -31853,6 +31853,21 @@ const renderAdminPedLessonRecordDynamicSections = (record) => {
   );
 };
 
+const renderAdminPedLessonTranscript = (record) => {
+  const lessonId = String(record?.liveLessonId || "");
+  const reports = adminPedagogicoState.pedagogicalOps?.reports || [];
+  const report = reports.filter((row) => row?.tipo_relatorio === "auditoria_aula_ia" &&
+    row?.payload?.linkage_status === "matched" && lessonId &&
+    String(row.payload.lesson_id) === lessonId && row.payload.transcript)
+    .sort((a, b) => Date.parse(b.updated_at || b.created_at) - Date.parse(a.updated_at || a.created_at))[0];
+  if (!report) return "";
+  return `<section class="admin-ped-record-section" data-lesson-transcript>
+    <h3>Transcrição da aula</h3>
+    <p>Transcrição automática · ${escapeHtml(report.payload.transcript_source || "n8n")}</p>
+    <div class="admin-ped-lesson-transcript" tabindex="0" aria-label="Transcrição completa da aula">${escapeHtml(report.payload.transcript)}</div>
+  </section>`;
+};
+
 const renderAdminPedLessonRecordDetail = (record) => {
   const statusMeta = getAdminPedLessonRecordStatusMeta(record?.log?.statusAula || record?.statusKey);
   const titleEl = getAdminPedLessonRecordDrawer()?.querySelector("[data-admin-ped-lesson-record-title]");
@@ -31875,6 +31890,7 @@ const renderAdminPedLessonRecordDetail = (record) => {
       <span class="pedrecords-status-badge is-${escapeHtml(statusMeta.tone)}">${escapeHtml(statusMeta.label)}</span>
     </section>
     ${renderAdminPedLessonRecordDynamicSections(record)}
+    ${renderAdminPedLessonTranscript(record)}
   `;
 };
 
