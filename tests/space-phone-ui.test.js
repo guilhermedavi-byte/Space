@@ -280,3 +280,16 @@ test('subscribe publishes state machine changes from the core', async () => {
   assert.ok(seen.includes('active'));
   assert.ok(seen.includes('ended'));
 });
+
+test('SDK nested IDs persist while call is active and getter IDs survive hangup', async () => {
+  const dom = createDom(); const requests=[]; const RTC=fakeTelnyxFactory(requests);
+  const phone=createSpacePhone({window:dom.window,document:dom.window.document,TelnyxRTC:RTC,fetchWithAuth:createFetch(requests),bootstrap:{enabled:true,tokenEndpoint:'/token',callEndpoint:'/calls'}});
+  phone.mount(); await phone.call({phoneNumber:'+16175551212'});
+  const sdkCall={state:'active',hangup:async()=>{},telnyxIDs:{telnyxLegId:'getter-leg',telnyxSessionId:'getter-session'}};
+  RTC.instances[0].emit('telnyx.notification',{call:sdkCall,data:{call_control_id:'control'}});
+  await new Promise(resolve=>setTimeout(resolve,20));
+  assert.ok(requests.some(r=>r.method==='PATCH'&&r.body.telnyx_call_leg_id==='getter-leg'&&r.body.telnyx_call_control_id==='control'));
+  await phone.hangup();
+  assert.ok(requests.some(r=>r.method==='PATCH'&&r.body.status==='ended'&&r.body.telnyx_call_session_id==='getter-session'));
+  await phone.cleanup(); dom.window.close();
+});

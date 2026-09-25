@@ -50,26 +50,7 @@ const getCall = async (callId, request = supabaseFetch) => {
 
 const getQualification = async (callId, request = supabaseFetch) => asRows(await request(`/voice_call_qualifications?select=${qualificationSelect}&voice_call_id=eq.${enc(callId)}&limit=1`, { timeoutMs: 12000 }))[0] || null;
 
-const getScore = async (call, request = supabaseFetch) => {
-  const ids = [call.telnyx_call_leg_id, call.telnyx_call_session_id].map(clean).filter(Boolean);
-  for (const id of ids) {
-    for (const field of ['call_leg_id', 'call_session_id']) {
-      const row = asRows(await request(`/sdr_call_scores?select=${scoreSelect}&${field}=eq.${enc(id)}&limit=1`, { timeoutMs: 12000 }).catch(() => ({ data: [] })))[0];
-      if (row) return row;
-    }
-  }
-  const from = clean(call.from_number); const to = clean(call.to_number);
-  if (!from || !to) return null;
-  const rows = asRows(await request(`/sdr_call_scores?select=${scoreSelect}&from_number=eq.${enc(from)}&to_number=eq.${enc(to)}&order=created_at.desc&limit=8`, { timeoutMs: 12000 }).catch(() => ({ data: [] })));
-  const callStart = Date.parse(call.started_at || call.ended_at || '');
-  const candidates = rows.map(row => {
-    const scoreStart = Date.parse(row.started_at || row.created_at || '');
-    const startDelta = callStart && scoreStart ? Math.abs(callStart - scoreStart) / 1000 : 9999;
-    const durDelta = call.duration_seconds && row.duration_seconds ? Math.abs(Number(call.duration_seconds) - Number(row.duration_seconds)) : 0;
-    return { row, score: startDelta + durDelta };
-  }).filter(item => item.score <= 95).sort((a, b) => a.score - b.score);
-  return candidates[0] && (!candidates[1] || Math.abs(candidates[0].score - candidates[1].score) > 1) ? candidates[0].row : null;
-};
+const { getCorrelatedScore: getScore } = require('./space-phone-correlation');
 
 const normalizeQualificationPayload = row => ({
   context: clean(row?.context),
@@ -251,7 +232,7 @@ const processPendingQualifications = async ({ request = supabaseFetch, now = new
   if (!eventWebhookUrl()) return { ok: false, error: 'n8n_webhook_not_configured' };
   const before = new Date(now.getTime() - 60 * 1000).toISOString();
   const expired = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
-  const rows = asRows(await request(`/voice_call_qualifications?select=voice_call_id,updated_at,voice_calls!inner(status,ended_at)&voice_calls.status=eq.ended&or=(and(status.eq.draft,updated_at.lt.${enc(before)}),and(status.eq.ai_processing,updated_at.lt.${enc(expired)}))&order=updated_at.asc&limit=10`, { timeoutMs: 12000 }));
+  const rows = asRows(await request(`/voice_call_qualifications?select=voice_call_id,updated_at,voice_calls!inner(status,ended_at)&voice_calls.ended_at=not.is.null&or=(and(status.eq.draft,updated_at.lt.${enc(before)}),and(status.eq.ai_processing,updated_at.lt.${enc(expired)}))&order=updated_at.asc&limit=10`, { timeoutMs: 12000 }));
   let dispatched = 0;
   const started = Date.now();
   for (const row of rows) {

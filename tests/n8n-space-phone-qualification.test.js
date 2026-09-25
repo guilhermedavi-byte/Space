@@ -332,3 +332,25 @@ test('explicit community-node failure cannot mark handoff sent', async () => {
     assert.equal(seen.some(r => r.options.method === 'PATCH'), false);
   }
 });
+
+test('late transcript stays draft then dispatches once and reaches review_required', async () => {
+  const {requestAiQualification,saveAiQualification}=require('../api/_lib/space-phone-n8n');
+  const fx=fixtures();fx.qualification.status='draft';fx.score.transcript='';fx.qualification.updated_at='2026-09-24T12:00:00Z';
+  let events=0;
+  const request=async(path,options={})=>{
+    if(path.startsWith('/voice_call_qualifications')&&options.method==='PATCH') {
+      Object.assign(fx.qualification,options.body);return {data:[{...fx.qualification}]};
+    }
+    return makeRequest(fx)(path,options);
+  };
+  const dispatch=async()=>{events++;return {ok:true};};
+  await requestAiQualification({call:fx.call,request,dispatch});
+  assert.equal(fx.qualification.status,'draft');assert.equal(events,0);
+  fx.score.transcript='Transcript arrived later';
+  await requestAiQualification({call:fx.call,request,dispatch});
+  await requestAiQualification({call:fx.call,request,dispatch});
+  assert.equal(events,1);
+  await saveAiQualification({callId:fx.call.id,qualification:{context:'Gemini suggestion'},request});
+  assert.equal(fx.qualification.status,'review_required');
+  await requestAiQualification({call:fx.call,request,dispatch});assert.equal(events,1);
+});

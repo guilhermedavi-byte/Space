@@ -157,7 +157,7 @@ test("space phone route boots the dedicated admin panel and script", async () =>
     assert.match(body, /data-initial-panel="space-phone"/);
     assert.match(body, /data-space-phone/);
     assert.match(body, /src="script\.js\?v=7"/);
-    assert.match(body, /src="space-phone\.js\?v=10"/);
+    assert.match(body, /src="space-phone\.js\?v=11"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
@@ -230,7 +230,7 @@ test("space phone correlates post-call AI by from/to/time/duration fallback and 
   assert.equal(res.json.calls[0].analysisStatus, "completed");
   assert.equal(res.json.calls[0].transcriptionAvailable, true);
   assert.equal(res.json.calls[0].recordingId, "567415f8-0551-4dc6-b0a4-a1315d71a7bb");
-  assert.deepEqual(patches[0], { path: "/voice_calls?id=eq.call-space", body: { telnyx_call_leg_id: "leg-real", telnyx_call_session_id: "session-real" } });
+  assert.deepEqual(patches[0], { path: "/voice_calls?id=eq.call-space&telnyx_call_leg_id=is.null&telnyx_call_session_id=is.null", body: { telnyx_call_leg_id: "leg-real", telnyx_call_session_id: "session-real" } });
 });
 
 test("space phone does not correlate ambiguous fallback candidates", async () => {

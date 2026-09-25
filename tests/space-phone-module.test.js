@@ -403,3 +403,19 @@ for (const scenario of ['manual-summary', 'ai-empty-fields', 'human-filled']) te
     assert.equal(writes.length,2);
   }
 });
+
+test('qualification shows waiting, delayed transcript retry, generating and available states', async t => {
+  const dom=createModuleDom();t.after(()=>dom.window.close());
+  const mod=dom.window.SpacePhoneModule;await mod.open();
+  mod.state.detail={call:{id:'late-call',endedAt:new Date(Date.now()-11*60000).toISOString()}};
+  mod.state.qualification={values:{},ai:{},status:'draft'};
+  await mod.open();
+  assert.match(dom.window.document.body.textContent,/Transcrição ainda não disponível/);
+  assert.equal(dom.window.document.querySelector('[data-sp-retry-ai]').textContent,'Buscar novamente');
+  mod.state.detail.call.endedAt=new Date().toISOString();await mod.open();
+  assert.match(dom.window.document.body.textContent,/Aguardando transcrição/);
+  mod.state.qualification.status='ai_processing';await mod.open();
+  assert.match(dom.window.document.body.textContent,/Gerando sugestões IA/);
+  mod.state.qualification.ai={context:'suggestion'};await mod.open();
+  assert.match(dom.window.document.body.textContent,/Sugestões IA disponíveis/);
+});

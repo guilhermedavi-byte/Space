@@ -5,6 +5,28 @@
   const { normalizePhoneNumber } = require('./phone-number');
   const ACTIVE_STATUSES = new Set(['connecting', 'ringing', 'active', 'ending']);
 
+  // Explicit SDK IDs only: call.id is a WebRTC dialog ID, not a Telnyx leg ID.
+  function extractTelnyxIds(payload = {}) {
+    const result = {};
+    const seen = new Set();
+    const visit = (value, depth = 0) => {
+      if (!value || typeof value !== 'object' || seen.has(value) || depth > 4) return;
+      seen.add(value);
+      for (const [key, aliases] of Object.entries({
+        telnyx_call_control_id: ['call_control_id', 'callControlId', 'telnyxCallControlId'],
+        telnyx_call_leg_id: ['call_leg_id', 'callLegId', 'telnyxLegId'],
+        telnyx_call_session_id: ['call_session_id', 'callSessionId', 'telnyxSessionId'],
+      })) {
+        for (const alias of [key, ...aliases]) {
+          if (!result[key] && typeof value[alias] === 'string' && value[alias].trim()) result[key] = value[alias].trim();
+        }
+      }
+      for (const key of ['call', 'telnyxIDs', 'data', 'params', 'options']) visit(value[key], depth + 1);
+    };
+    visit(payload);
+    return result;
+  }
+
   function normalizePhone(value, defaultCountry) {
     return normalizePhoneNumber(value, { defaultCountry });
   }
@@ -171,7 +193,7 @@
       }
       if ((status === 'ended' || status === 'failed') && previous !== status) {
         const duration = updateTimerDom();
-        updateCallRecord({ status, ended_at: new Date().toISOString(), duration_seconds: duration }).catch(() => {});
+        updateCallRecord({ ...extractTelnyxIds(state.telnyxCall), status, ended_at: new Date().toISOString(), duration_seconds: duration }).catch(() => {});
       }
       if (status === 'ended' || status === 'failed' || status === 'idle') {
         state.activeStartedAt = 0;
@@ -282,13 +304,9 @@
       if (call && call !== notification && (typeof call.hangup === 'function' || typeof call.muteAudio === 'function')) state.telnyxCall = call;
       const status = normalizeSdkStatus(call?.state || call?.status || notification.type || notification.event_type || notification.eventType);
       if (status) setStatus(status);
-      const ids = {
-        telnyx_call_control_id: call?.call_control_id || call?.callControlId,
-        telnyx_call_leg_id: call?.call_leg_id || call?.callLegId,
-        telnyx_call_session_id: call?.call_session_id || call?.callSessionId,
-      };
-      if (state.callRecord?.id && Object.values(ids).some(Boolean)) {
-        updateCallRecord({ ...ids, status: state.status }).catch(() => {});
+      const ids = { ...extractTelnyxIds(state.telnyxCall), ...extractTelnyxIds(notification) };
+      if (state.callRecord?.id && Object.keys(ids).length) {
+        updateCallRecord(ids).catch(() => {});
       }
     }
 
@@ -304,13 +322,17 @@
       });
     }
 
+    let callUpdateQueue = Promise.resolve();
     async function updateCallRecord(patch = {}) {
       if (!state.callRecord?.id) return null;
-      return apiFetch(bootstrap.callEndpoint || '/api/voice/calls', {
+      const callId = state.callRecord.id;
+      const result = callUpdateQueue.catch(() => {}).then(() => apiFetch(bootstrap.callEndpoint || '/api/voice/calls', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ call_id: state.callRecord.id, ...patch }),
-      });
+        body: JSON.stringify({ call_id: callId, ...patch }),
+      }));
+      callUpdateQueue = result;
+      return result;
     }
 
     function fail(message) {
@@ -365,6 +387,7 @@
           clientState: state.callRecord?.id,
         });
         attachCallListeners(state.telnyxCall);
+        updateCallRecord(extractTelnyxIds(state.telnyxCall)).catch(() => {});
         await applyAudioDevices({ micId: input.micId || input.inputDeviceId, speakerId: input.speakerId || input.outputDeviceId }).catch(() => {});
         setStatus('connecting');
         return state.callRecord;
@@ -381,6 +404,8 @@
 
     async function hangup() {
       if (!ACTIVE_STATUSES.has(state.status)) return;
+      const finalIds = extractTelnyxIds(state.telnyxCall);
+      updateCallRecord(finalIds).catch(() => {});
       setStatus('ending');
       try {
         await requireTelnyxCall('Hangup').hangup();
@@ -391,7 +416,7 @@
       }
       const endedAt = new Date().toISOString();
       const duration = updateTimerDom();
-      await updateCallRecord({ status: 'ended', ended_at: endedAt, duration_seconds: duration }).catch(() => {});
+      await updateCallRecord({ ...finalIds, ...extractTelnyxIds(state.telnyxCall), status: 'ended', ended_at: endedAt, duration_seconds: duration }).catch(() => {});
       setStatus('ended');
       const resetTimer = timers.setTimeout(() => setStatus('idle'), 1800);
       if (resetTimer && typeof resetTimer.unref === 'function') resetTimer.unref();
@@ -534,5 +559,5 @@
     return api;
   }
 
-  return { ACTIVE_STATUSES, createSpacePhone, formatDuration, normalizePhone, normalizeSdkStatus };
+  return { ACTIVE_STATUSES, extractTelnyxIds, createSpacePhone, formatDuration, normalizePhone, normalizeSdkStatus };
 });
