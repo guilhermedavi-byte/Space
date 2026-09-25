@@ -299,7 +299,7 @@ test('history defaults to last7, restores valid preference and ignores invalid s
 test('period selection persists and clear filters resets contextual empty history', async t => {
   const dom = createModuleDom(); t.after(() => dom.window.close());
   await dom.window.SpacePhoneModule.open();
-  assert.match(dom.window.document.querySelector('.sphone-history').textContent, /Nenhuma ligação encontrada nos últimos 7 dias/);
+  assert.match(dom.window.document.querySelector('.sphone-history').textContent, /Nenhuma ligação encontrada no histórico/);
   let select = dom.window.document.querySelector('[data-sp-period]');
   select.value = 'last30'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
   await tick(20);
@@ -350,4 +350,21 @@ test('qualification completion keeps drawer, focused field and scroll nodes inta
   assert.equal(drawer.scrollTop, 280); assert.equal(dom.window.scrollY, 700);
   assert.equal(dom.window.document.activeElement, field);
   assert.match(drawer.textContent, /Qualificação concluída ✓/);
+});
+
+test('changing KPI period preserves loaded history and load more appends calls', async t => {
+  const dom=createModuleDom();t.after(()=>dom.window.close());const seen=[];
+  dom.window.fetchWithAuth=async url=>{
+    const q=new URL(url,'https://space.test').searchParams; seen.push(q);
+    if(q.get('view')==='analytics')return jsonResponse({analytics:{totalCalls:0},range:{period:'today'}});
+    if(q.get('view')==='history')return jsonResponse({calls:[{id:'older',number:'+14075917081',sdrName:'Luana'}],history:{hasMore:false,nextOffset:100}});
+    return jsonResponse({analytics:{totalCalls:1},calls:[{id:'yesterday',number:'+14075917081',sdrName:'Luana'}],history:{hasMore:true,nextOffset:50}});
+  };
+  await dom.window.SpacePhoneModule.open();
+  dom.window.document.querySelector('[data-sp-load-more]').click();await tick(30);
+  assert.deepEqual(Array.from(dom.window.SpacePhoneModule.state.data.calls,c=>c.id),['yesterday','older']);
+  const select=dom.window.document.querySelector('[data-sp-period]');select.value='today';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await tick(30);
+  assert.equal(seen.at(-1).get('view'),'analytics');assert.equal(dom.window.SpacePhoneModule.state.data.analytics.totalCalls,0);
+  assert.deepEqual(Array.from(dom.window.SpacePhoneModule.state.data.calls,c=>c.id),['yesterday','older']);
+  assert.equal(dom.window.document.querySelectorAll('[data-sp-detail]').length,2);
 });

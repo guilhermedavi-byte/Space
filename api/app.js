@@ -179,6 +179,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="/api/runtime-config.js"></script>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="finance-v1.css?v=8" />
+    <link rel="stylesheet" href="dashboard-system.css?v=1" />
   </head>
   <body data-view="interno" data-page="app" data-app-role="${String(roleSlug || "")}" data-initial-panel="${String(initialPanel || "dashboard")}">
     <div class="page-glow page-glow-left" aria-hidden="true"></div>
@@ -203,7 +204,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="finance-v1.js?v=31"></script>
     <script src="script.js?v=7"></script>
     <script src="/assets/space-phone.bundle.js?v=2"></script>
-    <script src="space-phone.js?v=8"></script>
+    <script src="space-phone.js?v=9"></script>
     <script src="admin-sdr.js?v=7"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>

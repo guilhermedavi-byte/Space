@@ -489,20 +489,7 @@ const filterForUser = ({ user, isAdmin, sdr }) => {
   return { userUid: clean(user?.sub) };
 };
 
-const queryVoiceCalls = async ({ request, range, userFilter, status = '', q = '', limit = 80 }) => {
-  const params = [
-    `select=${voiceCallSelect}`,
-    `or=(started_at.gte.${encodeURIComponent(range.from)},created_at.gte.${encodeURIComponent(range.from)})`,
-    `or=(started_at.lte.${encodeURIComponent(range.to)},created_at.lte.${encodeURIComponent(range.to)})`,
-    'order=started_at.desc.nullslast,created_at.desc',
-    `limit=${clamp(limit, 1, 200)}`,
-  ];
-  if (userFilter.userUid) params.push(`space_user_uid=eq.${encodeURIComponent(userFilter.userUid)}`);
-  if (q) {
-    const normalized = normalizePhoneInput(q).normalized || clean(q);
-    params.push(`or=(to_number.ilike.*${escapeFilter(normalized)}*,from_number.ilike.*${escapeFilter(normalized)}*)`);
-  }
-  const rows = asRows(await request(`/voice_calls?${params.join('&')}`, { timeoutMs: 15000 }));
+const filterCallStatus = (rows, status) => {
   return clean(status)
     ? rows.filter(row => {
         const call = normalizeCall(row);
@@ -513,6 +500,23 @@ const queryVoiceCalls = async ({ request, range, userFilter, status = '', q = ''
         return true;
       })
     : rows;
+};
+
+const queryVoiceCalls = async ({ request, range, userFilter, status = '', q = '', limit = 80, offset = 0 }) => {
+  const params = [
+    `select=${voiceCallSelect}`,
+    ...(range ? [`or=(started_at.gte.${encodeURIComponent(range.from)},created_at.gte.${encodeURIComponent(range.from)})`, `or=(started_at.lte.${encodeURIComponent(range.to)},created_at.lte.${encodeURIComponent(range.to)})`] : []),
+    'order=started_at.desc.nullslast,created_at.desc,id.desc',
+    `offset=${Math.max(0, Math.floor(Number(offset) || 0))}`,
+    `limit=${clamp(limit, 1, 200)}`,
+  ];
+  if (userFilter.userUid) params.push(`space_user_uid=eq.${encodeURIComponent(userFilter.userUid)}`);
+  if (q) {
+    const normalized = normalizePhoneInput(q).normalized || clean(q);
+    params.push(`or=(to_number.ilike.*${escapeFilter(normalized)}*,from_number.ilike.*${escapeFilter(normalized)}*)`);
+  }
+  const rows = asRows(await request(`/voice_calls?${params.join('&')}`, { timeoutMs: 15000 }));
+  return filterCallStatus(rows, status);
 };
 
 const scoreAnalysisCandidate = (call = {}, analysis = {}) => {
@@ -636,13 +640,23 @@ const loadCrmContext = async ({ request, phone }) => {
 const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = resolveSdrNames }) => {
   const range = rangeForPeriod(query.period);
   const userFilter = filterForUser({ user, isAdmin, sdr: query.sdr });
-  const rows = await queryVoiceCalls({ request, range, userFilter, status: query.status, q: query.q, limit: query.limit });
+  const historyOnly = query.view === 'history';
+  const analyticsOnly = query.view === 'analytics';
+  const offset = Math.max(0, Math.min(1000000, Math.floor(Number(query.historyOffset) || 0)));
+  const [metricRows, recentRows] = await Promise.all([
+    historyOnly ? [] : queryVoiceCalls({ request, range, userFilter, status: query.status, q: query.q, limit: query.limit }),
+    analyticsOnly ? [] : queryVoiceCalls({ request, userFilter, q: query.q, limit: 51, offset }),
+  ]);
+  const rows = filterCallStatus(recentRows.slice(0, 50), query.status);
   const analysisMap = await loadAnalysisMap({ request, calls: rows });
   const qualificationMap = await loadQualificationsMap({ request, callIds: rows.map(row => row.id) });
   const names = await resolveNames(rows, user);
   const calls = rows.map(row => normalizeCall(row, findAnalysis(row, analysisMap), null, qualificationMap.get(clean(row.id)), names.get(clean(row.space_user_uid))));
   const callbacks = calls.filter(call => call.callbackAt && new Date(call.callbackAt).getTime() >= Date.now()).slice(0, 12);
-  return { ok: true, range, scope: isAdmin ? 'admin' : 'self', analytics: summarize(calls), calls, callbacks };
+  return { ok: true, range, scope: isAdmin ? 'admin' : 'self',
+    ...(!historyOnly ? { analytics: summarize(metricRows.map(row => normalizeCall(row))) } : {}),
+    ...(!analyticsOnly ? { calls, callbacks, history: { hasMore: recentRows.length > 50, nextOffset: offset + 50 } } : {}),
+  };
 };
 
 const detailModel = async ({ request, id, user, isAdmin }) => {

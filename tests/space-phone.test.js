@@ -157,7 +157,7 @@ test("space phone route boots the dedicated admin panel and script", async () =>
     assert.match(body, /data-initial-panel="space-phone"/);
     assert.match(body, /data-space-phone/);
     assert.match(body, /src="script\.js\?v=7"/);
-    assert.match(body, /src="space-phone\.js\?v=8"/);
+    assert.match(body, /src="space-phone\.js\?v=9"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
@@ -432,7 +432,7 @@ test('repeated SDR completion never resets sent or a reserved Datacrazy handoff'
   }
 });
 
-test('last7 includes yesterday for Growth without allowing another SDR and Admin retains scope', async () => {
+test('history includes yesterday with today KPIs at zero, preserving Growth and Admin scope', async () => {
   const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1); yesterday.setHours(12, 0, 0, 0);
   const data = [{ id: 'own-yesterday', space_user_uid: 'sdr-history', started_at: yesterday.toISOString(), status: 'completed', duration_seconds: 60, outcome: 'agendado' }, { id: 'other-yesterday', space_user_uid: 'sdr-other', started_at: yesterday.toISOString(), status: 'completed' }];
   for (const role of ['growth', 'admin']) {
@@ -443,14 +443,15 @@ test('last7 includes yesterday for Growth without allowing another SDR and Admin
         if (!path.startsWith('/voice_calls')) return { data: [] };
         const url = new URL(path, 'https://test'); const scope = url.searchParams.get('space_user_uid');
         if (role === 'growth') assert.equal(scope, 'eq.sdr-history'); else assert.equal(scope, null);
-        const start = url.searchParams.getAll('or').find(x => x.includes('started_at.gte.')).match(/started_at.gte.([^,]+)/)[1];
+        const start = url.searchParams.getAll('or').find(x => x.includes('started_at.gte.'))?.match(/started_at.gte.([^,]+)/)[1] || '';
         return { data: data.filter(row => (!scope || row.space_user_uid === scope.slice(3)) && row.started_at >= start) };
       },
     });
     for (const period of ['today', 'last7', 'last30']) {
       const response = await invoke(handler, { url: `/api/space-phone?period=${period}` });
       assert.equal(response.status, 200);
-      assert.equal(response.json.calls.length, period === 'today' ? 0 : role === 'growth' ? 1 : 2);
+      assert.equal(response.json.calls.length, role === 'growth' ? 1 : 2);
+      assert.equal(response.json.analytics.totalCalls, period === 'today' ? 0 : role === 'growth' ? 1 : 2);
       if (period !== 'today') assert.equal(response.json.calls[0].outcome, 'agendado');
     }
   }
@@ -486,4 +487,25 @@ test('history search and status retain own-call scope and scheduled outcome', as
   });
   assert.deepEqual(model.calls.map(call => call.id), ['scheduled']);
   assert.equal(model.calls[0].outcome, 'agendado');
+});
+
+test('history pages are 50 recent calls without period; analytics-only never reloads history', async () => {
+  const rows = Array.from({length: 63}, (_,i) => ({id: `recent-${i}`, space_user_uid:'owner', started_at:'2026-01-01T12:00:00Z'}));
+  const seen=[];
+  const request=async path=>{
+    if (!path.startsWith('/voice_calls')) return {data:[]};
+    const q=new URL(path,'https://test').searchParams; seen.push(q);
+    assert.equal(q.get('space_user_uid'),'eq.owner');
+    if(q.getAll('or').some(v=>v.includes('started_at.gte'))) return {data:[]};
+    assert.equal(q.get('order'),'started_at.desc.nullslast,created_at.desc,id.desc');
+    const offset=Number(q.get('offset'));return {data:rows.slice(offset,offset+Number(q.get('limit')))};
+  };
+  const args={request,user:{sub:'owner'},isAdmin:false,resolveNames:async()=>new Map()};
+  const first=await __private.listModel({...args,query:{period:'today'}});
+  assert.equal(first.analytics.totalCalls,0);assert.equal(first.calls.length,50);assert.equal(first.history.hasMore,true);
+  const second=await __private.listModel({...args,query:{view:'history',historyOffset:first.history.nextOffset,period:'today'}});
+  assert.equal(second.calls.length,13);assert.equal(second.calls[0].id,'recent-50');assert.equal(second.history.hasMore,false);
+  seen.length=0;
+  const metrics=await __private.listModel({...args,query:{view:'analytics',period:'last30'}});
+  assert.equal(seen.length,1);assert.equal(metrics.calls,undefined);assert.equal(metrics.analytics.totalCalls,0);
 });

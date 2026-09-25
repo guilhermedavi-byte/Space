@@ -227,10 +227,9 @@
   };
 
   const aiBadge = (c) => c.analysisStatus === "completed" || c.score != null ? `<span class="sphone-badge ok">● Pronta</span>` : `<span class="sphone-badge warn">○ Processando</span>`;
-  const historyPeriodLabel = () => ({ today: 'hoje', last7: 'nos últimos 7 dias', last30: 'nos últimos 30 dias' })[state.period];
   const renderHistory = () => {
     const calls = state.data?.calls || [];
-    return `<section class="sphone-history"><div class="sphone-history-head"><div><h2>Histórico</h2><p class="sphone-muted">${state.period === "today" ? "Ligações de hoje" : `Ligações ${historyPeriodLabel()}`} · análise IA pós-call.</p></div><button class="sphone-btn" data-sp-refresh>Atualizar</button></div><div class="sphone-table-wrap"><table class="sphone-table"><thead><tr><th>Lead / número</th><th>SDR</th><th>Horário</th><th>Status</th><th>Duração</th><th>Resultado</th><th>IA</th><th></th></tr></thead><tbody>${calls.map((c) => `<tr><td><strong>${esc(c.leadName || c.number || "Lead")}</strong><br><span class="sphone-muted">${esc(c.number || "-")}</span></td><td>${esc(c.sdrName || "SDR")}</td><td>${esc(fmtDate(c.startedAt))}</td><td><span class="sphone-badge ${c.status === "connected" ? "ok" : c.status === "failed" ? "bad" : ""}">${esc(c.status)}</span></td><td>${fmtSec(c.durationSeconds)}</td><td>${esc(c.outcome || "-")}</td><td>${aiBadge(c)}</td><td><button class="sphone-btn" data-sp-detail="${esc(c.id)}">Detalhes</button></td></tr>`).join("") || `<tr><td colspan="8"><div class="sphone-empty">Nenhuma ligação encontrada ${historyPeriodLabel()}.${state.status || state.q ? ' Há filtros ativos de status ou busca.' : ''}<br><button class="sphone-btn" data-sp-clear-filters>Limpar filtros</button></div></td></tr>`}</tbody></table></div></section>`;
+    return `<section class="sphone-history"><div class="sphone-history-head"><div><h2>Histórico</h2><p class="sphone-muted">Últimas chamadas · independente do período dos indicadores.</p></div><button class="sphone-btn" data-sp-refresh>Atualizar</button></div><div class="sphone-table-wrap"><table class="sphone-table"><thead><tr><th>Lead / número</th><th>SDR</th><th>Horário</th><th>Status</th><th>Duração</th><th>Resultado</th><th>IA</th><th></th></tr></thead><tbody>${calls.map((c) => `<tr><td><strong>${esc(c.leadName || c.number || "Lead")}</strong><br><span class="sphone-muted">${esc(c.number || "-")}</span></td><td>${esc(c.sdrName || "SDR")}</td><td>${esc(fmtDate(c.startedAt))}</td><td><span class="sphone-badge ${c.status === "connected" ? "ok" : c.status === "failed" ? "bad" : ""}">${esc(c.status)}</span></td><td>${fmtSec(c.durationSeconds)}</td><td>${esc(c.outcome || "-")}</td><td>${aiBadge(c)}</td><td><button class="sphone-btn" data-sp-detail="${esc(c.id)}">Detalhes</button></td></tr>`).join("") || `<tr><td colspan="8"><div class="sphone-empty">Nenhuma ligação encontrada no histórico.${state.status || state.q ? ' Há filtros ativos de status ou busca.' : ''}<br><button class="sphone-btn" data-sp-clear-filters>Limpar filtros</button></div></td></tr>`}</tbody></table></div>${state.data?.history?.hasMore ? `<div class="sphone-call-actions"><button class="sphone-btn" data-sp-load-more ${state.loading ? "disabled" : ""}>${state.loading ? "Carregando..." : "Carregar mais"}</button></div>` : ""}</section>`;
   };
 
   const renderDetailTab = (c) => {
@@ -251,7 +250,7 @@
     const el = root();
     if (!el) return;
     const ps = phoneStatus();
-    el.innerHTML = `<div class="sphone"><div class="sphone-shell"><header class="sphone-head"><div class="sphone-title"><h1>Ligações</h1><span>Central de voz comercial</span></div><div class="sphone-online"><span class="sphone-dot" data-tone="${ps.tone}"></span>${esc(ps.label)}</div></header>${renderKpis()}<div class="sphone-toolbar"><div class="sphone-filters"><select class="sphone-select" data-sp-period><option value="today">Hoje</option><option value="last7">7 dias</option><option value="last30">30 dias</option></select><select class="sphone-select" data-sp-status><option value="">Todos</option><option value="answered">Atendida</option><option value="unanswered">Não atendida</option><option value="scheduled">Agendada</option><option value="failed">Falhou</option></select><input class="sphone-input" type="search" data-sp-search placeholder="Buscar número" value="${esc(state.q)}" /></div><button class="sphone-btn" data-sp-refresh>Atualizar</button></div>${state.error ? `<div class="sphone-empty">${esc(state.error)}</div>` : ""}<main class="sphone-grid">${renderDialer()}${renderCenter()}${renderRight()}</main>${renderHistory()}</div></div>${renderDetail()}`;
+    el.innerHTML = `<div class="sphone"><div class="sphone-shell"><header class="sphone-head"><div class="sphone-title"><h1>Ligações</h1><span>Central de voz comercial</span></div><div class="sphone-online"><span class="sphone-dot" data-tone="${ps.tone}"></span>${esc(ps.label)}</div></header>${renderKpis()}<div class="sphone-toolbar"><div class="sphone-filters"><select class="sphone-select" data-sp-period aria-label="Período dos indicadores"><option value="today">Hoje</option><option value="last7">7 dias</option><option value="last30">30 dias</option></select><select class="sphone-select" data-sp-status><option value="">Todos</option><option value="answered">Atendida</option><option value="unanswered">Não atendida</option><option value="scheduled">Agendada</option><option value="failed">Falhou</option></select><input class="sphone-input" type="search" data-sp-search placeholder="Buscar número" value="${esc(state.q)}" /></div><button class="sphone-btn" data-sp-refresh>Atualizar</button></div>${state.error ? `<div class="sphone-empty">${esc(state.error)}</div>` : ""}<main class="sphone-grid">${renderDialer()}${renderCenter()}${renderRight()}</main>${renderHistory()}</div></div>${renderDetail()}`;
     const status = el.querySelector("[data-sp-status]");
     if (status) status.value = state.status;
     const period = el.querySelector("[data-sp-period]");
@@ -281,13 +280,13 @@
     const history = root()?.querySelector('.sphone-history');
     if (history) history.outerHTML = renderHistory();
   };
-  const load = async ({ silent = false, patchOnly = false } = {}) => {
+  const load = async ({ silent = false, patchOnly = false, analyticsOnly = false, appendHistory = false } = {}) => {
     const version = ++loadVersion;
     if (!silent) { state.loading = true; if (!patchOnly) render(); }
     try {
-      const data = await api({ period: state.period, status: state.status, q: state.q, sdr: state.sdr });
+      const data = await api({ period: state.period, status: state.status, q: state.q, sdr: state.sdr, view: analyticsOnly ? "analytics" : appendHistory ? "history" : undefined, historyOffset: appendHistory ? state.data?.history?.nextOffset : 0 });
       if (version !== loadVersion) return;
-      state.data = data; state.error = '';
+      state.data = analyticsOnly ? { ...state.data, ...data, calls: state.data?.calls || [], history: state.data?.history } : appendHistory ? { ...state.data, ...data, callbacks: state.data?.callbacks || [], calls: [...new Map([...(state.data?.calls || []), ...(data.calls || [])].map(call => [call.id, call])).values()] } : data; state.error = '';
     } catch (error) { if (version === loadVersion) state.error = error.message || 'Não foi possível carregar ligações.'; }
     finally { if (version === loadVersion) { state.loading = false; if (patchOnly) patchHistory(); else render(); } }
   };
@@ -430,15 +429,16 @@
       state.popover = "";
       render();
     }
-    const t = event.target.closest("[data-sp-key],[data-sp-backspace],[data-sp-call],[data-sp-fill],[data-sp-refresh],[data-sp-period],[data-sp-detail],[data-sp-close-detail],[data-sp-mute],[data-sp-hold],[data-sp-hangup],[data-sp-popover],[data-sp-dtmf-toggle],[data-sp-dtmf],[data-sp-outcome],[data-sp-skip-outcome],[data-sp-reset-call],[data-sp-tab],[data-sp-test-device],[data-sp-apply-ai],[data-sp-complete-qualification],[data-sp-retry-ai],[data-sp-clear-filters]");
+    const t = event.target.closest("[data-sp-key],[data-sp-backspace],[data-sp-call],[data-sp-fill],[data-sp-refresh],[data-sp-period],[data-sp-detail],[data-sp-close-detail],[data-sp-mute],[data-sp-hold],[data-sp-hangup],[data-sp-popover],[data-sp-dtmf-toggle],[data-sp-dtmf],[data-sp-outcome],[data-sp-skip-outcome],[data-sp-reset-call],[data-sp-tab],[data-sp-test-device],[data-sp-apply-ai],[data-sp-complete-qualification],[data-sp-retry-ai],[data-sp-clear-filters],[data-sp-load-more]");
     if (!t || !root()) return;
     if (t.matches("[data-sp-key]")) { state.dial += t.dataset.spKey; normalize(); return; }
     if (t.matches("[data-sp-backspace]")) { state.dial = state.dial.slice(0, -1); normalize(); return; }
     if (t.matches("[data-sp-call]")) { await startCall(); return; }
     if (t.matches("[data-sp-fill]")) { state.dial = t.dataset.spFill || ""; normalize(); render(); return; }
+    if (t.matches("[data-sp-load-more]")) { if (!state.loading) await load({ appendHistory: true }); return; }
     if (t.matches("[data-sp-clear-filters]")) { setPeriod("last7"); state.status = ""; state.q = ""; state.sdr = "all"; clearTimeout(state.searchTimer); await load(); return; }
     if (t.matches("[data-sp-refresh]")) { await load(); return; }
-    if (t.matches("[data-sp-period]") && t.tagName !== "SELECT") { setPeriod(t.dataset.spPeriod); await load(); return; }
+    if (t.matches("[data-sp-period]") && t.tagName !== "SELECT") { setPeriod(t.dataset.spPeriod); await load({ analyticsOnly: true }); return; }
     if (t.matches("[data-sp-detail]")) { state.qualificationBeforeDetail = state.qualification; state.detail = await api({ id: t.dataset.spDetail }); state.detailTab = "summary"; state.qualification = normalizeQualification(state.detail.call?.qualification || { voiceCallId: t.dataset.spDetail }); render(); return; }
     if (t.matches("[data-sp-close-detail]")) { state.detail = null; if (state.qualificationBeforeDetail) state.qualification = state.qualificationBeforeDetail; render(); return; }
     if (t.matches("[data-sp-mute]")) { await callMethod(state.call.muted ? "unmute" : "mute"); render(); return; }
@@ -479,7 +479,7 @@
     const t = event.target;
     if (!root() || !(t instanceof HTMLElement)) return;
     if (t.matches("[data-sp-status]")) { state.status = t.value; await load(); }
-    if (t.matches("[data-sp-period]")) { setPeriod(t.value); await load(); }
+    if (t.matches("[data-sp-period]")) { setPeriod(t.value); await load({ analyticsOnly: true }); }
     if (t.matches("[data-sp-mic]")) { state.devices.micId = t.value; saveLocal(); await adapter()?.setAudioInputDevice?.(t.value); }
     if (t.matches("[data-sp-speaker]")) { state.devices.speakerId = t.value; saveLocal(); await adapter()?.setAudioOutputDevice?.(t.value); }
   });
