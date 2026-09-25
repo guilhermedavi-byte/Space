@@ -5,12 +5,16 @@ async function requeueTranscription({ call, score, request, fetchImpl = global.f
   if (!score?.recording_id) return { skipped: true, aiStatus: 'waiting_recording' };
   const age = now.getTime() - Date.parse(score.updated_at || score.created_at);
   if (['transcription_retry_pending', 'processing'].includes(score.status) && age >= 0 && age < 10 * 60 * 1000) return { skipped: true, aiStatus: 'transcribing' };
-  const key = clean(process.env.TELNYX_API_KEY).replace(/^(?:Bearer\s+)+/i, '').trim();
-  if (!key) return { ok: false, aiStatus: 'failed', reason: 'transcription_retry_unavailable' };
-  const response = await fetchImpl(`https://api.telnyx.com/v2/recordings/${encodeURIComponent(score.recording_id)}`, {
-    headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(15000),
-  });
-  console.info('[space-phone] recording lookup', { recordingId: score.recording_id, httpStatus: response.status });
+  const keys = ['TELNYX_API_KEY', 'TELNYX_WEBRTC_API_KEY'].map(name => ({ name, key: clean(process.env[name]).replace(/^(?:Bearer\s+)+/i, '').trim() })).filter(item => item.key);
+  if (!keys.length) return { ok: false, aiStatus: 'failed', reason: 'transcription_retry_unavailable' };
+  let response;
+  for (const {name, key} of keys) {
+    response = await fetchImpl(`https://api.telnyx.com/v2/recordings/${encodeURIComponent(score.recording_id)}`, {
+      headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(15000),
+    });
+    console.info('[space-phone] recording lookup', { recordingId: score.recording_id, credentialSource: name, httpStatus: response.status });
+    if (![401, 403].includes(response.status)) break;
+  }
   const recording = (await response.json().catch(() => ({})))?.data;
   if (!response.ok || !recording) return { ok: false, aiStatus: 'failed', reason: 'recording_lookup_failed' };
   if (String(recording.id) !== String(score.recording_id) || ['call_leg_id', 'call_session_id'].some(field => call[`telnyx_${field}`] && String(recording[field] || '') !== String(call[`telnyx_${field}`]))) return { ok: false, aiStatus: 'failed', reason: 'recording_identity_mismatch' };

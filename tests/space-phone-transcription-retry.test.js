@@ -33,3 +33,9 @@ test('recovery clears compromised AI without reopening human completion', async 
  assert.deepEqual(Object.keys(patches[0].body).sort(),['ai_context','ai_decision_investment','ai_experience','ai_key_point','ai_pain_goal','ai_urgency']);
  assert.ok(Object.values(patches[0].body).every(v=>v===null));
 });
+test('existing WebRTC key is tried only after rejected legacy authentication', async()=>{
+ const legacy=process.env.TELNYX_API_KEY,web=process.env.TELNYX_WEBRTC_API_KEY;
+ process.env.TELNYX_API_KEY='KEY-legacy';process.env.TELNYX_WEBRTC_API_KEY='KEY-webrtc';
+ try{const keys=[];const result=await requeueTranscription({call,score,now,fetchImpl:async(url,opts)=>{keys.push(opts.headers.Authorization);return keys.length===1?{status:401,ok:false}:{status:200,ok:true,json:async()=>({data:recording})};},request:async()=>({data:[score]})});assert.deepEqual(keys,['Bearer KEY-legacy','Bearer KEY-webrtc']);assert.equal(result.queued,true);
+ }finally{if(legacy===undefined)delete process.env.TELNYX_API_KEY;else process.env.TELNYX_API_KEY=legacy;if(web===undefined)delete process.env.TELNYX_WEBRTC_API_KEY;else process.env.TELNYX_WEBRTC_API_KEY=web;}
+});
