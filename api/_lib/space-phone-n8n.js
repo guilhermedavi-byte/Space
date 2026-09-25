@@ -1,3 +1,4 @@
+const { requeueTranscription } = require('./space-phone-transcription-retry');
 const { analysisIntegrity, logIntegrity } = require('./space-phone-analysis-integrity');
 const crypto = require('node:crypto');
 const { resolveSdrNames } = require('./space-phone-sdr-names');
@@ -207,6 +208,10 @@ const requestAiQualification = async ({ call, request = supabaseFetch, now = new
   if (!current) {
     await request('/voice_call_qualifications?on_conflict=voice_call_id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: { voice_call_id: call.id, space_user_uid: call.space_user_uid, status: 'draft' } });
     current = await getQualification(call.id, request);
+  }
+  if (retry) {
+    const score = await getScore(call, request);
+    if (!clean(score?.transcript) || analysisIntegrity(call, score).inconsistent) return requeueTranscription({ call, score, request, now });
   }
   if (!current || !(retry ? ['draft', 'ai_processing', 'review_required'] : ['draft', 'ai_processing']).includes(current.status)) return { skipped: true };
   const staleBefore = now.getTime() - 10 * 60 * 1000;

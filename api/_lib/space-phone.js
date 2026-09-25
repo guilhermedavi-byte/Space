@@ -466,10 +466,10 @@ const normalizeCall = (row = {}, analysis = null, crm = null, qualification = nu
     callbackAt: clean(row.callback_at),
     endedReason: clean(row.ended_reason),
     recordingAvailable: Boolean(analysis?.recording_id || analysis?.recording_url),
-    transcriptionAvailable: Boolean(analysis?.transcript),
+    transcriptionAvailable: !integrity.inconsistent && Boolean(analysis?.transcript),
     analysisStatus: integrity.inconsistent ? 'failed' : analysis?.transcript ? (analysis.score != null ? 'completed' : 'analyzing') : analysis ? 'transcribing' : 'waiting_recording',
     score: integrity.inconsistent ? null : analysis?.score ?? null,
-    transcript: clean(analysis?.transcript),
+    transcript: integrity.inconsistent ? '' : clean(analysis?.transcript),
     analysis: integrity.inconsistent ? null : analysis?.analysis || null,
     analysisWarning: integrity.reason,
     crm,
@@ -529,14 +529,19 @@ const indexAnalysis = (map, row, analysis) => map.set(clean(row.id), analysis);
 const { getCorrelatedScore } = require('./space-phone-correlation');
 const loadAnalysisMap = async ({ request, calls }) => {
   const map = new Map();
-  for (const call of calls) {
-    try {
-      const score = await getCorrelatedScore(call, request);
-      if (score) indexAnalysis(map, call, score);
-    } catch {
-      // Optional enrichment does not block history; cron retries infrastructure failures.
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < calls.length) {
+      const call = calls[cursor++];
+      try {
+        const score = await getCorrelatedScore(call, request);
+        if (score) indexAnalysis(map, call, score);
+      } catch {
+        // Optional enrichment does not block history; cron retries infrastructure failures.
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, calls.length) }, worker));
   return map;
 };
 

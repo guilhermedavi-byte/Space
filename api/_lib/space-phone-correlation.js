@@ -1,7 +1,7 @@
 const clean = value => String(value ?? '').trim();
 const rows = response => Array.isArray(response?.data) ? response.data : [];
 const enc = value => encodeURIComponent(clean(value));
-const select = 'recording_id,call_leg_id,call_session_id,connection_id,from_number,to_number,started_at,duration_seconds,transcript,score,analysis,recording_url,created_at';
+const select = 'recording_id,call_leg_id,call_session_id,connection_id,from_number,to_number,started_at,duration_seconds,transcript,score,analysis,recording_url,status,updated_at,created_at';
 const digits = value => clean(value).replace(/\D/g, '');
 
 const conflicts = (call, score) => ['call_leg_id','call_session_id'].some(field => clean(call[`telnyx_${field}`]) && clean(score[field]) && clean(call[`telnyx_${field}`]) !== clean(score[field]));
