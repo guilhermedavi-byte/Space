@@ -1,3 +1,5 @@
+const { analysisIntegrity, logIntegrity } = require('./space-phone-analysis-integrity');
+const { businessDisposition } = require('./business-disposition');
 const crypto = require('node:crypto');
 const { resolveSdrNames } = require('./space-phone-sdr-names');
 const { resolveAdminRequestAuth } = require('./admin-request-auth');
@@ -61,16 +63,7 @@ const dateKeyFor = (value, now = new Date()) => {
   const get = type => parts.find(part => part.type === type)?.value || '';
   return { dateKey: `${get('year')}-${get('month')}-${get('day')}`, localTime: `${get('hour')}:${get('minute')}` };
 };
-const outcomeToSdrOutcome = outcome => ({
-  nao_atendeu: 'nao_atendeu',
-  ocupado: 'nao_atendeu',
-  numero_invalido: 'nao_atendeu',
-  caixa_postal: 'nao_atendeu',
-  sem_interesse: 'atendeu',
-  retornar_depois: 'atendeu',
-  interessado: 'atendeu',
-  agendado: 'agendou',
-}[clean(outcome)] || '');
+const outcomeToSdrOutcome = outcome => businessDisposition({ outcome }).activityOutcome;
 const firestoreDocName = (collection, id, { allowTestProject = false } = {}) => {
   const project = PROJECT_ID || (allowTestProject ? 'test-project' : '');
   if (!project) throw Object.assign(new Error('missing_project_id'), { status: 503 });
@@ -101,12 +94,10 @@ const normalizePeriod = value => {
 
 const rangeForPeriod = (period, now = new Date()) => {
   const normalized = normalizePeriod(period);
-  const end = new Date(now);
-  const start = new Date(now);
-  if (normalized === 'today') start.setHours(0, 0, 0, 0);
-  else start.setDate(start.getDate() - (normalized === 'last30' ? 29 : 6));
-  if (normalized !== 'today') start.setHours(0, 0, 0, 0);
-  end.setHours(23, 59, 59, 999);
+  const today = dateKeyFor(now).dateKey;
+  const end = new Date(`${today}T23:59:59.999-03:00`);
+  const start = new Date(`${today}T00:00:00-03:00`);
+  start.setUTCDate(start.getUTCDate() - (normalized === 'today' ? 0 : normalized === 'last30' ? 29 : 6));
   return { period: normalized, from: start.toISOString(), to: end.toISOString() };
 };
 
@@ -445,6 +436,9 @@ const statusKind = (row = {}) => {
 const normalizeCall = (row = {}, analysis = null, crm = null, qualification = null, sdrName = '') => {
   const to = clean(row.to_number || row.phone || '');
   const from = clean(row.from_number || '');
+  const integrity = analysisIntegrity(row, analysis);
+  const normalizedQualification = normalizeQualification(qualification);
+  if (integrity.inconsistent && normalizedQualification) normalizedQualification.ai = {};
   return {
     id: clean(row.id || row.telnyx_call_leg_id || row.telnyx_call_session_id || analysis?.recording_id),
     callLegId: clean(row.telnyx_call_leg_id),
@@ -461,7 +455,7 @@ const normalizeCall = (row = {}, analysis = null, crm = null, qualification = nu
     leadName: clean(row.lead_name),
     sdrName: clean(sdrName) || clean(row.space_user_email).split('@')[0].replace(/[._-]+/g, ' ') || 'SDR',
     sdrEmail: clean(row.space_user_email),
-    status: statusKind(row),
+    status: businessDisposition({ ...row, status: statusKind(row) }).status,
     rawStatus: clean(row.status),
     startedAt: clean(row.started_at || row.created_at),
     answeredAt: clean(row.answered_at),
@@ -473,12 +467,13 @@ const normalizeCall = (row = {}, analysis = null, crm = null, qualification = nu
     endedReason: clean(row.ended_reason),
     recordingAvailable: Boolean(analysis?.recording_id || analysis?.recording_url),
     transcriptionAvailable: Boolean(analysis?.transcript),
-    analysisStatus: analysis ? (analysis.score != null ? 'completed' : analysis.transcript ? 'analyzing' : 'processing') : 'processing',
-    score: analysis?.score ?? null,
+    analysisStatus: integrity.inconsistent ? 'failed' : analysis?.transcript ? (analysis.score != null ? 'completed' : 'analyzing') : analysis ? 'transcribing' : 'waiting_recording',
+    score: integrity.inconsistent ? null : analysis?.score ?? null,
     transcript: clean(analysis?.transcript),
-    analysis: analysis?.analysis || null,
+    analysis: integrity.inconsistent ? null : analysis?.analysis || null,
+    analysisWarning: integrity.reason,
     crm,
-    qualification: normalizeQualification(qualification),
+    qualification: normalizedQualification,
   };
 };
 
@@ -529,12 +524,7 @@ const queryMetricCalls = async options => {
   }
 };
 
-const indexAnalysis = (map, row, analysis) => {
-  const ids = [row.id, row.telnyx_call_leg_id, row.telnyx_call_session_id, analysis?.call_leg_id, analysis?.call_session_id]
-    .map(clean)
-    .filter(Boolean);
-  ids.forEach(id => map.set(id, analysis));
-};
+const indexAnalysis = (map, row, analysis) => map.set(clean(row.id), analysis);
 
 const { getCorrelatedScore } = require('./space-phone-correlation');
 const loadAnalysisMap = async ({ request, calls }) => {
@@ -550,17 +540,14 @@ const loadAnalysisMap = async ({ request, calls }) => {
   return map;
 };
 
-const findAnalysis = (row, analysisMap) => {
-  const key = [row.id, row.telnyx_call_leg_id, row.telnyx_call_session_id].map(clean).find(id => analysisMap.has(id));
-  return key ? analysisMap.get(key) : null;
-};
+const findAnalysis = (row, analysisMap) => analysisMap.get(clean(row.id)) || null;
 
 const summarize = calls => {
   const totalCalls = calls.length;
   const connected = calls.filter(call => call.status === 'connected').length;
   const failed = calls.filter(call => call.status === 'failed').length;
   const unanswered = calls.filter(call => call.status === 'unanswered' || call.outcome === 'nao_atendeu').length;
-  const talkTime = calls.reduce((sum, call) => sum + (call.status === 'connected' ? number(call.durationSeconds) : 0), 0);
+  const talkTime = calls.reduce((sum, call) => sum + businessDisposition(call).humanTalkTimeSeconds, 0);
   const scheduled = calls.filter(call => call.outcome === 'agendado').length;
   return {
     totalCalls,
@@ -610,7 +597,7 @@ const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = re
   const offset = Math.max(0, Math.min(1000000, Math.floor(Number(query.historyOffset) || 0)));
   const [metricRows, recentRows] = await Promise.all([
     historyOnly ? [] : queryMetricCalls({ request, range, userFilter, status: query.status, q: query.q }),
-    analyticsOnly ? [] : queryVoiceCalls({ request, userFilter, q: query.q, limit: 51, offset }),
+    analyticsOnly ? [] : queryVoiceCalls({ request, range, userFilter, q: query.q, limit: 51, offset }),
   ]);
   const rows = filterCallStatus(recentRows.slice(0, 50), query.status);
   const analysisMap = await loadAnalysisMap({ request, calls: rows });
@@ -656,7 +643,8 @@ const detailModel = async ({ request, id, user, isAdmin }) => {
   const qualification = await loadQualification({ request, voiceCallId: row.id }).catch(() => null);
   const names = await resolveSdrNames([row], user);
   const call = normalizeCall(row, analysis, crm, qualification, names.get(clean(row.space_user_uid)));
-  if (analysis?.transcript && (!qualification || ['draft', 'ai_processing'].includes(qualification.status))) {
+  if (call.analysisWarning) logIntegrity(row, analysis);
+  if (!call.analysisWarning && analysis?.transcript && (!qualification || ['draft', 'ai_processing'].includes(qualification.status))) {
     const result = await requestAiQualification({ call: row, request }).catch(() => ({ aiStatus: 'failed' }));
     call.qualification = await loadQualification({ request, voiceCallId: row.id }).catch(() => qualification);
     if (call.qualification) call.qualification.aiStatus = result.aiStatus || 'pending';
@@ -685,7 +673,7 @@ const syncOutcomeToSdrActivity = async ({ call, outcome, user, now = new Date(),
     source: 'space_phone',
     sourceVoiceCallId: voiceCallId,
     phone: clean(call?.toNumber || call?.to_number || call?.number),
-    durationSeconds: number(call?.durationSeconds || call?.duration_seconds),
+    durationSeconds: businessDisposition({ ...call, outcome }).humanTalkTimeSeconds,
     time,
     createdAt: time,
     updatedAt: now.toISOString(),
@@ -719,7 +707,7 @@ const syncQualificationToSdrActivity = async ({ call, qualification, user, now =
     qualificationComplete: true,
     datacrazySyncStatus: qualification.datacrazy?.syncStatus || 'blocked',
     phone: clean(call?.toNumber || call?.to_number || call?.number),
-    durationSeconds: number(call?.durationSeconds || call?.duration_seconds),
+    durationSeconds: businessDisposition(call).humanTalkTimeSeconds,
     time,
     updatedAt: now.toISOString(),
   };
@@ -743,6 +731,11 @@ const updateCall = async ({ request, id, user, isAdmin, patch = {}, bridgeCommit
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'callbackAt')) body.callback_at = isoOrNull(patch.callbackAt);
   if (Object.prototype.hasOwnProperty.call(patch, 'endedReason')) body.ended_reason = clean(patch.endedReason).slice(0, 120) || null;
+  if (clean(patch.action) === 'retry_ai_qualification') {
+    const call = { id: current.id, space_user_uid: current.sdrUid, from_number: current.fromNumber, to_number: current.toNumber, started_at: current.startedAt, duration_seconds: current.durationSeconds, outcome: current.outcome, telnyx_call_leg_id: current.callLegId, telnyx_call_session_id: current.callSessionId };
+    const result = await requestAiQualification({ call, request, retry: true });
+    return { ok: true, ...result };
+  }
   if (clean(patch.action) === 'save_qualification') {
     const qualification = await upsertQualification({ request, call: current, user, patch: patch.qualification || patch });
     return { ok: true, call: { ...current, qualification }, qualification };

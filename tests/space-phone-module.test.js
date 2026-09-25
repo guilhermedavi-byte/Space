@@ -178,7 +178,7 @@ test('Space Phone V2 renders AI processing and ready states without live transcr
   };
   await dom.window.SpacePhoneModule.open();
   assert.ok(dom.window.document.body.textContent.includes('Pronta'));
-  assert.ok(dom.window.document.body.textContent.includes('Processando'));
+  assert.ok(dom.window.document.body.textContent.includes('Aguardando gravação'));
   dom.window.document.querySelector('[data-sp-detail="call-ready"]').click();
   await tick(20);
   assert.ok(dom.window.document.body.textContent.includes('Boa descoberta.'));
@@ -352,11 +352,11 @@ test('qualification completion keeps drawer, focused field and scroll nodes inta
   assert.match(drawer.textContent, /Qualificação concluída ✓/);
 });
 
-test('changing KPI period preserves loaded history and load more appends calls', async t => {
+test('changing period refreshes history and resets pagination', async t => {
   const dom=createModuleDom();t.after(()=>dom.window.close());const seen=[];
   dom.window.fetchWithAuth=async url=>{
     const q=new URL(url,'https://space.test').searchParams; seen.push(q);
-    if(q.get('view')==='analytics')return jsonResponse({analytics:{totalCalls:0},range:{period:'today'}});
+    if(q.get('period')==='today')return jsonResponse({analytics:{totalCalls:0},calls:[],history:{hasMore:false},range:{period:'today'}});
     if(q.get('view')==='history')return jsonResponse({calls:[{id:'older',number:'+14075917081',sdrName:'Luana'}],history:{hasMore:false,nextOffset:100}});
     return jsonResponse({analytics:{totalCalls:1},calls:[{id:'yesterday',number:'+14075917081',sdrName:'Luana'}],history:{hasMore:true,nextOffset:50}});
   };
@@ -364,9 +364,9 @@ test('changing KPI period preserves loaded history and load more appends calls',
   dom.window.document.querySelector('[data-sp-load-more]').click();await tick(30);
   assert.deepEqual(Array.from(dom.window.SpacePhoneModule.state.data.calls,c=>c.id),['yesterday','older']);
   const select=dom.window.document.querySelector('[data-sp-period]');select.value='today';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await tick(30);
-  assert.equal(seen.at(-1).get('view'),'analytics');assert.equal(dom.window.SpacePhoneModule.state.data.analytics.totalCalls,0);
-  assert.deepEqual(Array.from(dom.window.SpacePhoneModule.state.data.calls,c=>c.id),['yesterday','older']);
-  assert.equal(dom.window.document.querySelectorAll('[data-sp-detail]').length,2);
+  assert.equal(seen.at(-1).get('view'),null);assert.equal(dom.window.SpacePhoneModule.state.data.analytics.totalCalls,0);
+  assert.deepEqual(Array.from(dom.window.SpacePhoneModule.state.data.calls,c=>c.id),[]);
+  assert.equal(dom.window.document.querySelectorAll('[data-sp-detail]').length,0);
 });
 
 for (const scenario of ['manual-summary', 'ai-empty-fields', 'human-filled']) test(`AI suggestions UX: ${scenario}`, async t => {
@@ -387,7 +387,7 @@ for (const scenario of ['manual-summary', 'ai-empty-fields', 'human-filled']) te
   const button=dom.window.document.querySelector('[data-sp-apply-ai]');
   if(scenario==='manual-summary'){
     assert.equal(button,null);assert.equal(dom.window.document.querySelector('.sphone-ai-suggestion'),null);
-    assert.match(dom.window.document.body.textContent,/Sugestões IA ainda não disponíveis/);
+    assert.match(dom.window.document.body.textContent,/Nenhuma sugestão confiável encontrada/);
     assert.ok(dom.window.document.querySelector('[data-sp-retry-ai]'));return;
   }
   assert.ok(button);button.click();await tick(100);
@@ -438,4 +438,40 @@ test('SDR selector is Admin-only, persists selection and reloads both history an
   scope = 'self'; await dom.window.SpacePhoneModule.open();
   assert.equal(dom.window.document.querySelector('[data-sp-sdr]'),null);
   dom.window.close();
+});
+
+test('booking stays in-page, requires provider confirmation and ignores events after close', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  const state = dom.window.SpacePhoneModule.state;
+  state.call = { ...state.call, id: 'booking-call', status: 'ended' };
+  state.postCall = { ...state.postCall, id: 'booking-call', savedOutcome: 'agendado' };
+  state.qualification = { ...state.qualification, voiceCallId: 'booking-call', values: { context: 'Preservar humano' } };
+  dom.window.fetchWithAuth = async url => jsonResponse(String(url).includes('id=booking-call') ? { call: { id: 'booking-call', outcome: 'agendado', number: '+15555550123' } } : { calls: [], analytics: {} });
+  await dom.window.SpacePhoneModule.open();
+  dom.window.document.querySelector('[data-sp-booking]').click(); await tick(20);
+  const ns = Object.values(dom.window.Cal.ns)[0];
+  const config = ns.q.find(args => args[0] === 'inline')[1];
+  assert.equal(config.calLink, 'team/closers-space-idiomas/reuniao-com-mentor-do-space');
+  assert.equal(config.config.metadata.voiceCallId, 'booking-call');
+  const callback = ns.q.find(args => args[0] === 'on')[1].callback;
+  const event = status => ({ detail: { data: { uid: 'booking', startTime: '2026-10-01T14:00:00Z', status } } });
+  callback(event('PENDING'));
+  assert.doesNotMatch(dom.window.document.body.textContent, /Reunião agendada ✓/);
+  callback(event('ACCEPTED'));
+  assert.match(dom.window.document.body.textContent, /Reunião agendada ✓/);
+  dom.window.document.querySelector('[data-sp-close-booking]').click();
+  callback(event('PENDING'));
+  assert.equal(dom.window.document.getElementById('sphone-booking'), null);
+  assert.equal(state.qualification.values.context, 'Preservar humano');
+});
+
+test('placeholder AI values are never offered as applicable suggestions', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  const state = dom.window.SpacePhoneModule.state;
+  state.call = { ...state.call, id: 'empty-ai', status: 'ended' };
+  state.postCall = { ...state.postCall, id: 'empty-ai', savedOutcome: 'agendado' };
+  state.qualification = { ...state.qualification, voiceCallId: 'empty-ai', values: { context: 'Humano real' }, ai: { context: 'Não validado', painGoal: 'Não informado', urgency: 'Precisa ser validado', keyPoint: 'Não identificado' } };
+  await dom.window.SpacePhoneModule.open();
+  assert.equal(dom.window.document.querySelector('[data-sp-apply-ai]'), null);
+  assert.equal(state.qualification.values.context, 'Humano real');
 });

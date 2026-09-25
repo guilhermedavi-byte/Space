@@ -16,7 +16,7 @@ test('extract SDK telnyxIDs, snake/camel and nested notifications without invent
 });
 test('exact leg wins over session; no cross-field ID matching', async () => {
   const paths=[];
-  const found=await getCorrelatedScore({...call,telnyx_call_leg_id:'l1',telnyx_call_session_id:'s2'},async p=>{paths.push(p);return {data:[score]};});
+  const found=await getCorrelatedScore({...call,telnyx_call_leg_id:'l1',telnyx_call_session_id:'s1'},async p=>{paths.push(p);return {data:[score]};});
   assert.equal(found.recording_id,'r1');assert.equal(paths.length,1);assert.match(paths[0], /call_leg_id=eq.l1/);
 });
 test('fallback heals missing IDs only after unique phones/time/duration match', async () => {
@@ -31,4 +31,8 @@ test('ambiguous, mismatched duration or absent transcript remain unmatched/pendi
     let writes=0;const result=await getCorrelatedScore(call,async(p,o={})=>{if(o.method)writes++;return {data};});
     assert.equal(result,null);assert.equal(writes,0);
   }
+});
+test('two nearby calls to same number cannot override contradictory Telnyx IDs',async()=>{
+ const result=await getCorrelatedScore({...call,telnyx_call_leg_id:'l-other',telnyx_call_session_id:'s-other'},async()=>({data:[score]}));
+ assert.equal(result,null);
 });

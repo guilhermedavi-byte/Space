@@ -1,3 +1,4 @@
+const { businessDisposition } = require('./_lib/business-disposition');
 const { readJsonBody, sendJson } = require('../_lib/http');
 const { resolveAdminRequestAuth } = require('./_lib/admin-request-auth');
 const { requireResolvedAdminPermission } = require('./_lib/admin-permissions');
@@ -192,14 +193,7 @@ const voiceRangeParams = ({ fromKey = '', toKey = '' } = {}) => {
   if (parseDateKey(toKey)) params.push(`started_at=lt.${encodeURIComponent(`${addDaysToKey(toKey, 1)}T00:00:00-03:00`)}`);
   return params.length ? `&${params.join('&')}` : '';
 };
-const normalizeVoiceStatus = row => {
-  const raw = clean(row.status).toLowerCase();
-  const outcome = clean(row.outcome);
-  if (['failed', 'error', 'erro'].includes(raw)) return 'failed';
-  if (['nao_atendeu', 'ocupado', 'numero_invalido', 'caixa_postal'].includes(outcome)) return 'unanswered';
-  if (row.answered_at || row.ended_at || ['completed','connected','answered','ended'].includes(raw)) return 'connected';
-  return raw || 'connected';
-};
+const normalizeVoiceStatus = row => businessDisposition(row).status;
 const normalizeVoiceCall = (row = {}) => {
   const started = row.started_at || row.created_at || row.ended_at || '';
   const local = localPartsFromIso(started);
@@ -287,6 +281,7 @@ const loadVoiceCalls = async ({ request = supabaseFetch, fromKey = '', toKey = '
   }
 };
 const scoreAnalysisCandidate = (call = {}, score = {}) => {
+  if (['callLegId','callSessionId'].some(key => call[key] && score[key] && call[key] !== score[key])) return null;
   if (clean(call.fromNumber) !== clean(score.fromNumber)) return null;
   if (clean(call.toNumber || call.phone) !== clean(score.toNumber || score.phone)) return null;
   const callStarted = Date.parse(call.startedAt || call.createdAt || '');
@@ -330,8 +325,9 @@ const mergeVoiceAndScoreCalls = (voiceCalls = [], scoredCalls = []) => {
     let score = (call.callLegId && byLeg.get(call.callLegId)) || (call.callSessionId && bySession.get(call.callSessionId));
     if (!score) {
       const candidates = scoredCalls.filter(item => !usedScores.has(item.id)).map(item => ({ item, score: scoreAnalysisCandidate(call, item) })).filter(item => item.score != null).sort((a,b)=>a.score-b.score);
-      if (candidates[0] && (!candidates[1] || Math.abs(candidates[0].score - candidates[1].score) > 1)) score = candidates[0].item;
+      if (candidates.length === 1) score = candidates[0].item;
     }
+    if (score && (['callLegId','callSessionId'].some(key => call[key] && score[key] && call[key] !== score[key]) || scoredCalls.filter(item => (call.callLegId && item.callLegId === call.callLegId) || (!call.callLegId && call.callSessionId && item.callSessionId === call.callSessionId)).length > 1)) score = null;
     if (score?.id) usedScores.add(score.id);
     return enrichVoiceCall(call, score);
   });
@@ -514,8 +510,8 @@ const buildModel = async (query = {}, deps = {}) => {
     over2m: rawCalls.filter(c => c.status !== 'meeting' && Number(c.durationSeconds) >= 120).length || null,
     over5m: rawCalls.filter(c => c.status !== 'meeting' && Number(c.durationSeconds) >= 300).length || null,
     over10m: rawCalls.filter(c => c.status !== 'meeting' && Number(c.durationSeconds) >= 600).length || null,
-    totalDurationSeconds: rawCalls.some(c => c.durationSeconds != null) ? rawCalls.reduce((sum,c)=>sum+number(c.durationSeconds),0) : null,
-    avgDurationSeconds: avg(rawCalls.map(c => c.durationSeconds)),
+    totalDurationSeconds: rawCalls.some(c => c.durationSeconds != null) ? rawCalls.reduce((sum,c)=>sum+businessDisposition(c).humanTalkTimeSeconds,0) : null,
+    avgDurationSeconds: avg(rawCalls.filter(c => businessDisposition(c).humanContact).map(c => c.durationSeconds)),
     scheduled: calls.filter(c => c.outcome === 'scheduled').length,
     pendingOutcome: calls.filter(c => c.status !== 'meeting' && (!c.sourceOutcome && c.outcome === 'none')).length,
     shows: calls.filter(c => c.outcome === 'show').length,

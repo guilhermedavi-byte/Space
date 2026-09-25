@@ -1,3 +1,4 @@
+const { businessDisposition } = require('./business-disposition');
 const { listCollectionAsAdmin, queryCollectionByDateRangeAsAdmin } = require("./firestore-admin");
 
 const ACTIVITY_COLLECTION = "sdrActivityEvents";
@@ -90,7 +91,7 @@ const normalizeActivityEvent = (row = {}) => {
   const sdrUid = safeString(row?.sdrUid);
   const dateKey = parseDateKey(row?.dateKey);
   const eventType = safeString(row?.eventType);
-  const outcome = safeString(row?.outcome);
+  const outcome = row?.sourceOutcome ? businessDisposition(row).activityOutcome : safeString(row?.outcome);
   if (!id || !sdrUid || !dateKey || row?.deletedAt) return null;
   if (eventType === "call" && !VALID_CALL_OUTCOMES.has(outcome)) return null;
   if (eventType === "meeting" && !VALID_MEETING_OUTCOMES.has(outcome)) return null;
@@ -139,7 +140,7 @@ const summarizeActivityEvents = (rows = []) => {
   const base = (Array.isArray(rows) ? rows : []).reduce(
     (acc, row) => {
       const type = safeString(row?.eventType);
-      const outcome = safeString(row?.outcome);
+      const outcome = row?.sourceOutcome ? businessDisposition(row).activityOutcome : safeString(row?.outcome);
       if (type === "call") {
         acc.totalCalls += 1;
         if (outcome === "atendeu" || outcome === "agendou" || outcome === "double") acc.answered += 1;

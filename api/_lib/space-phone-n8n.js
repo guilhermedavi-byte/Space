@@ -1,3 +1,4 @@
+const { analysisIntegrity, logIntegrity } = require('./space-phone-analysis-integrity');
 const crypto = require('node:crypto');
 const { resolveSdrNames } = require('./space-phone-sdr-names');
 const { localMatches, remoteMatches } = require('./datacrazy-lead-resolver');
@@ -76,7 +77,7 @@ const getQualificationPayload = async ({ callId, request = supabaseFetch, resolv
     sdrName: clean(names.get(clean(call.space_user_uid))) || 'SDR',
     sdrEmail: clean(call.space_user_email),
     outcome: clean(call.outcome),
-    transcript: clean(score?.transcript),
+    transcript: analysisIntegrity(call, score).inconsistent ? '' : clean(score?.transcript),
     qualification: normalizeQualificationPayload(qualification),
     handoffEligible: handoffEligible(call, qualification) && qualification?.datacrazy_sync_status !== 'sent',
     datacrazy: {
@@ -201,17 +202,18 @@ const dispatchQualificationEvent = async ({ event, callId, fetchImpl = fetch, no
   }
 };
 
-const requestAiQualification = async ({ call, request = supabaseFetch, now = new Date(), dispatch = dispatchQualificationEvent }) => {
+const requestAiQualification = async ({ call, request = supabaseFetch, now = new Date(), dispatch = dispatchQualificationEvent, retry = false }) => {
   let current = await getQualification(call.id, request);
   if (!current) {
     await request('/voice_call_qualifications?on_conflict=voice_call_id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: { voice_call_id: call.id, space_user_uid: call.space_user_uid, status: 'draft' } });
     current = await getQualification(call.id, request);
   }
-  if (!current || !['draft', 'ai_processing'].includes(current.status)) return { skipped: true };
+  if (!current || !(retry ? ['draft', 'ai_processing', 'review_required'] : ['draft', 'ai_processing']).includes(current.status)) return { skipped: true };
   const staleBefore = now.getTime() - 10 * 60 * 1000;
   if (current.status === 'ai_processing' && Date.parse(current.updated_at) > staleBefore) return { skipped: true, aiStatus: 'pending' };
   const score = await getScore(call, request);
-  if (!clean(score?.transcript)) return { skipped: true, aiStatus: 'pending' };
+  if (analysisIntegrity(call, score).inconsistent) { logIntegrity(call, score); return { skipped: true, aiStatus: 'failed', reason: 'outcome_transcript_inconsistent' }; }
+  if (!clean(score?.transcript)) return { skipped: true, aiStatus: score ? 'transcribing' : 'waiting_recording', retryAvailable: true };
   const stamp = now.toISOString();
   const version = current.updated_at ? `&updated_at=eq.${enc(current.updated_at)}` : '';
   const claim = asRows(await request(`/voice_call_qualifications?voice_call_id=eq.${enc(call.id)}&status=eq.${enc(current.status)}${version}`, {

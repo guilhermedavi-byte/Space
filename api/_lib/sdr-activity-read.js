@@ -1,4 +1,4 @@
-const SELECT=['id','sdrUid','sdrId','sdrEmail','dateKey','eventType','outcome','deletedAt','time','createdAt','dealId','businessId'];
+const SELECT=['id','sdrUid','sdrId','sdrEmail','dateKey','eventType','outcome','sourceOutcome','deletedAt','time','createdAt','dealId','businessId'];
 const PREFIX='projects/plataforma-space/databases/(default)/documents';
 function query(cursor,{from,to}){
   return {structuredQuery:{select:{fields:SELECT.map(fieldPath=>({fieldPath}))},from:[{collectionId:'sdrActivityEvents'}],

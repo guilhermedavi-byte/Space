@@ -250,7 +250,7 @@ test("space phone does not correlate ambiguous fallback candidates", async () =>
   });
   const res = await invoke(handler, { url: "/api/space-phone?period=today" });
   assert.equal(res.status, 200);
-  assert.equal(res.json.calls[0].analysisStatus, "processing");
+  assert.equal(res.json.calls[0].analysisStatus, "waiting_recording");
   assert.equal(patches.length, 0);
 });
 
@@ -433,7 +433,7 @@ test('repeated SDR completion never resets sent or a reserved Datacrazy handoff'
   }
 });
 
-test('history includes yesterday with today KPIs at zero, preserving Growth and Admin scope', async () => {
+test('period filters yesterday from both history and KPIs, preserving Growth and Admin scope', async () => {
   const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1); yesterday.setHours(12, 0, 0, 0);
   const data = [{ id: 'own-yesterday', space_user_uid: 'sdr-history', started_at: yesterday.toISOString(), status: 'completed', duration_seconds: 60, outcome: 'agendado' }, { id: 'other-yesterday', space_user_uid: 'sdr-other', started_at: yesterday.toISOString(), status: 'completed' }];
   for (const role of ['growth', 'admin']) {
@@ -451,7 +451,7 @@ test('history includes yesterday with today KPIs at zero, preserving Growth and 
     for (const period of ['today', 'last7', 'last30']) {
       const response = await invoke(handler, { url: `/api/space-phone?period=${period}` });
       assert.equal(response.status, 200);
-      assert.equal(response.json.calls.length, role === 'growth' ? 1 : 2);
+      assert.equal(response.json.calls.length, period === 'today' ? 0 : role === 'growth' ? 1 : 2);
       assert.equal(response.json.analytics.totalCalls, period === 'today' ? 0 : role === 'growth' ? 1 : 2);
       if (period !== 'today') assert.equal(response.json.calls[0].outcome, 'agendado');
     }
@@ -490,14 +490,15 @@ test('history search and status retain own-call scope and scheduled outcome', as
   assert.equal(model.calls[0].outcome, 'agendado');
 });
 
-test('history pages are 50 recent calls without period; analytics-only never reloads history', async () => {
+test('history pages retain period; analytics-only does not reload history', async () => {
   const rows = Array.from({length: 63}, (_,i) => ({id: `recent-${i}`, space_user_uid:'owner', started_at:'2026-01-01T12:00:00Z'}));
   const seen=[];
   const request=async path=>{
     if (!path.startsWith('/voice_calls')) return {data:[]};
     const q=new URL(path,'https://test').searchParams; seen.push(q);
     assert.equal(q.get('space_user_uid'),'eq.owner');
-    if(q.getAll('or').some(v=>v.includes('started_at.gte'))) return {data:[]};
+    assert.ok(q.getAll('or').some(v=>v.includes('started_at.gte')));
+    if(q.get('limit') === '200') return {data:[]};
     assert.equal(q.get('order'),'started_at.desc.nullslast,created_at.desc,id.desc');
     const offset=Number(q.get('offset'));return {data:rows.slice(offset,offset+Number(q.get('limit')))};
   };
@@ -528,7 +529,7 @@ test('Admin SDR and Growth spoof isolation apply to metrics, recent history and 
     return { data: rows };
   };
   const args = { request, user: { sub: 'luana' }, resolveNames: async () => new Map([['luana', 'Luana Mendonça'], ['other', 'Guilherme Davi']]) };
-  for (const [isAdmin, sdr, count, history] of [[true,'all',2,3],[true,'luana',1,2],[false,'other',1,2],[false,'all',1,2],[true,'inactive',2,3]]) {
+  for (const [isAdmin, sdr, count, history] of [[true,'all',2,2],[true,'luana',1,1],[false,'other',1,1],[false,'all',1,1],[true,'inactive',2,2]]) {
     const model = await __private.listModel({ ...args, isAdmin, query: { period: 'today', sdr } });
     assert.equal(model.analytics.totalCalls,count); assert.equal(model.calls.length,history);
     assert.equal(model.calls[0].sdrName,'Luana Mendonça');
