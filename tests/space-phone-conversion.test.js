@@ -7,7 +7,8 @@ function db(){
  const bookings=[{id:'a',sdr_uid:'own',lead_id:'lead-a',status:'confirmed',start_at:now},{id:'b',sdr_uid:'other',lead_id:'lead-b',status:'confirmed',start_at:now}];
  const meetings={ 'lead-a':[{id:'m-a',status:'scheduled'}],'lead-b':[{id:'m-b',status:'completed'}]};
  const paths=[];
- return {bookings,meetings,paths,request:async path=>{paths.push(path);const p=new URL(path,'https://test').searchParams;
+ return {bookings,meetings,paths,request:async (path,options={})=>{paths.push(path);const p=new URL(path,'https://test').searchParams;
+ if(path==='/rpc/space_resolve_booking_meeting'){const b=bookings.find(b=>b.id===options.body.p_booking_id);const ms=meetings[b.lead_id]||[];return {data:{booking_id:b.id,meeting_id:ms.length===1?ms[0].id:null,meeting_status:ms.length!==1?'unresolved':['attended','completed'].includes(ms[0].status)?'completed':ms[0].status}};}
  if(path.startsWith('/commercial_bookings'))return {data:bookings.filter(b=>b.status==='confirmed'&&(!p.get('sdr_uid')?.startsWith('eq.')||b.sdr_uid===p.get('sdr_uid').slice(3))&&Date.parse(b.start_at)>=Date.parse(p.getAll('start_at')[0].slice(4))&&Date.parse(b.start_at)<=Date.parse(p.getAll('start_at')[1].slice(4)))};
  return {data:meetings[p.get('lead_id').slice(3)]||[]};}};
 }

@@ -67,7 +67,7 @@ async function executeCommercialAction(body,{request=supabaseFetch,crm=crmReques
     if(!uuid(appointment.conversation_id))throw error('MISSING_CONVERSATION');
     result=await crm(`/conversations/${enc(appointment.conversation_id)}/messages`,{method:'POST',body:{body:'Ausência verificada por evidências de participação. Decisão auditada pela Space.',isInternal:true}});
    }else if(['meeting_attended','meeting_no_show','meeting_completed'].includes(action)){
-    result=(await request(`/sdr_meetings?id=eq.${enc(appointment.id)}`,{method:'PATCH',body:{status:action.replace('meeting_',''),updated_at:new Date(now()).toISOString()}})).data;
+    result=(await request(`/sdr_meetings?id=eq.${enc(appointment.id)}`,{method:'PATCH',body:{status:action.replace('meeting_',''),...(['meeting_attended','meeting_completed'].includes(action)?{completed_at:new Date(now()).toISOString()}:{}),updated_at:new Date(now()).toISOString()}})).data;
    }else throw error('UNSUPPORTED_ACTION');
    await finish('sent','SUCCESS',['attended','no_show'].includes(action)?decision.proposed_stage:decision.previous_stage);
    return {ok:true,performed:true,decision,result};

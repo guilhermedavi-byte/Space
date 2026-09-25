@@ -9,7 +9,7 @@ const fail = (code, status = 400) => Object.assign(new Error(code), { status });
 const uuid = x => /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(clean(x));
 const bookingUid = x => /^[A-Za-z0-9_-]{6,100}$/.test(clean(x));
 const iso = x => Number.isFinite(Date.parse(x)) ? new Date(x).toISOString() : null;
-const fields = 'id,calcom_booking_id,status,start_at,end_at,timezone,attendee_name,attendee_email,attendee_phone,host_name,sdr_uid,voice_call_id,lead_id,opportunity_id,updated_at,rescheduled_from,rescheduled_to';
+const fields = 'id,calcom_booking_id,status,start_at,end_at,timezone,attendee_name,attendee_email,attendee_phone,host_name,sdr_uid,voice_call_id,lead_id,opportunity_id,updated_at,rescheduled_from,rescheduled_to,meeting_id,meeting_status,meeting_completed_at,match_method';
 const model = b => ({ id:b.id, bookingExternalId:b.calcom_booking_id, bookingConfirmed:b.status === 'confirmed', status:b.status, bookingStartAt:b.start_at, bookingEndAt:b.end_at, timezone:b.timezone, attendeeName:b.attendee_name, attendeeEmail:b.attendee_email, attendeePhone:b.attendee_phone, hostName:b.host_name, sdrUid:b.sdr_uid, voiceCallId:b.voice_call_id, leadId:b.lead_id, opportunityId:b.opportunity_id });
 async function callInScope(request, id, user, isAdmin) {
   if (!uuid(id)) throw fail('invalid_call');
