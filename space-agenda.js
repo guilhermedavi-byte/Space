@@ -61,7 +61,7 @@
           await refresh(callId);
         }catch{status.textContent='Agendamento recebido pelo calendário. Confirmação na Space pendente de sincronização.';}
       }});
-      cal('inline',{elementOrSelector:'#space-cal-calendar',calLink:ctx.calLink,config:{theme:'dark',layout:'month_view',...contact,metadata:{spaceBookingContext:ctx.contextId}}});
+      cal('inline',{elementOrSelector:'#space-cal-calendar',calLink:ctx.calLink,config:{theme:'dark',layout:'month_view',...contact,'metadata[spaceBookingContext]':ctx.contextId}});
       cal('ui',{hideEventTypeDetails:false,layout:'month_view'});
       };
       form.addEventListener('submit',mountCalendar);
