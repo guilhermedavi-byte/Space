@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
-const DATACRAZY_BLOCKED = 'DATACRAZY_NOTE_WRITE_BLOCKED_API_ENDPOINT';
+const WRITE_IN_PROGRESS = 'DATACRAZY_WRITE_IN_PROGRESS';
+const WRITE_UNCERTAIN = 'DATACRAZY_WRITE_OUTCOME_UNKNOWN';
 const { supabaseFetch } = require('./supabase-rest');
 
 const clean = value => String(value == null ? '' : value).trim();
@@ -94,10 +95,12 @@ const getQualificationPayload = async ({ callId, request = supabaseFetch }) => {
     outcome: clean(call.outcome),
     transcript: clean(score?.transcript),
     qualification: normalizeQualificationPayload(qualification),
-    handoffEligible: handoffEligible(call, qualification),
+    handoffEligible: handoffEligible(call, qualification) && qualification?.datacrazy_sync_status !== 'sent',
     datacrazy: {
       contactId: clean(qualification?.datacrazy_lead_id || call.lead_id),
       dealId: clean(call.opportunity_id),
+      syncStatus: clean(qualification?.datacrazy_sync_status),
+      alreadySent: qualification?.datacrazy_sync_status === 'sent',
     },
   };
 };
@@ -137,26 +140,50 @@ const saveAiQualification = async ({ callId, qualification = {}, request = supab
 
 const markDatacrazySynced = async ({ callId, sync = {}, request = supabaseFetch }) => {
   const call = await getCall(callId, request);
-  const current = await getQualification(call.id, request).catch(() => null);
-  if (clean(current?.datacrazy_note_id) && clean(current?.datacrazy_sync_status) === 'sent') return { ok: true, duplicate: true, qualification: current };
-  if (!handoffEligible(call, current) || !clean(sync.datacrazyNoteId || sync.noteId)) throw Object.assign(new Error('datacrazy_sync_not_confirmed'), { status: 409 });
-  const now = new Date().toISOString();
+  const current = await getQualification(call.id, request);
+  if (current?.datacrazy_sync_status === 'sent') return { ok: true, duplicate: true, qualification: current };
+  if (!handoffEligible(call, current) || sync.success === false || Number(sync.statusCode) >= 400) throw Object.assign(new Error('datacrazy_sync_not_confirmed'), { status: 409 });
+  // This authenticated callback belongs exclusively to the community node's success output.
+  // Successful nodes may emit an empty item: noteId is optional, never fabricated.
+  const resolved = current.datacrazy_sync_error === WRITE_IN_PROGRESS && current.datacrazy_lead_id
+    ? { matched: true, leadId: current.datacrazy_lead_id }
+    : await resolveDatacrazy({ callId: call.id, request });
+  const suppliedLead = clean(sync.datacrazyLeadId || sync.leadId || sync.contactId || sync.datacrazyId);
+  if (!resolved.matched || (suppliedLead && suppliedLead !== resolved.leadId)) throw Object.assign(new Error('datacrazy_unique_match_required'), { status: 409 });
   const body = {
-    datacrazy_lead_id: clean(sync.datacrazyLeadId || sync.leadId || sync.contactId || sync.datacrazyId).slice(0, 240) || null,
+    datacrazy_lead_id: resolved.leadId,
     datacrazy_note_id: clean(sync.datacrazyNoteId || sync.noteId).slice(0, 240) || null,
-    datacrazy_synced_at: clean(sync.syncedAt) || now,
-    datacrazy_sync_status: 'sent',
-    datacrazy_sync_error: null,
-    updated_at: now,
+    datacrazy_synced_at: new Date().toISOString(),
+    datacrazy_sync_status: 'sent', status: 'sent', datacrazy_sync_error: null,
+    updated_at: new Date().toISOString(),
   };
-  const rows = asRows(await request(`/voice_call_qualifications?voice_call_id=eq.${enc(call.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body, timeoutMs: 12000 }));
-  return { ok: true, duplicate: false, qualification: rows[0] || body };
+  const rows = asRows(await request(`/voice_call_qualifications?voice_call_id=eq.${enc(call.id)}&status=eq.complete&completed_at=not.is.null&or=(datacrazy_sync_status.is.null,datacrazy_sync_status.neq.sent)`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body, timeoutMs: 12000 }));
+  if (rows[0]) return { ok: true, duplicate: false, qualification: rows[0] };
+  const latest = await getQualification(call.id, request);
+  if (latest?.datacrazy_sync_status === 'sent') return { ok: true, duplicate: true, qualification: latest };
+  throw Object.assign(new Error('datacrazy_sync_not_persisted'), { status: 409 });
+};
+
+const claimDatacrazyHandoff = async ({ callId, request = supabaseFetch }) => {
+  const call = await getCall(callId, request);
+  const current = await getQualification(call.id, request);
+  if (current?.datacrazy_sync_status === 'sent') return { ok: true, shouldWrite: false, reason: 'already_sent' };
+  if (!handoffEligible(call, current)) return { ok: true, shouldWrite: false, reason: 'qualification_not_confirmed' };
+  if ([WRITE_IN_PROGRESS, WRITE_UNCERTAIN].includes(current.datacrazy_sync_error)) return { ok: true, shouldWrite: false, reason: 'write_in_progress_or_uncertain' };
+  const resolved = await resolveDatacrazy({ callId: call.id, request });
+  if (!resolved.matched) return { ok: true, shouldWrite: false, reason: resolved.reason };
+  const rows = asRows(await request(`/voice_call_qualifications?voice_call_id=eq.${enc(call.id)}&status=eq.complete&completed_at=not.is.null&and=(or(datacrazy_sync_status.is.null,datacrazy_sync_status.neq.sent),or(datacrazy_sync_error.is.null,datacrazy_sync_error.not.in.(${WRITE_IN_PROGRESS},${WRITE_UNCERTAIN})))`, {
+    method: 'PATCH', headers: { Prefer: 'return=representation' },
+    body: { datacrazy_lead_id: resolved.leadId, datacrazy_sync_status: 'pending', datacrazy_sync_error: WRITE_IN_PROGRESS, updated_at: new Date().toISOString() }, timeoutMs: 12000,
+  }));
+  if (!rows.length) return { ok: true, shouldWrite: false, reason: 'claimed_or_sent' };
+  return { ok: true, shouldWrite: true, callId: call.id, leadId: resolved.leadId, note: clean(current.final_summary) || formatQualificationNote({ call, qualification: current }) };
 };
 
 const markDatacrazyFailed = async ({ callId, request = supabaseFetch }) => {
   const call = await getCall(callId, request);
   const rows = asRows(await request(`/voice_call_qualifications?voice_call_id=eq.${enc(call.id)}&status=eq.complete&datacrazy_sync_status=in.(pending,failed)`, {
-    method: 'PATCH', headers: { Prefer: 'return=representation' }, body: { datacrazy_sync_status: 'failed', datacrazy_sync_error: 'DATACRAZY_HANDOFF_FAILED' }, timeoutMs: 12000,
+    method: 'PATCH', headers: { Prefer: 'return=representation' }, body: { datacrazy_sync_status: 'failed', datacrazy_sync_error: WRITE_UNCERTAIN }, timeoutMs: 12000,
   }));
   return { ok: true, skipped: !rows.length };
 };
@@ -238,28 +265,27 @@ const processPendingQualifications = async ({ request = supabaseFetch, now = new
 
 const makeMatch = (source, row = {}, extras = {}) => ({
   source,
-  datacrazyContactId: clean(row.datacrazy_contact_id || row.contact_id || row.contactId || row.lead_id || row.external_id || extras.contactId),
-  datacrazyDealId: clean(row.datacrazy_deal_id || row.deal_id || row.dealId || row.business_id || row.external_id || extras.dealId),
+  datacrazyContactId: clean(row.datacrazy_contact_id || row.contact_id || row.contactId || row.datacrazy_lead_id || row.lead_id || row.leadId || extras.contactId),
+  datacrazyDealId: clean(row.datacrazy_deal_id || row.deal_id || row.dealId || row.business_id || extras.dealId),
   phone: clean(row.telefone_normalizado || row.phone_normalized || row.phone || row.telefone || extras.phone),
-  name: clean(row.nome || row.name || row.lead_name || row.payload?.lead?.name || row.payload?.leadName || extras.name),
+  name: clean(row.nome || row.name || row.lead_name || extras.name),
 });
-const uniqueMatches = matches => [...new Map(matches.filter(m => m.datacrazyContactId || m.datacrazyDealId).map(m => [`${m.datacrazyContactId}:${m.datacrazyDealId}`, m])).values()];
+const matchResult = (candidates, truncated = false) => {
+  const matches = [...new Map(candidates.filter(m => m.datacrazyContactId).map(m => [m.datacrazyContactId, m])).values()];
+  const matched = !truncated && matches.length === 1;
+  return { matches, matched, leadId: matched ? matches[0].datacrazyContactId : null, reason: matched ? null : truncated ? 'match_search_incomplete' : matches.length ? 'ambiguous_match' : 'no_match' };
+};
 
 const resolveDatacrazy = async ({ callId = '', phone = '', request = supabaseFetch }) => {
-  const matches = [];
-  let call = null;
-  if (callId) {
-    call = await getCall(callId, request).catch(() => null);
-    if (call?.lead_id || call?.opportunity_id) matches.push(makeMatch('voice_call', {}, { contactId: call.lead_id, dealId: call.opportunity_id, phone: call.to_number, name: call.lead_name }));
-  }
-  const normalized = normalizePhone(phone || call?.to_number || call?.from_number);
-  if (!normalized) return { matches: uniqueMatches(matches) };
-  const suffix = normalized.slice(-8);
-  const estado = asRows(await request(`/n8n_estado_leads_comercial_space?select=*&or=(telefone_normalizado.eq.${enc(normalized)},telefone_normalizado.ilike.*${enc(suffix)}*)&limit=10`, { timeoutMs: 12000 }).catch(() => ({ data: [] })));
-  estado.filter(row => eq(row.telefone_normalizado, normalized) || clean(row.telefone_normalizado).endsWith(suffix)).forEach(row => matches.push(makeMatch('n8n_estado_leads_comercial_space', row)));
-  const enrich = asRows(await request(`/n8n_sales_call_outcome_enrichment_space?select=*&limit=50`, { timeoutMs: 12000 }).catch(() => ({ data: [] })));
-  enrich.filter(row => [row.telefone_normalizado, row.phone_normalized, row.phone, row.to_number].some(value => eq(value, normalized) || clean(value).replace(/\D+/g, '').endsWith(suffix))).forEach(row => matches.push(makeMatch('n8n_sales_call_outcome_enrichment_space', row)));
-  return { matches: uniqueMatches(matches) };
+  const call = callId ? await getCall(callId, request) : null;
+  // An actual lead relationship is authoritative; a deal/external ID is never a lead ID.
+  if (call?.lead_id) return matchResult([makeMatch('voice_call', {}, { contactId: call.lead_id, dealId: call.opportunity_id, phone: call.to_number, name: call.lead_name })]);
+  const normalized = normalizePhone(call?.to_number || phone);
+  if (!normalized) return matchResult([]);
+  const estado = asRows(await request(`/n8n_estado_leads_comercial_space?select=*&telefone_normalizado=eq.${enc(normalized)}&limit=101`, { timeoutMs: 12000 }));
+  const candidates = estado.filter(row => eq(row.telefone_normalizado, normalized)).map(row => makeMatch('n8n_estado_leads_comercial_space', row));
+  // Fail closed on truncation/infra; suffix-only phone matches are not sufficient evidence.
+  return matchResult(candidates, estado.length >= 101);
 };
 
 const formatQualificationNote = ({ call, qualification }) => {
@@ -275,15 +301,11 @@ const datacrazyNote = async ({ callId, datacrazyId, note = '', request = supabas
   if (!handoffEligible(call, qualification)) return { ok: false, status: 409, error: 'datacrazy_gate_not_satisfied' };
   const target = clean(datacrazyId || qualification.datacrazy_lead_id || call.lead_id || call.opportunity_id);
   if (!target) return { ok: false, status: 409, error: 'datacrazy_match_required' };
-  // No certified write endpoint: persist the handoff blocker independently of qualification.
-  await request(`/voice_call_qualifications?voice_call_id=eq.${enc(call.id)}&status=eq.complete&or=(datacrazy_sync_status.is.null,datacrazy_sync_status.neq.sent)`, {
-    method: 'PATCH', body: { datacrazy_sync_status: 'blocked', datacrazy_sync_error: DATACRAZY_BLOCKED }, timeoutMs: 12000,
-  });
-  return { ok: false, status: 501, error: DATACRAZY_BLOCKED, preparedNote: formatQualificationNote({ call, qualification }) };
+  // Retired path: the certified community node owns writes. Never change a claim here.
+  return { ok: false, status: 410, error: 'DATACRAZY_WRITE_DELEGATED_TO_N8N', preparedNote: clean(qualification.final_summary) || formatQualificationNote({ call, qualification }) };
 };
 
 module.exports = {
-  DATACRAZY_BLOCKED,
   requestAiQualification,
   processPendingQualifications,
   assertN8nAuth,
@@ -296,6 +318,7 @@ module.exports = {
   getQualificationPayload,
   handoffEligible,
   markDatacrazySynced,
+  claimDatacrazyHandoff,
   markDatacrazyFailed,
   normalizePhone,
   publicError,

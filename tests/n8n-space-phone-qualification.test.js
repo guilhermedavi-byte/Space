@@ -91,12 +91,12 @@ test('n8n mark_datacrazy_synced is idempotent and marks sent', async () => withE
   const restore = installSupabaseStub(makeRequest(fixtures(), seen));
   try {
     const handler = require('../api/integrations/n8n/space-phone-qualification');
-    const res = await invoke(handler, { method: 'POST', body: { action: 'mark_datacrazy_synced', callId: 'call-1', sync: { contactId: 'c1', noteId: 'n1' } } });
+    const res = await invoke(handler, { method: 'POST', body: { action: 'mark_datacrazy_synced', callId: 'call-1', sync: { contactId: 'contact-known' } } });
     assert.equal(res.status, 200);
     const patch = seen.find(item => item.options.method === 'PATCH');
-    assert.equal(patch.options.body.datacrazy_note_id, 'n1');
+    assert.equal(patch.options.body.datacrazy_note_id, null);
     assert.equal(patch.options.body.datacrazy_sync_status, 'sent');
-    assert.equal(patch.options.body.status, undefined);
+    assert.equal(patch.options.body.status, 'sent');
   } finally { restore(); }
 }));
 
@@ -107,19 +107,21 @@ test('datacrazy resolve prefers deterministic ids and local state matches safely
     const res = await invoke(handler, { method: 'POST', url: '/api/integrations/n8n/datacrazy-resolve', body: { callId: 'call-1', phone: '+1 407 751 1479' } });
     assert.equal(res.status, 200);
     assert.ok(res.json.matches.some(m => m.source === 'voice_call' && m.datacrazyContactId === 'contact-known'));
-    assert.ok(res.json.matches.some(m => m.source === 'n8n_estado_leads_comercial_space' && m.datacrazyContactId === 'contact-local'));
+    assert.equal(res.json.matched, true);
+    assert.equal(res.json.leadId, 'contact-known');
+    assert.equal(res.json.matches.length, 1);
   } finally { restore(); }
 }));
 
-test('datacrazy note enforces gate, idempotency and blocks uncertified write endpoint', async () => withEnv({ SPACE_N8N_SHARED_SECRET: 'shared-secret-123456', CRM_API_BASE_URL: 'https://datacrazy.test', CRM_API_KEY: 'secret-key' }, async () => {
+test('legacy Datacrazy note endpoint is retired without writing', async () => withEnv({ SPACE_N8N_SHARED_SECRET: 'shared-secret-123456', CRM_API_BASE_URL: 'https://datacrazy.test', CRM_API_KEY: 'secret-key' }, async () => {
   const restore = installSupabaseStub(makeRequest());
   try {
     const handler = require('../api/integrations/n8n/datacrazy-note');
     const res = await invoke(handler, { method: 'POST', url: '/api/integrations/n8n/datacrazy-note', body: { callId: 'call-1', datacrazyId: 'contact-local', note: 'Qualificação SDR — Space\nContexto: ok\nTranscript: não deve ir' } });
-    assert.equal(res.status, 501);
-    assert.equal(res.json.error, 'DATACRAZY_NOTE_WRITE_BLOCKED_API_ENDPOINT');
+    assert.equal(res.status, 410);
+    assert.equal(res.json.error, 'DATACRAZY_WRITE_DELEGATED_TO_N8N');
     assert.equal(res.json.preparedNote.includes('Transcript'), false);
-    assert.equal(res.json.preparedNote.includes('Qualificação SDR — Space'), true);
+    assert.equal(res.json.preparedNote, 'Resumo');
   } finally { restore(); }
 }));
 
@@ -176,14 +178,13 @@ test('scheduled worker fails closed without its cron secret', async () => withEn
   assert.equal(res.status, 401);
 }));
 
-test('blocked Datacrazy write persists only handoff fields', async () => {
+test('retired Datacrazy write endpoint cannot overwrite a handoff claim', async () => {
   const { datacrazyNote } = require('../api/_lib/space-phone-n8n');
   const seen = [];
   const result = await datacrazyNote({ callId: 'call-1', request: makeRequest(fixtures(), seen) });
-  assert.equal(result.error, 'DATACRAZY_NOTE_WRITE_BLOCKED_API_ENDPOINT');
-  const write = seen.find(r => r.options.method === 'PATCH');
-  assert.equal(write.options.body.datacrazy_sync_status, 'blocked');
-  assert.equal(write.options.body.status, undefined);
+  assert.equal(result.error, 'DATACRAZY_WRITE_DELEGATED_TO_N8N');
+  assert.equal(result.status, 410);
+  assert.equal(seen.some(r => r.options.method === 'PATCH'), false);
 });
 
 
@@ -215,8 +216,8 @@ for (const [name, status, outcome, confirmed, allowed] of [
   assert.equal(payload.handoffEligible, allowed);
   const result = await datacrazyNote({ callId: fx.call.id, request });
   // A passing gate reaches the existing handoff implementation, which still blocks uncertified writes.
-  assert.equal(result.error, allowed ? 'DATACRAZY_NOTE_WRITE_BLOCKED_API_ENDPOINT' : 'datacrazy_gate_not_satisfied');
-  assert.equal(seen.some(r => r.options.method === 'PATCH'), allowed);
+  assert.equal(result.error, allowed ? 'DATACRAZY_WRITE_DELEGATED_TO_N8N' : 'datacrazy_gate_not_satisfied');
+  assert.equal(seen.some(r => r.options.method === 'PATCH'), false);
   if (!allowed) await assert.rejects(() => markDatacrazySynced({ callId: fx.call.id, request, sync: { noteId: 'note-1' } }), /datacrazy_sync_not_confirmed/);
 });
 
@@ -258,3 +259,76 @@ test('telemetry failure does not change a successful webhook dispatch', async ()
   const result = await dispatchQualificationEvent({ event: 'qualification.completed', callId: 'call-1', logger: () => { throw new Error('logging offline'); }, fetchImpl: async () => ({ ok: true, status: 200 }) });
   assert.equal(result.ok, true);
 }));
+
+test('sent callback with no note ID is idempotent and GET forbids a second handoff', async () => {
+  const fx = fixtures(); fx.qualification.status = 'sent'; fx.qualification.datacrazy_sync_status = 'sent'; fx.qualification.datacrazy_note_id = null;
+  const seen = []; const request = makeRequest(fx, seen);
+  const { markDatacrazySynced, claimDatacrazyHandoff, getQualificationPayload } = require('../api/_lib/space-phone-n8n');
+  assert.equal((await markDatacrazySynced({ callId: fx.call.id, request })).duplicate, true);
+  assert.equal((await claimDatacrazyHandoff({ callId: fx.call.id, request })).shouldWrite, false);
+  assert.equal((await getQualificationPayload({ callId: fx.call.id, request })).handoffEligible, false);
+  assert.equal(seen.some(r => r.options.method), false);
+});
+
+for (const [name, contacts, expected] of [
+  ['same lead in repeated rows', ['one', 'one'], true],
+  ['two distinct leads', ['one', 'two'], false],
+  ['no lead', [], false],
+]) test(`strict phone match: ${name}`, async () => {
+  const fx = fixtures(); fx.call.lead_id = null;
+  const base = makeRequest(fx);
+  const { resolveDatacrazy } = require('../api/_lib/space-phone-n8n');
+  const result = await resolveDatacrazy({ callId: fx.call.id, request: (path, opts) => path.startsWith('/n8n_estado') ? { data: contacts.map(id => ({ lead_id: id, telefone_normalizado: '14077511479' })) } : base(path, opts) });
+  assert.equal(result.matched, expected);
+  assert.equal(result.leadId, expected ? 'one' : null);
+});
+
+test('suffix coincidence and deal/external IDs are not a valid lead match', async () => {
+  const fx = fixtures(); fx.call.lead_id = null;
+  const base = makeRequest(fx);
+  const { resolveDatacrazy } = require('../api/_lib/space-phone-n8n');
+  const result = await resolveDatacrazy({ callId: fx.call.id, request: (path, opts) => path.startsWith('/n8n_estado') ? { data: [
+    { lead_id: 'wrong-country', telefone_normalizado: '55477511479' },
+    { external_id: 'deal-not-lead', telefone_normalizado: '14077511479' },
+  ] } : base(path, opts) });
+  assert.equal(result.matched, false);
+});
+
+test('handoff claim returns resolved lead/note and blocks retry while write outcome is unknown', async () => {
+  const fx = fixtures(); const base = makeRequest(fx);
+  const request = async (path, opts = {}) => {
+    if (path.startsWith('/voice_call_qualifications') && opts.method === 'PATCH') Object.assign(fx.qualification, opts.body);
+    return base(path, opts);
+  };
+  const { claimDatacrazyHandoff, markDatacrazyFailed } = require('../api/_lib/space-phone-n8n');
+  const first = await claimDatacrazyHandoff({ callId: fx.call.id, request });
+  assert.equal(first.shouldWrite, true);
+  assert.equal(first.leadId, 'contact-known');
+  assert.equal(first.note, 'Resumo');
+  assert.equal((await claimDatacrazyHandoff({ callId: fx.call.id, request })).shouldWrite, false);
+  await markDatacrazyFailed({ callId: fx.call.id, request });
+  assert.equal((await claimDatacrazyHandoff({ callId: fx.call.id, request })).shouldWrite, false);
+});
+
+test('claim loser cannot write and failed sent persistence does not report success', async () => {
+  const fx = fixtures(); const base = makeRequest(fx);
+  const request = (path, opts) => opts?.method === 'PATCH' ? { data: [] } : base(path, opts);
+  const { claimDatacrazyHandoff, markDatacrazySynced } = require('../api/_lib/space-phone-n8n');
+  assert.equal((await claimDatacrazyHandoff({ callId: fx.call.id, request })).shouldWrite, false);
+  await assert.rejects(() => markDatacrazySynced({ callId: fx.call.id, request }), /datacrazy_sync_not_persisted/);
+});
+
+test('callback rejects a manually selected lead different from the resolver', async () => {
+  const { markDatacrazySynced } = require('../api/_lib/space-phone-n8n');
+  await assert.rejects(() => markDatacrazySynced({ callId: 'call-1', sync: { leadId: 'manual-other-lead' }, request: makeRequest() }), /datacrazy_unique_match_required/);
+});
+
+
+test('explicit community-node failure cannot mark handoff sent', async () => {
+  const { markDatacrazySynced } = require('../api/_lib/space-phone-n8n');
+  for (const sync of [{ success: false }, { statusCode: 500 }]) {
+    const seen = [];
+    await assert.rejects(() => markDatacrazySynced({ callId: 'call-1', sync, request: makeRequest(fixtures(), seen) }), /datacrazy_sync_not_confirmed/);
+    assert.equal(seen.some(r => r.options.method === 'PATCH'), false);
+  }
+});

@@ -312,7 +312,7 @@ test('space phone qualification completion is gated by agendado and required fie
   const ok = await invoke(handler, { method: 'PATCH', body: { id: 'call-q2', action: 'complete_qualification' } });
   assert.equal(ok.status, 200);
   assert.equal(ok.json.qualification.status, 'complete');
-  assert.equal(ok.json.qualification.datacrazy.syncStatus, 'blocked');
+  assert.equal(ok.json.qualification.datacrazy.syncStatus, 'pending');
   assert.equal(calls.some(call => String(call.path).startsWith('/datacrazy')), false);
 });
 
@@ -365,7 +365,7 @@ test('manual qualification completes before unavailable n8n, without rollback', 
     const res = await invoke(handler, { method: 'PATCH', body: { id: 'call-manual', action: 'complete_qualification' } });
     assert.equal(res.status, 200);
     assert.equal(res.json.qualification.status, 'complete');
-    assert.equal(res.json.qualification.datacrazy.syncStatus, 'blocked');
+    assert.equal(res.json.qualification.datacrazy.syncStatus, 'pending');
     assert.equal(events[0], 'saved');
     assert.ok(events.includes('dispatch'));
   } finally {
@@ -409,6 +409,25 @@ for (const persisted of [true, false]) test(`completed dispatch requires persist
     assert.equal(events.length, persisted ? 1 : 0);
   } finally {
     global.fetch = originalFetch;
+    if (previous === undefined) delete process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL; else process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL = previous;
+  }
+});
+
+test('repeated SDR completion never resets sent or a reserved Datacrazy handoff', async () => {
+  const { completeQualification } = require('../api/_lib/space-phone');
+  const previous = process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL;
+  process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL = '';
+  try {
+    for (const syncStatus of ['sent', 'pending']) {
+      const writes = [];
+      const result = await completeQualification({ call: { id: 'call-1', outcome: 'agendado' }, user: { sub: 'sdr-1' }, request: async (path, opts = {}) => {
+        if (opts.method) writes.push(opts);
+        return { data: [{ id: 'q1', voice_call_id: 'call-1', status: syncStatus === 'sent' ? 'sent' : 'complete', completed_at: '2026-09-24T12:00:00Z', datacrazy_sync_status: syncStatus, datacrazy_sync_error: syncStatus === 'pending' ? 'DATACRAZY_WRITE_IN_PROGRESS' : null }] };
+      } });
+      assert.equal(result.qualification.datacrazy.syncStatus, syncStatus);
+      assert.equal(writes.length, 0);
+    }
+  } finally {
     if (previous === undefined) delete process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL; else process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL = previous;
   }
 });

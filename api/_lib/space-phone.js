@@ -5,7 +5,7 @@ const { supabaseFetch } = require('./supabase-rest');
 const { commitWritesAsAdmin } = require('./firestore-admin');
 const { PROJECT_ID, encodeFields } = require('./firestore-rest');
 const { normalizePhoneNumber } = require('../../src/space-phone/phone-number');
-const { dispatchQualificationEvent, requestAiQualification, DATACRAZY_BLOCKED } = require('./space-phone-n8n');
+const { dispatchQualificationEvent, requestAiQualification } = require('./space-phone-n8n');
 
 const OUTCOMES = new Set([
   'nao_atendeu',
@@ -397,6 +397,11 @@ const completeQualification = async ({ request = supabaseFetch, call, user, now 
   if (clean(call?.outcome) !== 'agendado') throw Object.assign(new Error('qualification_requires_agendado'), { status: 409 });
   const current = await loadQualification({ request, voiceCallId: call.id });
   if (!current) throw Object.assign(new Error('qualification_required'), { status: 409 });
+  if (current.complete) {
+    const sent = current.datacrazy.syncStatus === 'sent';
+    const n8n = sent ? { ok: true, skipped: true } : await dispatchQualificationEvent({ event: 'qualification.completed', callId: call.id });
+    return { ok: true, qualification: current, n8n, datacrazy: { ok: sent, status: current.datacrazy.syncStatus } };
+  }
   const missing = REQUIRED_QUALIFICATION_FIELDS.filter(field => !clean(current[field]));
   if (missing.length) {
     const error = new Error('qualification_incomplete');
@@ -406,8 +411,12 @@ const completeQualification = async ({ request = supabaseFetch, call, user, now 
   }
   const finalSummary = clean(current.finalSummary) || qualificationSummary(current);
   const nowIso = now.toISOString();
-  const patch = { status: 'complete', final_summary: finalSummary, completed_at: nowIso, updated_at: nowIso, datacrazy_sync_status: current.datacrazy.syncStatus === 'sent' ? 'sent' : 'blocked', datacrazy_sync_error: current.datacrazy.syncStatus === 'sent' ? null : DATACRAZY_BLOCKED };
-  const rows = asRows(await request(`/voice_call_qualifications?voice_call_id=eq.${encodeURIComponent(call.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: patch, timeoutMs: 12000 }));
+  const patch = { status: 'complete', final_summary: finalSummary, completed_at: nowIso, updated_at: nowIso, datacrazy_sync_status: 'pending', datacrazy_sync_error: null };
+  const rows = asRows(await request(`/voice_call_qualifications?voice_call_id=eq.${encodeURIComponent(call.id)}&status=in.(draft,ai_processing,review_required)`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: patch, timeoutMs: 12000 }));
+  if (!rows[0]) {
+    const latest = await loadQualification({ request, voiceCallId: call.id });
+    if (latest?.complete && latest.completedAt) return { ok: true, qualification: latest, datacrazy: { ok: latest.datacrazy.syncStatus === 'sent', status: latest.datacrazy.syncStatus } };
+  }
   if (!rows[0] || rows[0].status !== 'complete' || !rows[0].completed_at) throw Object.assign(new Error('qualification_completion_not_persisted'), { status: 409 });
   const qualification = normalizeQualification(rows[0]);
   const eventDispatch = await dispatchQualificationEvent({ event: 'qualification.completed', callId: call.id }).catch(error => ({ ok: false, error: clean(error?.message) || 'n8n_dispatch_failed' }));
