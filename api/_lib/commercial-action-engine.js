@@ -1,6 +1,6 @@
 const crypto=require('node:crypto');
 const {supabaseFetch}=require('./supabase-rest');
-const {evaluateCommercialAction,STAGES,leadId,stageId}=require('./commercial-action-policy');
+const {evaluateCommercialAction,STAGES,leadId,stageId,studentEvidence}=require('./commercial-action-policy');
 const clean=v=>String(v??'').trim(); const enc=v=>encodeURIComponent(clean(v));
 const rows=r=>Array.isArray(r?.data)?r.data:[];
 const uuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean(v));
@@ -52,7 +52,7 @@ async function executeCommercialAction(body,{request=supabaseFetch,crm=crmReques
   try{
    // Re-read immediately before the side effect. Never reuse the decision snapshot for a write.
    const freshRaw=await crm(`/businesses/${enc(businessId)}`);const fresh=freshRaw?.data?.id?freshRaw.data:freshRaw;
-   if(clean(fresh.id)!==businessId||stageId(fresh)!==decision.previous_stage||clean(fresh.status)!==clean(business.status)||leadId(fresh)!==leadId(business)){
+   if(studentEvidence([fresh])||clean(fresh.id)!==businessId||stageId(fresh)!==decision.previous_stage||clean(fresh.status)!==clean(business.status)||leadId(fresh)!==leadId(business)){
     await finish('blocked','BLOCKED_STATE_CONFLICT',stageId(fresh));return {ok:true,performed:false,decision:{...decision,action_allowed:false,block_reasons:['BLOCKED_STATE_CONFLICT']}};
    }
    let result={};

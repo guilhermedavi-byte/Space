@@ -33,8 +33,8 @@ function evaluateCommercialAction(input, now = Date.now()) {
   const reasons = [];
   const people = exactPeople({ businesses, appointment, attendees: meeting.attendees, explicitLeadId: input.explicitLeadId });
   const unique = people.length===1 && (!input.explicitLeadId || people[0]===clean(input.explicitLeadId));
-  const related = unique ? businesses.filter(b=>leadId(b)===people[0]) : businesses;
-  const existingStudent = studentEvidence(related) || evidence.student_found===true;
+  const related = unique ? businesses.filter(b=>leadId(b)===people[0]) : [];
+  const existingStudent = studentEvidence(related) || studentEvidence(business ? [business] : []) || evidence.student_found===true;
   const checkedStudent = evidence.student_lookup_complete===true && evidence.crm_lookup_complete===true;
   const scheduled = Date.parse(appointment?.starts_at || '');
   const sameOccurrence = appointment && Number.isFinite(scheduled) && scheduled===Date.parse(meeting.scheduled_at || '') &&
