@@ -162,15 +162,31 @@ const markDatacrazyFailed = async ({ callId, request = supabaseFetch }) => {
 };
 
 const eventWebhookUrl = () => clean(process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL);
-const dispatchQualificationEvent = async ({ event, callId, fetchImpl = fetch, now = new Date() } = {}) => {
+// Only numeric IDs/UUIDs from explicitly supported response headers are logged.
+// Never log webhook URLs, request/response bodies, credentials or arbitrary error text.
+const correlationId = value => /^(?:[0-9]{1,32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(clean(value)) ? clean(value) : null;
+const dispatchQualificationEvent = async ({ event, callId, fetchImpl = fetch, now = new Date(), logger = entry => console.info(JSON.stringify(entry)) } = {}) => {
   const url = eventWebhookUrl();
-  if (!url) return { ok: false, skipped: true, error: 'n8n_webhook_not_configured' };
   const payload = { event: clean(event), callId: clean(callId), occurredAt: now.toISOString() };
+  const dispatchId = crypto.randomUUID();
+  const started = Date.now();
+  const log = fields => {
+    try { logger({ component: 'space-phone-qualification-dispatch', dispatchId, ...payload, timestamp: new Date().toISOString(), ...fields }); } catch { /* Telemetry must not affect qualification. */ }
+  };
+  if (!url) {
+    log({ phase: 'result', outcome: 'not_configured', httpStatus: null, durationMs: 0 });
+    return { ok: false, skipped: true, error: 'n8n_webhook_not_configured', dispatchId };
+  }
+  log({ phase: 'start' });
   try {
-    const response = await fetchImpl(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000), headers: { 'Content-Type': 'application/json', 'x-space-n8n-secret': clean(process.env.SPACE_N8N_SHARED_SECRET) }, body: JSON.stringify(payload) });
-    return { ok: response.ok, status: response.status || 0 };
-  } catch {
-    return { ok: false, status: 0, error: 'n8n_dispatch_failed' };
+    const response = await fetchImpl(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000), headers: { 'Content-Type': 'application/json', 'x-space-n8n-secret': clean(process.env.SPACE_N8N_SHARED_SECRET), 'x-space-dispatch-id': dispatchId }, body: JSON.stringify(payload) });
+    const executionId = correlationId(response.headers?.get?.('x-n8n-execution-id'));
+    const requestId = correlationId(response.headers?.get?.('x-request-id'));
+    log({ phase: 'result', outcome: response.ok ? 'accepted' : 'http_error', httpStatus: response.status || 0, durationMs: Date.now() - started, n8nExecutionId: executionId, n8nRequestId: requestId });
+    return { ok: response.ok, status: response.status || 0, dispatchId };
+  } catch (error) {
+    log({ phase: 'result', outcome: ['AbortError', 'TimeoutError'].includes(error?.name) ? 'timeout' : 'transport_error', httpStatus: null, durationMs: Date.now() - started });
+    return { ok: false, status: 0, error: 'n8n_dispatch_failed', dispatchId };
   }
 };
 

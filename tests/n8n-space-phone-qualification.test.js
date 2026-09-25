@@ -219,3 +219,42 @@ for (const [name, status, outcome, confirmed, allowed] of [
   assert.equal(seen.some(r => r.options.method === 'PATCH'), allowed);
   if (!allowed) await assert.rejects(() => markDatacrazySynced({ callId: fx.call.id, request, sync: { noteId: 'note-1' } }), /datacrazy_sync_not_confirmed/);
 });
+
+test('dispatch telemetry correlates automatic completed event without logging secrets or response body', async () => withEnv({ SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL: 'https://n8n.test/private-webhook', SPACE_N8N_SHARED_SECRET: 'private-shared-secret' }, async () => {
+  const { dispatchQualificationEvent } = require('../api/_lib/space-phone-n8n');
+  const logs = []; let request;
+  const result = await dispatchQualificationEvent({ event: 'qualification.completed', callId: 'call-1', now: new Date('2026-09-24T12:00:00Z'), logger: entry => logs.push(entry), fetchImpl: async (_url, options) => {
+    request = options;
+    return { ok: true, status: 200, headers: new Headers({ 'x-n8n-execution-id': '12345', 'x-request-id': '6f1aeb32-e8d0-4719-8c0e-b81f1e4b7a83' }), json() { throw new Error('must not inspect response body'); } };
+  } });
+  assert.equal(result.ok, true);
+  assert.equal(request.headers['x-space-dispatch-id'], result.dispatchId);
+  assert.deepEqual(JSON.parse(request.body), { event: 'qualification.completed', callId: 'call-1', occurredAt: '2026-09-24T12:00:00.000Z' });
+  assert.equal(logs[0].phase, 'start');
+  assert.equal(logs[1].dispatchId, result.dispatchId);
+  assert.equal(logs[1].httpStatus, 200);
+  assert.equal(logs[1].n8nExecutionId, '12345');
+  assert.equal(logs[1].outcome, 'accepted');
+  assert.ok(Number.isFinite(Date.parse(logs[1].timestamp)));
+  assert.equal(JSON.stringify(logs).includes('private-'), false);
+}));
+
+test('dispatch telemetry records rejected and timed-out requests without arbitrary headers/errors', async () => withEnv({ SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL: 'https://n8n.test/webhook' }, async () => {
+  const { dispatchQualificationEvent } = require('../api/_lib/space-phone-n8n');
+  const logs = [];
+  const rejected = await dispatchQualificationEvent({ event: 'qualification.completed', callId: 'call-1', logger: e => logs.push(e), fetchImpl: async () => ({ ok: false, status: 503, headers: new Headers({ 'x-n8n-execution-id': 'secret-response-value' }) }) });
+  assert.equal(rejected.ok, false);
+  assert.equal(logs.at(-1).httpStatus, 503);
+  assert.equal(logs.at(-1).n8nExecutionId, null);
+  const timeout = await dispatchQualificationEvent({ event: 'qualification.completed', callId: 'call-1', logger: e => logs.push(e), fetchImpl: async () => { throw Object.assign(new Error('secret-error-value'), { name: 'TimeoutError' }); } });
+  assert.equal(timeout.ok, false);
+  assert.equal(logs.at(-1).outcome, 'timeout');
+  assert.equal(logs.at(-1).httpStatus, null);
+  assert.equal(JSON.stringify(logs).includes('secret-'), false);
+}));
+
+test('telemetry failure does not change a successful webhook dispatch', async () => withEnv({ SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL: 'https://n8n.test/webhook' }, async () => {
+  const { dispatchQualificationEvent } = require('../api/_lib/space-phone-n8n');
+  const result = await dispatchQualificationEvent({ event: 'qualification.completed', callId: 'call-1', logger: () => { throw new Error('logging offline'); }, fetchImpl: async () => ({ ok: true, status: 200 }) });
+  assert.equal(result.ok, true);
+}));
