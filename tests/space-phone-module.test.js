@@ -368,3 +368,38 @@ test('changing KPI period preserves loaded history and load more appends calls',
   assert.deepEqual(Array.from(dom.window.SpacePhoneModule.state.data.calls,c=>c.id),['yesterday','older']);
   assert.equal(dom.window.document.querySelectorAll('[data-sp-detail]').length,2);
 });
+
+for (const scenario of ['manual-summary', 'ai-empty-fields', 'human-filled']) test(`AI suggestions UX: ${scenario}`, async t => {
+  const dom=createModuleDom();t.after(()=>dom.window.close());
+  const keys=['context','painGoal','experience','urgency','decisionInvestment','keyPoint'];
+  let q={voiceCallId:'ai-review-call',status:'review_required',finalSummary:'Resumo manual',ai:scenario==='manual-summary'?{context:'   ',unexpected:'not a qualification field'}:{context:'Contexto IA',painGoal:'Objetivo IA'}};
+  if(scenario==='human-filled')for(const key of keys)q[key]='Texto humano';
+  const writes=[];
+  dom.window.fetchWithAuth=async(url,opts={})=>{
+    if(opts.method==='PATCH'){const body=JSON.parse(opts.body);writes.push(body);q={...q,...body.qualification};return jsonResponse({qualification:q});}
+    return jsonResponse({calls:[],analytics:{}});
+  };
+  const state=dom.window.SpacePhoneModule.state;
+  state.call={...state.call,id:q.voiceCallId,status:'ended'};
+  state.postCall={...state.postCall,id:q.voiceCallId,savedOutcome:'agendado'};
+  state.qualification={voiceCallId:q.voiceCallId,values:Object.fromEntries(keys.map(k=>[k,q[k]||''])),ai:q.ai,finalSummary:q.finalSummary,status:q.status,datacrazy:{}};
+  await dom.window.SpacePhoneModule.open();
+  const button=dom.window.document.querySelector('[data-sp-apply-ai]');
+  if(scenario==='manual-summary'){
+    assert.equal(button,null);assert.equal(dom.window.document.querySelector('.sphone-ai-suggestion'),null);
+    assert.match(dom.window.document.body.textContent,/Sugestões IA ainda não disponíveis/);
+    assert.ok(dom.window.document.querySelector('[data-sp-retry-ai]'));return;
+  }
+  assert.ok(button);button.click();await tick(100);
+  const feedback=dom.window.document.querySelector('[data-sp-ai-feedback]').textContent;
+  if(scenario==='human-filled'){
+    assert.equal(feedback,'Todos os campos já estão preenchidos');assert.equal(writes.length,0);
+    for(const key of keys)assert.equal(state.qualification.values[key],'Texto humano');
+  }else{
+    assert.equal(feedback,'2 sugestões aplicadas ✓');assert.equal(writes.length,2);
+    assert.equal(q.context,'Contexto IA');assert.equal(q.painGoal,'Objetivo IA');assert.equal(q.finalSummary,'Resumo manual');
+    button.click();await tick(20);
+    assert.equal(dom.window.document.querySelector('[data-sp-ai-feedback]').textContent,'Nenhuma sugestão disponível para os campos vazios');
+    assert.equal(writes.length,2);
+  }
+});

@@ -157,7 +157,7 @@ test("space phone route boots the dedicated admin panel and script", async () =>
     assert.match(body, /data-initial-panel="space-phone"/);
     assert.match(body, /data-space-phone/);
     assert.match(body, /src="script\.js\?v=7"/);
-    assert.match(body, /src="space-phone\.js\?v=9"/);
+    assert.match(body, /src="space-phone\.js\?v=10"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];

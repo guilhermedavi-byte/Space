@@ -52,6 +52,7 @@
     popover: "",
     postCall: { id: "", polls: 0, status: "idle", call: null, savedOutcome: "", saveStatus: "", skipped: false },
     qualification: { voiceCallId: "", values: {}, ai: {}, finalSummary: "", status: "draft", saveStatus: "", error: "", datacrazy: {} },
+    aiApply: { callId: "", pending: false, message: "" },
     qualificationTimers: new Map(),
     noteTimers: new Map(),
     lastTimerText: "",
@@ -199,14 +200,15 @@
 
   const renderIdleRight = () => `<section class="sphone-pane"><h2>Contexto recente</h2><div class="sphone-context"><div class="sphone-card"><strong>Callbacks</strong>${(state.data?.callbacks || []).slice(0, 5).map((c) => `<button class="sphone-chip" data-sp-detail="${esc(c.id)}"><span>${esc(c.number)}</span><small>${esc(fmtDate(c.callbackAt))}</small></button>`).join("") || `<p class="sphone-muted">Nenhum callback pendente.</p>`}</div></div></section>`;
 
+  const hasSuggestion = value => typeof value === 'string' && Boolean(value.trim());
   const renderQualificationForm = ({ post = false, detail = false } = {}) => {
     if (state.detail && !detail) return "";
     const q = state.qualification;
     const ai = q.ai || {};
     const missing = qualificationMissing();
-    const aiReadyFields = Object.values(ai).some(Boolean) || q.finalSummary;
+    const aiReadyFields = QUAL_FIELDS.some(([key]) => hasSuggestion(ai[key]));
     const fields = QUAL_FIELDS.map(([key, label]) => `<label><span class="sphone-muted">${esc(label)}${QUAL_REQUIRED.has(key) ? ' *' : ''}</span><textarea class="sphone-textarea" data-sp-qual="${esc(key)}" placeholder="${esc(label)}">${esc(q.values[key] || '')}</textarea>${missing.includes(key) && post ? `<small class="sphone-warnline">Campo obrigatório para agendado.</small>` : ''}</label>`).join('');
-    return `<div class="sphone-card"><div class="sphone-qual-head"><strong>Qualificação</strong><span class="sphone-badge ${q.saveStatus === 'Salvo ✓' ? 'ok' : 'warn'}" data-sp-qual-status>${esc(q.saveStatus || (['complete','sent'].includes(q.status) ? 'Qualificação concluída ✓' : 'SDR preenchendo'))}</span></div><div class="sphone-qual">${fields}</div>${aiReadyFields ? `<div class="sphone-ai-suggestion"><strong>Resumo sugerido pela IA</strong><p class="sphone-muted">Revise antes de enviar. Campos sem evidência ficam como “Precisa ser validado”.</p>${QUAL_FIELDS.map(([key,label]) => ai[key] ? `<small><b>${esc(label)}:</b> ${esc(ai[key])}</small>` : '').join('')}<button class="sphone-btn" data-sp-apply-ai>Aplicar sugestões da IA</button></div>` : `<p class="sphone-muted">Durante a ligação o preenchimento é manual. Análise disponível após a ligação, quando a transcrição real estiver disponível.</p>`}<p class="sphone-muted" data-sp-handoff>${['complete','sent'].includes(q.status) && q.datacrazy?.syncStatus !== 'sent' ? 'Handoff Datacrazy pendente' : ''}</p>${q.aiStatus === 'failed' ? '<p class="sphone-muted">Sugestões IA pendentes. Você pode continuar preenchendo e concluir manualmente.</p>' : ''}${post && !aiReadyFields && !['complete','sent'].includes(q.status) ? '<button class="sphone-btn" data-sp-retry-ai>Buscar sugestões IA novamente</button>' : ''}${post ? `<textarea class="sphone-textarea" data-sp-final-summary placeholder="Resumo final para handoff">${esc(q.finalSummary || '')}</textarea>` : ''}</div>`;
+    return `<div class="sphone-card"><div class="sphone-qual-head"><strong>Qualificação</strong><span class="sphone-badge ${q.saveStatus === 'Salvo ✓' ? 'ok' : 'warn'}" data-sp-qual-status>${esc(q.saveStatus || (['complete','sent'].includes(q.status) ? 'Qualificação concluída ✓' : 'SDR preenchendo'))}</span></div><div class="sphone-qual">${fields}</div>${aiReadyFields ? `<div class="sphone-ai-suggestion"><strong>Resumo sugerido pela IA</strong><p class="sphone-muted">Revise antes de enviar. Campos sem evidência ficam como “Precisa ser validado”.</p>${QUAL_FIELDS.map(([key,label]) => hasSuggestion(ai[key]) ? `<small><b>${esc(label)}:</b> ${esc(ai[key])}</small>` : '').join('')}<button class="sphone-btn" data-sp-apply-ai ${state.aiApply.pending && state.aiApply.callId === currentCallId() ? "disabled" : ""}>Aplicar sugestões da IA</button><p class="sphone-muted" data-sp-ai-feedback role="status" aria-live="polite">${state.aiApply.callId === currentCallId() ? esc(state.aiApply.message) : ""}</p></div>` : `<p class="sphone-muted">Sugestões IA ainda não disponíveis</p><p class="sphone-muted">Análise disponível após a ligação, quando a transcrição real estiver disponível.</p>`}<p class="sphone-muted" data-sp-handoff>${['complete','sent'].includes(q.status) && q.datacrazy?.syncStatus !== 'sent' ? 'Handoff Datacrazy pendente' : ''}</p>${q.aiStatus === 'failed' ? '<p class="sphone-muted">Sugestões IA pendentes. Você pode continuar preenchendo e concluir manualmente.</p>' : ''}${post && !aiReadyFields && !['complete','sent'].includes(q.status) ? '<button class="sphone-btn" data-sp-retry-ai>Buscar sugestões IA novamente</button>' : ''}${post ? `<textarea class="sphone-textarea" data-sp-final-summary placeholder="Resumo final para handoff">${esc(q.finalSummary || '')}</textarea>` : ''}</div>`;
   };
   const renderActiveRight = () => `<section class="sphone-pane"><h2>Qualificação</h2><div class="sphone-context">${renderQualificationForm()}</div></section>`;
 
@@ -447,14 +449,42 @@
     if (t.matches("[data-sp-popover]")) { state.popover = state.popover === t.dataset.spPopover ? "" : t.dataset.spPopover; render(); return; }
     if (t.matches("[data-sp-dtmf]")) { await callMethod("dtmf", t.dataset.spDtmf || ""); return; }
     if (t.matches("[data-sp-apply-ai]")) {
+      const id = currentCallId();
+      if (state.aiApply.pending) return;
       const ai = state.qualification.ai || {};
-      const suggestions = QUAL_FIELDS.filter(([key]) => !state.qualification.values[key] && ai[key]).map(([key]) => [key, ai[key]]);
+      const fieldValue = key => document.querySelector(`[data-sp-qual="${key}"]`)?.value ?? state.qualification.values[key] ?? '';
+      const suggestions = QUAL_FIELDS.filter(([key]) => !String(fieldValue(key)).trim() && hasSuggestion(ai[key])).map(([key]) => [key, ai[key].trim()]);
+      const feedback = message => {
+        state.aiApply = { ...state.aiApply, callId: id, message };
+        if (currentCallId() === id) document.querySelectorAll('[data-sp-ai-feedback]').forEach(el => { el.textContent = message; });
+      };
+      if (!suggestions.length) {
+        feedback(QUAL_FIELDS.every(([key]) => String(fieldValue(key)).trim()) ? 'Todos os campos já estão preenchidos' : 'Nenhuma sugestão disponível para os campos vazios');
+        return;
+      }
+      state.aiApply = { callId: id, pending: true, message: '' };
+      t.disabled = true;
+      feedback('Aplicando sugestões...');
       for (const [key, value] of suggestions) {
         state.qualification.values[key] = value;
         const el = document.querySelector(`[data-sp-qual="${key}"]`); if (el) el.value = value;
       }
-      try { for (const [key, value] of suggestions) await saveQualificationPatch(key, value); } catch {}
-      render(); return;
+      try {
+        let applied = 0;
+        for (const [key, value] of suggestions) {
+          if (currentCallId() !== id) break;
+          if (fieldValue(key) !== value) continue;
+          await saveQualificationPatch(key, value);
+          applied++;
+        }
+        feedback(`${applied} sugestões aplicadas ✓`);
+      } catch { feedback('Sugestões preenchidas, mas não foi possível salvar. Tente novamente salvar os campos.'); }
+      finally {
+        state.aiApply.pending = false;
+        t.disabled = false;
+        if (currentCallId() === id) document.querySelectorAll('[data-sp-complete-qualification]').forEach(button => { button.disabled = !qualificationComplete(); });
+      }
+      return;
     }
     if (t.matches("[data-sp-retry-ai]")) {
       const id = currentCallId(); state.postCall.status = 'processing'; pollPostCall(id); return;
