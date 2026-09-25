@@ -1,6 +1,8 @@
 const { supabaseFetch } = require('./supabase-rest');
 const { createHmac, timingSafeEqual } = require('node:crypto');
 const CAL_LINK = 'team/closers-space-idiomas/reuniao-com-mentor-do-space';
+// Verified from the real booking created through this exact published team event (2026-09-25).
+const CAL_EVENT_TYPE_ID = 4640970;
 const clean = x => String(x ?? '').trim();
 const rows = result => Array.isArray(result?.data) ? result.data : [];
 const fail = (code, status = 400) => Object.assign(new Error(code), { status });
@@ -53,9 +55,9 @@ async function reconcile({uid,request=supabaseFetch,fetcher=fetch,env=process.en
   if (!bookingUid(uid) || depth>4) throw fail('invalid_booking');
   const b=await calGet(`bookings/${encodeURIComponent(uid)}`,{fetcher,env});
   if (b.uid !== uid || !Number.isInteger(b.eventTypeId)) throw fail('calcom_invalid_response',502);
-  const event=await calGet(`event-types/${b.eventTypeId}`,{fetcher,env,version:'2026-06-12'});
-  // Verify the actual configured event, not just a same-named event or untrusted webhook fields.
-  if (clean(event.bookingUrl).replace(/\/$/,'') !== `https://cal.com/${CAL_LINK}`) throw fail('booking_event_not_allowed',403);
+  // Team bookingUrl representations differ between Cal endpoints. Match the canonical
+  // ID verified on the published event, never a supplied webhook slug or phone number.
+  if (b.eventTypeId !== CAL_EVENT_TYPE_ID) throw fail('booking_event_not_allowed',403);
   const existing=rows(await request(`/commercial_bookings?calcom_booking_id=eq.${encodeURIComponent(uid)}&select=*&limit=1`))[0];
   let ctx=null;
   const contextId=b.metadata?.spaceBookingContext;
@@ -80,4 +82,4 @@ async function reconcile({uid,request=supabaseFetch,fetcher=fetch,env=process.en
   if(bookingUid(b.rescheduledToUid)) return reconcile({uid:b.rescheduledToUid,request,fetcher,env,user,isAdmin,depth:depth+1});
   return model(Array.isArray(saved.data)?saved.data[0]:saved.data);
 }
-module.exports={CAL_LINK,list,context,reconcile,verifySignature,bookingUid,fail};
+module.exports={CAL_LINK,CAL_EVENT_TYPE_ID,list,context,reconcile,verifySignature,bookingUid,fail};

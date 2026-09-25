@@ -1,7 +1,7 @@
 const test=require('node:test');const assert=require('node:assert/strict');const {Readable}=require('node:stream');const {createHmac}=require('node:crypto');
 const lib=require('../api/_lib/commercial-bookings');const handler=require('../api/commercial-bookings').createHandler;const webhook=require('../api/webhooks/calcom').createHandler;
 const callId='11111111-1111-4111-8111-111111111111',ctxId='22222222-2222-4222-8222-222222222222';
-const booking={uid:'booking-abc',eventTypeId:7,status:'accepted',start:'2026-10-01T13:00:00Z',end:'2026-10-01T13:30:00Z',updatedAt:'2026-09-25T12:00:00Z',attendees:[{name:'Test',email:'test@example.test',timeZone:'America/Sao_Paulo'}],hosts:[{name:'Closer'}],metadata:{spaceBookingContext:ctxId}};
+const booking={uid:'booking-abc',eventTypeId:lib.CAL_EVENT_TYPE_ID,status:'accepted',start:'2026-10-01T13:00:00Z',end:'2026-10-01T13:30:00Z',updatedAt:'2026-09-25T12:00:00Z',attendees:[{name:'Test',email:'test@example.test',timeZone:'America/Sao_Paulo'}],hosts:[{name:'Closer'}],metadata:{spaceBookingContext:ctxId}};
 function harness(){
   const store=new Map(),requests=[];let provider={...booking};
   const request=async(path,options={})=>{
@@ -37,7 +37,7 @@ test('missing context does not guess SDR from phone/email',async()=>{
 test('wrong event, missing key, invalid response and provider failures fail closed',async()=>{
   const h=harness();await assert.rejects(()=>lib.reconcile({...h,uid:booking.uid,env:{}}),/calcom_not_configured/);assert.equal(h.store.size,0);
   await assert.rejects(()=>lib.reconcile({...h,uid:booking.uid,fetcher:async()=>({ok:false,status:401,json:async()=>({})})}),/calcom_provider_failed/);
-  await assert.rejects(()=>lib.reconcile({...h,uid:booking.uid,fetcher:async url=>({ok:true,json:async()=>({status:'success',data:url.includes('event-types')?{bookingUrl:'https://cal.com/other/event'}:booking})})}),/booking_event_not_allowed/);assert.equal(h.store.size,0);
+  await assert.rejects(()=>lib.reconcile({...h,uid:booking.uid,fetcher:async url=>({ok:true,json:async()=>({status:'success',data:{...booking,eventTypeId:999}})})}),/booking_event_not_allowed/);assert.equal(h.store.size,0);
 });
 test('Growth cannot create context or read bookings for another call owner',async()=>{
   const h=harness();for(const operation of [()=>lib.context({...h,user:{sub:'other'},isAdmin:false,callId}),()=>lib.list({...h,user:{sub:'other'},isAdmin:false,callId})])await assert.rejects(operation,/call_not_found/);
