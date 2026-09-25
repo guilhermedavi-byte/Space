@@ -157,7 +157,7 @@ test("space phone route boots the dedicated admin panel and script", async () =>
     assert.match(body, /data-initial-panel="space-phone"/);
     assert.match(body, /data-space-phone/);
     assert.match(body, /src="script\.js\?v=7"/);
-    assert.match(body, /src="space-phone\.js\?v=6"/);
+    assert.match(body, /src="space-phone\.js\?v=7"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
@@ -312,7 +312,7 @@ test('space phone qualification completion is gated by agendado and required fie
   const ok = await invoke(handler, { method: 'PATCH', body: { id: 'call-q2', action: 'complete_qualification' } });
   assert.equal(ok.status, 200);
   assert.equal(ok.json.qualification.status, 'complete');
-  assert.equal(ok.json.qualification.datacrazy.syncStatus, 'pending');
+  assert.equal(ok.json.qualification.datacrazy.syncStatus, 'blocked');
   assert.equal(calls.some(call => String(call.path).startsWith('/datacrazy')), false);
 });
 
@@ -343,5 +343,33 @@ test('space phone dispatches AI requested without storing fake live summary', as
   } finally {
     global.fetch = originalFetch;
     if (previous == null) delete process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL; else process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL = previous;
+  }
+});
+
+test('manual qualification completes before unavailable n8n, without rollback', async () => {
+  const original = global.fetch;
+  const previous = process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL;
+  process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL = 'https://n8n.test/webhook';
+  const q = { id: 'q1', voice_call_id: 'call-manual', context: 'Human', pain_goal: 'English', urgency: 'Now', decision_investment: 'Decider', key_point: 'Work', status: 'draft' };
+  const events = [];
+  global.fetch = async () => { events.push('dispatch'); throw new Error('offline'); };
+  const handler = createHandler({
+    authResolver: async () => ({ ok: true, session: { role: 'growth', sub: 'sdr-1' }, profile: { user: { commercialRoles: ['sdr'] } } }),
+    request: async (path, options = {}) => {
+      if (path.startsWith('/voice_calls')) return { data: [{ id: 'call-manual', space_user_uid: 'sdr-1', outcome: 'agendado', status: 'ended' }] };
+      if (options.method === 'PATCH') { Object.assign(q, options.body); events.push('saved'); }
+      return { data: [q] };
+    },
+  });
+  try {
+    const res = await invoke(handler, { method: 'PATCH', body: { id: 'call-manual', action: 'complete_qualification' } });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.qualification.status, 'complete');
+    assert.equal(res.json.qualification.datacrazy.syncStatus, 'blocked');
+    assert.equal(events[0], 'saved');
+    assert.ok(events.includes('dispatch'));
+  } finally {
+    global.fetch = original;
+    if (previous === undefined) delete process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL; else process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL = previous;
   }
 });

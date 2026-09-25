@@ -50,6 +50,9 @@
     },
     "api/retention-intelligence.js": {
       "maxDuration": 120
+    },
+    "api/space-phone-qualification-process.js": {
+      "maxDuration": 120
     }
   },
   "crons": [
@@ -68,6 +71,10 @@
     {
       "path": "/api/retention-health-job",
       "schedule": "20 3 * * *"
+    },
+    {
+      "path": "/api/space-phone-qualification-process",
+      "schedule": "* * * * *"
     }
   ],
   "headers": [

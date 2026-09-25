@@ -33,3 +33,16 @@ O pipeline legado de gravação/transcrição/análise continua fora desta fatia
 - refresh completo não preserva a chamada visualmente;
 - webhook Telnyx fica para próxima fase para estados autoritativos e idempotência;
 - não cria eventos em `sdrActivityEvents` e não altera `sdr_call_scores`.
+
+### Qualification production flow
+
+- `SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL` is the workflow **Production** webhook URL. No model/provider is selected by Space; Gemini or any other provider belongs to n8n.
+- `SPACE_N8N_SHARED_SECRET` protects n8n callbacks and is sent in `x-space-n8n-secret` to the configured webhook. n8n must acknowledge promptly; delivery has a 5-second timeout.
+- `CRON_SECRET` protects `/api/space-phone-qualification-process`, scheduled every minute in Production. On call end, the existing qualification row is queued without replacing human data. The worker reads real transcripts from the existing pipeline and claims pending work with a conditional update. A claim can be retried after ten minutes. A failed delivery returns the qualification to draft/pending; human editing and completion remain available.
+- Delivery is at-least-once: n8n should deduplicate `event + callId`. A late AI callback cannot reopen a complete qualification. Human fields are never replaced by callbacks.
+- The frontend waits for qualification `review_required`, not just the call score. Suggestions can be applied to empty fields and edited. Completion flushes autosave, persists `complete`, then dispatches `qualification.completed`. n8n failure never rolls it back.
+- Handoff states: `pending`, `blocked`, `sent`, `failed`. Until the Datacrazy write contract is certified, completion records `blocked` with `DATACRAZY_NOTE_WRITE_BLOCKED_API_ENDPOINT`. The UI displays “Qualificação concluída ✓” and “Handoff Datacrazy pendente”. `mark_datacrazy_failed` updates only a pending/failed handoff; `mark_datacrazy_synced` requires completed qualification and a note ID, and does not change qualification status.
+
+Datacrazy audit: the repository certifies business reads only. The official API notice describes public route migration, but does not establish the comment creation request/response contract or safe append semantics: https://help.datacrazy.io/pt-br/articles/10670832-comunicado-sobre-rotas-internas-datacrazy-mudancas-nas-apis-internas . Do not enable write-back based on an inferred endpoint. Qualification remains usable while this certification is pending.
+
+Release certification requires a new authorized real call, automatic transcript arrival, a scheduled/UI-initiated backend event, n8n execution and `review_required` visible in Space. Unit/DOM tests and previously manually executed n8n calls do not certify that production chain.

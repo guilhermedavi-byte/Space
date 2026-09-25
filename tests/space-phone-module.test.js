@@ -252,3 +252,36 @@ test('live qualification form autosaves without replacing focused field', async 
   assert.equal(saved[0].action, 'save_qualification');
   assert.equal(saved[0].qualification.context, 'Contexto real');
 });
+
+test('qualification review applies suggestions and completes independently of blocked handoff', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  let q = { voiceCallId: 'call-review', status: 'review_required', context: 'Humano', ai: { context: 'Não sobrescrever', painGoal: 'Inglês', urgency: 'Agora', decisionInvestment: 'Decisor', keyPoint: 'Trabalho' }, datacrazy: {} };
+  const writes = [];
+  dom.window.fetchWithAuth = async (_url, opts = {}) => {
+    if (opts.method === 'PATCH') {
+      const body = JSON.parse(opts.body); writes.push(body);
+      if (body.action === 'save_qualification') q = { ...q, ...body.qualification };
+      if (body.action === 'complete_qualification') q = { ...q, status: 'complete', datacrazy: { syncStatus: 'blocked' } };
+      return jsonResponse({ ok: true, qualification: q });
+    }
+    return jsonResponse({ ok: true, calls: [], analytics: {} });
+  };
+  const state = dom.window.SpacePhoneModule.state;
+  state.call = { ...state.call, id: 'call-review', status: 'ended' };
+  state.postCall = { ...state.postCall, id: 'call-review', savedOutcome: 'agendado' };
+  state.qualification = { voiceCallId: q.voiceCallId, values: { context: q.context }, ai: q.ai, status: q.status, datacrazy: {}, finalSummary: '' };
+  await dom.window.SpacePhoneModule.open();
+  dom.window.document.querySelector('[data-sp-apply-ai]').click();
+  await tick(100);
+  assert.ok(writes.length >= 4, 'apply button must reach its handler');
+  assert.equal(q.context, 'Humano');
+  const button = dom.window.document.querySelector('[data-sp-complete-qualification]');
+  assert.equal(button.disabled, false);
+  button.click();
+  await tick(150);
+  assert.equal(writes.at(-1).action, 'complete_qualification');
+  assert.equal(q.status, 'complete');
+  assert.match(dom.window.document.body.textContent, /Qualificação concluída ✓/);
+  assert.match(dom.window.document.body.textContent, /Handoff Datacrazy pendente/);
+});

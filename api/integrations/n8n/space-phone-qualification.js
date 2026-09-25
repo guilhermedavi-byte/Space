@@ -18,6 +18,7 @@ module.exports = async (req, res) => {
     if (!body || typeof body !== 'object') return sendJson(res, 400, { error: 'invalid_json' });
     const action = n8n.clean(body.action);
     if (action === 'save_ai_qualification') return sendJson(res, 200, await n8n.saveAiQualification({ callId: body.callId, qualification: body.qualification || {} }));
+    if (action === 'mark_datacrazy_failed') return sendJson(res, 200, await n8n.markDatacrazyFailed({ callId: body.callId }));
     if (action === 'mark_datacrazy_synced') return sendJson(res, 200, await n8n.markDatacrazySynced({ callId: body.callId, sync: body.sync || {} }));
     return sendJson(res, 400, { error: 'invalid_action' });
   } catch (error) {

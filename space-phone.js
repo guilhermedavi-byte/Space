@@ -124,11 +124,21 @@
     ai: q.ai || {},
     finalSummary: q.finalSummary || "",
     status: q.status || "draft",
+    aiStatus: q.aiStatus || "pending",
     saveStatus: state.qualification?.saveStatus || "",
     error: "",
     datacrazy: q.datacrazy || {},
   });
-  const mergeQualification = (q) => { if (!q) return; state.qualification = normalizeQualification(q); };
+  const mergeQualification = (q) => {
+    if (!q) return;
+    const values = { ...state.qualification.values };
+    state.qualification = normalizeQualification(q);
+    for (const field of state.qualificationTimers.keys()) {
+      if (field === 'finalSummary') state.qualification.finalSummary = document.querySelector('[data-sp-final-summary]')?.value || state.qualification.finalSummary;
+      else state.qualification.values[field] = values[field];
+    }
+  };
+  let qualificationSaveQueue = Promise.resolve();
   const qualificationMissing = () => [...QUAL_REQUIRED].filter((field) => !String(state.qualification.values[field] || "").trim());
   const qualificationComplete = () => !qualificationMissing().length;
   const setQualificationStatus = (text, tone = "warn") => { state.qualification.saveStatus = text; const el = document.querySelector('[data-sp-qual-status]'); if (el) { el.textContent = text; el.className = `sphone-badge ${tone}`; } };
@@ -186,13 +196,14 @@
 
   const renderIdleRight = () => `<section class="sphone-pane"><h2>Contexto recente</h2><div class="sphone-context"><div class="sphone-card"><strong>Callbacks</strong>${(state.data?.callbacks || []).slice(0, 5).map((c) => `<button class="sphone-chip" data-sp-detail="${esc(c.id)}"><span>${esc(c.number)}</span><small>${esc(fmtDate(c.callbackAt))}</small></button>`).join("") || `<p class="sphone-muted">Nenhum callback pendente.</p>`}</div></div></section>`;
 
-  const renderQualificationForm = ({ post = false } = {}) => {
+  const renderQualificationForm = ({ post = false, detail = false } = {}) => {
+    if (state.detail && !detail) return "";
     const q = state.qualification;
     const ai = q.ai || {};
     const missing = qualificationMissing();
     const aiReadyFields = Object.values(ai).some(Boolean) || q.finalSummary;
     const fields = QUAL_FIELDS.map(([key, label]) => `<label><span class="sphone-muted">${esc(label)}${QUAL_REQUIRED.has(key) ? ' *' : ''}</span><textarea class="sphone-textarea" data-sp-qual="${esc(key)}" placeholder="${esc(label)}">${esc(q.values[key] || '')}</textarea>${missing.includes(key) && post ? `<small class="sphone-warnline">Campo obrigatório para agendado.</small>` : ''}</label>`).join('');
-    return `<div class="sphone-card"><div class="sphone-qual-head"><strong>Qualificação</strong><span class="sphone-badge ${q.saveStatus === 'Salvo ✓' ? 'ok' : 'warn'}" data-sp-qual-status>${esc(q.saveStatus || (q.status === 'complete' ? 'Completa ✓' : 'SDR preenchendo'))}</span></div><div class="sphone-qual">${fields}</div>${aiReadyFields ? `<div class="sphone-ai-suggestion"><strong>Resumo sugerido pela IA</strong><p class="sphone-muted">Revise antes de enviar. Campos sem evidência ficam como “Precisa ser validado”.</p>${QUAL_FIELDS.map(([key,label]) => ai[key] ? `<small><b>${esc(label)}:</b> ${esc(ai[key])}</small>` : '').join('')}<button class="sphone-btn" data-sp-apply-ai>Aplicar sugestões da IA</button></div>` : `<p class="sphone-muted">Durante a ligação o preenchimento é manual. Análise disponível após a ligação, quando a transcrição real estiver disponível.</p>`}${post ? `<textarea class="sphone-textarea" data-sp-final-summary placeholder="Resumo final para handoff">${esc(q.finalSummary || '')}</textarea>` : ''}</div>`;
+    return `<div class="sphone-card"><div class="sphone-qual-head"><strong>Qualificação</strong><span class="sphone-badge ${q.saveStatus === 'Salvo ✓' ? 'ok' : 'warn'}" data-sp-qual-status>${esc(q.saveStatus || (['complete','sent'].includes(q.status) ? 'Qualificação concluída ✓' : 'SDR preenchendo'))}</span></div><div class="sphone-qual">${fields}</div>${aiReadyFields ? `<div class="sphone-ai-suggestion"><strong>Resumo sugerido pela IA</strong><p class="sphone-muted">Revise antes de enviar. Campos sem evidência ficam como “Precisa ser validado”.</p>${QUAL_FIELDS.map(([key,label]) => ai[key] ? `<small><b>${esc(label)}:</b> ${esc(ai[key])}</small>` : '').join('')}<button class="sphone-btn" data-sp-apply-ai>Aplicar sugestões da IA</button></div>` : `<p class="sphone-muted">Durante a ligação o preenchimento é manual. Análise disponível após a ligação, quando a transcrição real estiver disponível.</p>`}${['complete','sent'].includes(q.status) && q.datacrazy?.syncStatus !== 'sent' ? '<p class="sphone-muted">Handoff Datacrazy pendente</p>' : ''}${q.aiStatus === 'failed' ? '<p class="sphone-muted">Sugestões IA pendentes. Você pode continuar preenchendo e concluir manualmente.</p>' : ''}${post && !aiReadyFields && !['complete','sent'].includes(q.status) ? '<button class="sphone-btn" data-sp-retry-ai>Buscar sugestões IA novamente</button>' : ''}${post ? `<textarea class="sphone-textarea" data-sp-final-summary placeholder="Resumo final para handoff">${esc(q.finalSummary || '')}</textarea>` : ''}</div>`;
   };
   const renderActiveRight = () => `<section class="sphone-pane"><h2>Qualificação</h2><div class="sphone-context">${renderQualificationForm()}</div></section>`;
 
@@ -202,7 +213,7 @@
     const quick = new Set(["nao_atendeu", "agendado", "retornar_depois", "sem_interesse"]);
     const options = OUTCOMES.map(([value,label]) => `<button class="sphone-btn sphone-outcome ${state.postCall.savedOutcome === value ? "primary" : ""}" data-sp-outcome="${value}">${label}</button>`).join("");
     const status = state.postCall.saveStatus ? `<span class="sphone-badge ${state.postCall.saveStatus === "Salvo ✓" ? "ok" : "warn"}">${esc(state.postCall.saveStatus)}</span>` : "";
-    return `<section class="sphone-pane"><div class="sphone-coach-title"><h2>Wrap-up</h2>${status || `<span class="sphone-badge ${ready ? "ok" : "warn"}">${ready ? "IA pronta" : "Aguardando transcript"}</span>`}</div><div class="sphone-context"><div class="sphone-card"><strong>Como terminou esta ligação?</strong><p class="sphone-muted">Marque o resultado comercial para atualizar o Painel SDR agora.</p><div class="sphone-outcomes">${OUTCOMES.filter(([v])=>quick.has(v)).map(([value,label]) => `<button class="sphone-btn sphone-outcome ${state.postCall.savedOutcome === value ? "primary" : ""}" data-sp-outcome="${value}">${label}</button>`).join("")}</div><details><summary class="sphone-muted" style="cursor:pointer">Mais opções</summary><div class="sphone-outcomes" style="margin-top:10px">${options}</div></details><input class="sphone-input" data-sp-callback type="datetime-local" /><div class="sphone-call-actions"><button class="sphone-btn ghost" data-sp-skip-outcome>Pular por agora</button>${state.postCall.savedOutcome || state.postCall.skipped ? `<button class="sphone-btn primary" data-sp-reset-call>Nova ligação</button>` : ""}</div></div>${renderQualificationForm({ post: true })}<div class="sphone-card">${ready ? `<div class="sphone-post-grid"><div><span class="sphone-muted">Score IA</span><div class="sphone-ai-score">${esc(c.score ?? "-")}</div></div><div><span class="sphone-muted">Status</span><p>${c.transcriptionAvailable ? "Transcrição pronta" : "Análise disponível"}</p></div></div><p>${esc(analysisText(c.analysis, ["summary", "resumo", "call_summary"]) || "Análise pronta no pipeline IA.")}</p><button class="sphone-btn" data-sp-detail="${esc(c.id || state.call.id)}">Ver análise completa</button>` : `<p class="sphone-muted">IA e gravação serão anexadas depois à mesma ligação. Você já pode marcar o resultado.</p>`}${state.postCall.savedOutcome === 'agendado' ? `<div class="sphone-call-actions"><button class="sphone-btn primary" data-sp-complete-qualification ${qualificationComplete() ? '' : 'disabled'}>Concluir qualificação</button></div><p class="sphone-muted">Envia o contexto para o lead e libera o handoff.</p>` : `<p class="sphone-muted">Handoff automático só é habilitado quando o resultado for Agendado.</p>`}</div></div></section>`;
+    return `<section class="sphone-pane"><div class="sphone-coach-title"><h2>Wrap-up</h2>${status || `<span class="sphone-badge ${ready ? "ok" : "warn"}">${ready ? "IA pronta" : "Aguardando transcript"}</span>`}</div><div class="sphone-context"><div class="sphone-card"><strong>Como terminou esta ligação?</strong><p class="sphone-muted">Marque o resultado comercial para atualizar o Painel SDR agora.</p><div class="sphone-outcomes">${OUTCOMES.filter(([v])=>quick.has(v)).map(([value,label]) => `<button class="sphone-btn sphone-outcome ${state.postCall.savedOutcome === value ? "primary" : ""}" data-sp-outcome="${value}">${label}</button>`).join("")}</div><details><summary class="sphone-muted" style="cursor:pointer">Mais opções</summary><div class="sphone-outcomes" style="margin-top:10px">${options}</div></details><input class="sphone-input" data-sp-callback type="datetime-local" /><div class="sphone-call-actions"><button class="sphone-btn ghost" data-sp-skip-outcome>Pular por agora</button>${state.postCall.savedOutcome || state.postCall.skipped ? `<button class="sphone-btn primary" data-sp-reset-call>Nova ligação</button>` : ""}</div></div>${renderQualificationForm({ post: true })}<div class="sphone-card">${ready ? `<div class="sphone-post-grid"><div><span class="sphone-muted">Score IA</span><div class="sphone-ai-score">${esc(c.score ?? "-")}</div></div><div><span class="sphone-muted">Status</span><p>${c.transcriptionAvailable ? "Transcrição pronta" : "Análise disponível"}</p></div></div><p>${esc(analysisText(c.analysis, ["summary", "resumo", "call_summary"]) || "Análise pronta no pipeline IA.")}</p><button class="sphone-btn" data-sp-detail="${esc(c.id || state.call.id)}">Ver análise completa</button>` : `<p class="sphone-muted">IA e gravação serão anexadas depois à mesma ligação. Você já pode marcar o resultado.</p>`}${state.postCall.savedOutcome === 'agendado' ? `<div class="sphone-call-actions"><button class="sphone-btn primary" data-sp-complete-qualification ${qualificationComplete() ? '' : 'disabled'}>Concluir qualificação</button></div><p class="sphone-muted">Salva a qualificação. O handoff será enviado quando estiver disponível.</p>` : `<p class="sphone-muted">Handoff automático só é habilitado quando o resultado for Agendado.</p>`}</div></div></section>`;
   };
 
   const renderRight = () => {
@@ -222,7 +233,7 @@
     const analysis = parseAnalysis(c.analysis);
     if (state.detailTab === "transcript") return c.transcript ? `<div class="sphone-pre">${esc(c.transcript)}</div>` : `<p class="sphone-muted">Transcrição ainda não disponível.</p>`;
     if (state.detailTab === "scorecard") return `<div class="sphone-context"><div class="sphone-card"><strong>Score</strong><div class="sphone-ai-score">${esc(c.score ?? "-")}/100</div></div><div class="sphone-card"><strong>Pontos fortes</strong><p class="sphone-muted">${esc(analysisText(analysis, ["strengths", "pontos_fortes", "positive_points"]) || "Aguardando scorecard estruturado.")}</p></div><div class="sphone-card"><strong>Melhorias</strong><p class="sphone-muted">${esc(analysisText(analysis, ["weaknesses", "improvements", "recommendations", "principal_melhoria"]) || "Aguardando recomendações.")}</p></div></div>`;
-    return `<div class="sphone-detail-grid">${[["Telefone", c.number],["SDR", c.sdrName],["Status", c.status],["Duração", fmtSec(c.durationSeconds)],["Outcome", c.outcome || "-"],["Callback", fmtDate(c.callbackAt)]].map(([l,v]) => `<div class="sphone-detail-item"><span>${l}</span>${esc(v)}</div>`).join("")}</div><div class="sphone-card"><strong>Resumo IA</strong><p class="sphone-muted">${esc(analysisText(analysis, ["summary", "resumo", "call_summary"]) || c.analysisText || "Análise ainda não disponível.")}</p></div><div class="sphone-card"><strong>Notas</strong><textarea class="sphone-textarea" data-sp-detail-notes data-call-id="${esc(c.id)}">${esc(c.notes || "")}</textarea></div>`;
+    return `<div class="sphone-detail-grid">${[["Telefone", c.number],["SDR", c.sdrName],["Status", c.status],["Duração", fmtSec(c.durationSeconds)],["Outcome", c.outcome || "-"],["Callback", fmtDate(c.callbackAt)]].map(([l,v]) => `<div class="sphone-detail-item"><span>${l}</span>${esc(v)}</div>`).join("")}</div><div class="sphone-card"><strong>Resumo IA</strong><p class="sphone-muted">${esc(analysisText(analysis, ["summary", "resumo", "call_summary"]) || c.analysisText || "Análise ainda não disponível.")}</p></div>${renderQualificationForm({ post: true, detail: true })}${c.outcome === 'agendado' ? `<button class="sphone-btn primary" data-sp-complete-qualification ${qualificationComplete() ? '' : 'disabled'}>Concluir qualificação</button>` : ''}<div class="sphone-card"><strong>Notas</strong><textarea class="sphone-textarea" data-sp-detail-notes data-call-id="${esc(c.id)}">${esc(c.notes || "")}</textarea></div>`;
   };
   const renderDetail = () => {
     if (!state.detail) return "";
@@ -306,13 +317,15 @@
   const pollPostCall = async (id) => {
     if (!id || state.postCall.id === id && state.postCall.status === "ready") return;
     state.postCall = { ...state.postCall, id, polls: 0, status: "processing", call: state.postCall.call || null };
-    const delays = [5000, 10000, 20000, 40000];
+    const delays = [5000, 10000, 20000, ...Array(40).fill(15000)];
     const run = async () => {
       if (state.postCall.id !== id || state.postCall.status === "ready" || state.postCall.polls >= delays.length) return;
       state.postCall.polls += 1;
       try {
         const detail = await api({ id });
-        if (detail.call?.qualification) mergeQualification(detail.call.qualification); if (aiReady(detail.call)) { state.postCall = { ...state.postCall, status: "ready", call: detail.call }; render(); await load({ silent: true }); return; }
+        if (detail.call?.qualification && (!state.detail || state.detail.call?.id === id)) mergeQualification(detail.call.qualification);
+        if (detail.call) state.postCall.call = detail.call;
+        if (["review_required", "complete", "sent"].includes(detail.call?.qualification?.status)) { state.postCall = { ...state.postCall, status: "ready", call: detail.call }; render(); await load({ silent: true }); return; }
       } catch {}
       render();
       if (state.postCall.polls < delays.length) delay(run, delays[state.postCall.polls]);
@@ -346,19 +359,26 @@
   };
 
 
-  const saveQualificationPatch = async (field, value) => {
+  const saveQualificationPatch = (field, value) => {
     const id = currentCallId();
+    qualificationSaveQueue = qualificationSaveQueue.catch(() => {}).then(() => persistQualificationPatch(id, field, value));
+    return qualificationSaveQueue;
+  };
+  const persistQualificationPatch = async (id, field, value) => {
     if (!id) return;
     state.qualification.voiceCallId = id;
     state.qualification.values[field] = value;
     setQualificationStatus('Salvando...', 'warn');
     try {
       const response = await api({}, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'save_qualification', qualification: { [field]: value } }) });
-      mergeQualification(response.qualification || response.call?.qualification);
-      setQualificationStatus('Salvo ✓', 'ok');
+      if (currentCallId() === id) {
+        mergeQualification(response.qualification || response.call?.qualification);
+        setQualificationStatus('Salvo ✓', 'ok');
+      }
     } catch (error) {
       state.qualification.error = error.message || 'qualification_save_failed';
       setQualificationStatus('Erro ao salvar', 'bad');
+      throw new Error('qualification_save_failed');
     }
   };
   const completeQualification = async () => {
@@ -367,11 +387,15 @@
     setQualificationStatus('Concluindo...', 'warn');
     try {
       const summary = document.querySelector('[data-sp-final-summary]')?.value || state.qualification.finalSummary || '';
+      for (const timer of state.qualificationTimers.values()) clearTimeout(timer);
+      state.qualificationTimers.clear();
+      const values = { ...state.qualification.values };
+      for (const [field, value] of Object.entries(values)) await saveQualificationPatch(field, value);
       if (summary) await saveQualificationPatch('finalSummary', summary);
       const response = await api({}, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'complete_qualification' }) });
       mergeQualification(response.qualification || response.call?.qualification);
-      setQualificationStatus('Completa ✓', 'ok');
-      try { window.dispatchEvent(new CustomEvent('space-phone:call-updated', { detail: { id, qualificationStatus: state.qualification.status, datacrazyStatus: state.qualification.datacrazy?.syncStatus || 'blocked_api_audit' } })); } catch {}
+      setQualificationStatus('Qualificação concluída ✓', 'ok');
+      try { window.dispatchEvent(new CustomEvent('space-phone:call-updated', { detail: { id, qualificationStatus: state.qualification.status, datacrazyStatus: state.qualification.datacrazy?.syncStatus || 'blocked' } })); } catch {}
       await load({ silent: true });
       render();
     } catch (error) {
@@ -385,7 +409,7 @@
       state.popover = "";
       render();
     }
-    const t = event.target.closest("[data-sp-key],[data-sp-backspace],[data-sp-call],[data-sp-fill],[data-sp-refresh],[data-sp-period],[data-sp-detail],[data-sp-close-detail],[data-sp-mute],[data-sp-hold],[data-sp-hangup],[data-sp-popover],[data-sp-dtmf-toggle],[data-sp-dtmf],[data-sp-outcome],[data-sp-skip-outcome],[data-sp-reset-call],[data-sp-tab],[data-sp-test-device]");
+    const t = event.target.closest("[data-sp-key],[data-sp-backspace],[data-sp-call],[data-sp-fill],[data-sp-refresh],[data-sp-period],[data-sp-detail],[data-sp-close-detail],[data-sp-mute],[data-sp-hold],[data-sp-hangup],[data-sp-popover],[data-sp-dtmf-toggle],[data-sp-dtmf],[data-sp-outcome],[data-sp-skip-outcome],[data-sp-reset-call],[data-sp-tab],[data-sp-test-device],[data-sp-apply-ai],[data-sp-complete-qualification],[data-sp-retry-ai]");
     if (!t || !root()) return;
     if (t.matches("[data-sp-key]")) { state.dial += t.dataset.spKey; normalize(); return; }
     if (t.matches("[data-sp-backspace]")) { state.dial = state.dial.slice(0, -1); normalize(); return; }
@@ -393,14 +417,26 @@
     if (t.matches("[data-sp-fill]")) { state.dial = t.dataset.spFill || ""; normalize(); render(); return; }
     if (t.matches("[data-sp-refresh]")) { await load(); return; }
     if (t.matches("[data-sp-period]")) { state.period = t.dataset.spPeriod || "today"; await load(); return; }
-    if (t.matches("[data-sp-detail]")) { state.detail = await api({ id: t.dataset.spDetail }); state.detailTab = "summary"; render(); return; }
-    if (t.matches("[data-sp-close-detail]")) { state.detail = null; render(); return; }
+    if (t.matches("[data-sp-detail]")) { state.qualificationBeforeDetail = state.qualification; state.detail = await api({ id: t.dataset.spDetail }); state.detailTab = "summary"; state.qualification = normalizeQualification(state.detail.call?.qualification || { voiceCallId: t.dataset.spDetail }); render(); return; }
+    if (t.matches("[data-sp-close-detail]")) { state.detail = null; if (state.qualificationBeforeDetail) state.qualification = state.qualificationBeforeDetail; render(); return; }
     if (t.matches("[data-sp-mute]")) { await callMethod(state.call.muted ? "unmute" : "mute"); render(); return; }
     if (t.matches("[data-sp-hold]")) { await callMethod(state.call.held ? "unhold" : "hold"); render(); return; }
     if (t.matches("[data-sp-hangup]")) { state.call.status = "ending"; render(); const ended = await callMethod("hangup"); state.call.status = ended ? "ended" : state.call.status; if (ended && state.call.id) pollPostCall(state.call.id); render(); await load({ silent: true }); return; }
     if (t.matches("[data-sp-popover]")) { state.popover = state.popover === t.dataset.spPopover ? "" : t.dataset.spPopover; render(); return; }
     if (t.matches("[data-sp-dtmf]")) { await callMethod("dtmf", t.dataset.spDtmf || ""); return; }
-    if (t.matches("[data-sp-apply-ai]")) { const ai = state.qualification.ai || {}; QUAL_FIELDS.forEach(([key]) => { if (!state.qualification.values[key] && ai[key]) { state.qualification.values[key] = ai[key]; const el = document.querySelector(`[data-sp-qual=\"${key}\"]`); if (el) el.value = ai[key]; saveQualificationPatch(key, ai[key]); } }); if (!state.qualification.finalSummary) state.qualification.finalSummary = state.qualification.finalSummary || ''; return; }
+    if (t.matches("[data-sp-apply-ai]")) {
+      const ai = state.qualification.ai || {};
+      const suggestions = QUAL_FIELDS.filter(([key]) => !state.qualification.values[key] && ai[key]).map(([key]) => [key, ai[key]]);
+      for (const [key, value] of suggestions) {
+        state.qualification.values[key] = value;
+        const el = document.querySelector(`[data-sp-qual="${key}"]`); if (el) el.value = value;
+      }
+      try { for (const [key, value] of suggestions) await saveQualificationPatch(key, value); } catch {}
+      render(); return;
+    }
+    if (t.matches("[data-sp-retry-ai]")) {
+      const id = currentCallId(); state.postCall.status = 'processing'; pollPostCall(id); return;
+    }
     if (t.matches("[data-sp-complete-qualification]")) { await completeQualification(); return; }
     if (t.matches("[data-sp-outcome]")) { await saveCallPatch(state.detail?.call?.id || state.postCall.id || state.call.id, { outcome: t.dataset.spOutcome, callbackAt: root().querySelector("[data-sp-callback]")?.value || null }); return; }
     if (t.matches("[data-sp-skip-outcome]")) { await saveCallPatch(state.detail?.call?.id || state.postCall.id || state.call.id, { outcome: "" }); return; }
@@ -413,8 +449,8 @@
     if (!root() || !(t instanceof HTMLElement)) return;
     if (t.matches("[data-sp-dial]")) { state.dial = t.value; normalize(); }
     if (t.matches("[data-sp-search]")) { state.q = t.value; clearTimeout(state.searchTimer); state.searchTimer = setTimeout(() => load({ silent: true }), 350); }
-    if (t.matches("[data-sp-qual]")) { const field = t.dataset.spQual; state.qualification.values[field] = t.value; clearTimeout(state.qualificationTimers.get(field)); state.qualificationTimers.set(field, setTimeout(() => saveQualificationPatch(field, t.value), 650)); return; }
-    if (t.matches("[data-sp-final-summary]")) { state.qualification.finalSummary = t.value; clearTimeout(state.qualificationTimers.get('finalSummary')); state.qualificationTimers.set('finalSummary', setTimeout(() => saveQualificationPatch('finalSummary', t.value), 650)); return; }
+    if (t.matches("[data-sp-qual]")) { const field = t.dataset.spQual; state.qualification.values[field] = t.value; const completeButton = document.querySelector('[data-sp-complete-qualification]'); if (completeButton) completeButton.disabled = !qualificationComplete(); clearTimeout(state.qualificationTimers.get(field)); state.qualificationTimers.set(field, setTimeout(() => { saveQualificationPatch(field, t.value).catch(() => {}).finally(() => state.qualificationTimers.delete(field)); }, 650)); return; }
+    if (t.matches("[data-sp-final-summary]")) { state.qualification.finalSummary = t.value; clearTimeout(state.qualificationTimers.get('finalSummary')); state.qualificationTimers.set('finalSummary', setTimeout(() => { saveQualificationPatch('finalSummary', t.value).catch(() => {}).finally(() => state.qualificationTimers.delete('finalSummary')); }, 650)); return; }
     if (t.matches("[data-sp-notes],[data-sp-detail-notes]")) { const id = t.dataset.callId || state.detail?.call?.id || state.postCall.id || state.call.id; clearTimeout(state.noteTimers.get(t)); state.noteTimers.set(t, setTimeout(() => saveCallPatch(id, { notes: t.value }), 700)); }
   });
   document.addEventListener("change", async (event) => {

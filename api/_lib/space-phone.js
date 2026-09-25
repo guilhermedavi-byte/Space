@@ -5,7 +5,7 @@ const { supabaseFetch } = require('./supabase-rest');
 const { commitWritesAsAdmin } = require('./firestore-admin');
 const { PROJECT_ID, encodeFields } = require('./firestore-rest');
 const { normalizePhoneNumber } = require('../../src/space-phone/phone-number');
-const { dispatchQualificationEvent } = require('./space-phone-n8n');
+const { dispatchQualificationEvent, requestAiQualification, DATACRAZY_BLOCKED } = require('./space-phone-n8n');
 
 const OUTCOMES = new Set([
   'nao_atendeu',
@@ -200,6 +200,10 @@ const updateVoiceCall = async ({ session, callId, patch = {}, supabase = supabas
     error.status = 404;
     throw error;
   }
+  if (updated.ended_at || updated.status === 'ended') {
+    // Queue qualification without changing the recording/transcription pipeline.
+    await supabase('/voice_call_qualifications?on_conflict=voice_call_id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: { voice_call_id: updated.id, space_user_uid: clean(session?.sub), status: 'draft' } }).catch(() => null);
+  }
   return updated;
 };
 
@@ -296,6 +300,7 @@ const normalizeQualification = (row = null) => {
     },
     finalSummary: clean(row.final_summary || row.finalSummary),
     status: clean(row.status) || 'draft',
+    aiStatus: ['review_required', 'complete', 'sent'].includes(row.status) ? 'ready' : 'pending',
     createdAt: clean(row.created_at || row.createdAt),
     updatedAt: clean(row.updated_at || row.updatedAt),
     completedAt: clean(row.completed_at || row.completedAt),
@@ -383,6 +388,7 @@ const upsertQualification = async ({ request = supabaseFetch, call, user, patch 
     updated_at: nowIso,
   };
   if (!current?.id) body.created_at = nowIso;
+  else { delete body.status; delete body.created_at; }
   const response = await request('/voice_call_qualifications?on_conflict=voice_call_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body, timeoutMs: 12000 });
   return normalizeQualification(asRows(response)[0] || body);
 };
@@ -400,12 +406,12 @@ const completeQualification = async ({ request = supabaseFetch, call, user, now 
   }
   const finalSummary = clean(current.finalSummary) || qualificationSummary(current);
   const nowIso = now.toISOString();
-  const patch = { status: 'complete', final_summary: finalSummary, completed_at: nowIso, updated_at: nowIso, datacrazy_sync_status: 'pending', datacrazy_sync_error: null };
+  const patch = { status: 'complete', final_summary: finalSummary, completed_at: nowIso, updated_at: nowIso, datacrazy_sync_status: current.datacrazy.syncStatus === 'sent' ? 'sent' : 'blocked', datacrazy_sync_error: current.datacrazy.syncStatus === 'sent' ? null : DATACRAZY_BLOCKED };
   const rows = asRows(await request(`/voice_call_qualifications?voice_call_id=eq.${encodeURIComponent(call.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: patch, timeoutMs: 12000 }));
   const qualification = normalizeQualification(rows[0] || { ...current, ...patch });
   const bridge = await syncQualificationToSdrActivity({ call, qualification, user }).catch(error => ({ ok: false, error: clean(error?.message) || 'qualification_bridge_failed' }));
   const eventDispatch = await dispatchQualificationEvent({ event: 'qualification.completed', callId: call.id }).catch(error => ({ ok: false, error: clean(error?.message) || 'n8n_dispatch_failed' }));
-  return { ok: true, qualification, bridge, n8n: eventDispatch, datacrazy: { ok: false, status: 'pending' } };
+  return { ok: true, qualification, bridge, n8n: eventDispatch, datacrazy: { ok: qualification.datacrazy.syncStatus === 'sent', status: qualification.datacrazy.syncStatus } };
 };
 
 const duration = (row = {}) => {
@@ -657,13 +663,10 @@ const detailModel = async ({ request, id, user, isAdmin }) => {
   const crm = await loadCrmContext({ request, phone: row.to_number || row.from_number }).catch(() => null);
   const qualification = await loadQualification({ request, voiceCallId: row.id }).catch(() => null);
   const call = normalizeCall(row, analysis, crm, qualification);
-  if (analysis && qualification && !clean(qualification.finalSummary) && !Object.values(qualification.ai || {}).some(Boolean) && clean(qualification.status) === 'draft') {
-    const eventDispatch = await dispatchQualificationEvent({ event: 'qualification.ai_requested', callId: row.id }).catch(() => ({ ok: false }));
-    if (eventDispatch.ok) {
-      const body = { status: 'ai_processing', updated_at: new Date().toISOString() };
-      await request(`/voice_call_qualifications?voice_call_id=eq.${encodeURIComponent(row.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body, timeoutMs: 12000 }).catch(() => null);
-      call.qualification = normalizeQualification({ ...qualification, ...body });
-    }
+  if (analysis?.transcript && (!qualification || ['draft', 'ai_processing'].includes(qualification.status))) {
+    const result = await requestAiQualification({ call: row, request }).catch(() => ({ aiStatus: 'failed' }));
+    call.qualification = await loadQualification({ request, voiceCallId: row.id }).catch(() => qualification);
+    if (call.qualification) call.qualification.aiStatus = result.aiStatus || 'pending';
   }
   return { ok: true, call };
 };
@@ -721,7 +724,7 @@ const syncQualificationToSdrActivity = async ({ call, qualification, user, now =
     sourceVoiceCallId: voiceCallId,
     qualificationStatus: qualification.status,
     qualificationComplete: true,
-    datacrazySyncStatus: qualification.datacrazy?.syncStatus || 'blocked_api_audit',
+    datacrazySyncStatus: qualification.datacrazy?.syncStatus || 'blocked',
     phone: clean(call?.toNumber || call?.to_number || call?.number),
     durationSeconds: number(call?.durationSeconds || call?.duration_seconds),
     time,

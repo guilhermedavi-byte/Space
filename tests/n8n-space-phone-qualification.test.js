@@ -73,12 +73,13 @@ test('n8n GET returns call qualification and transcript without logging secrets'
 
 test('n8n save_ai_qualification writes only ai fields and review_required', async () => withEnv({ SPACE_N8N_SHARED_SECRET: 'shared-secret-123456' }, async () => {
   const seen = [];
-  const restore = installSupabaseStub(makeRequest(fixtures(), seen));
+  const fx = fixtures(); fx.qualification.status = 'ai_processing';
+  const restore = installSupabaseStub(makeRequest(fx, seen));
   try {
     const handler = require('../api/integrations/n8n/space-phone-qualification');
     const res = await invoke(handler, { method: 'POST', body: { action: 'save_ai_qualification', callId: 'call-1', qualification: { context: 'AI contexto', painGoal: 'AI dor', finalSummary: 'AI resumo' } } });
     assert.equal(res.status, 200);
-    const post = seen.find(item => item.options.method === 'POST');
+    const post = seen.find(item => item.options.method === 'PATCH');
     assert.equal(post.options.body.ai_context, 'AI contexto');
     assert.equal(post.options.body.context, undefined);
     assert.equal(post.options.body.status, 'review_required');
@@ -95,7 +96,7 @@ test('n8n mark_datacrazy_synced is idempotent and marks sent', async () => withE
     const patch = seen.find(item => item.options.method === 'PATCH');
     assert.equal(patch.options.body.datacrazy_note_id, 'n1');
     assert.equal(patch.options.body.datacrazy_sync_status, 'sent');
-    assert.equal(patch.options.body.status, 'sent');
+    assert.equal(patch.options.body.status, undefined);
   } finally { restore(); }
 }));
 
@@ -121,3 +122,66 @@ test('datacrazy note enforces gate, idempotency and blocks uncertified write end
     assert.equal(res.json.preparedNote.includes('Qualificação SDR — Space'), true);
   } finally { restore(); }
 }));
+
+
+test('late AI callback preserves human completion and final summary', async () => {
+  const seen = [];
+  const { saveAiQualification } = require('../api/_lib/space-phone-n8n');
+  const result = await saveAiQualification({ callId: 'call-1', qualification: { finalSummary: 'Late AI' }, request: makeRequest(fixtures(), seen) });
+  assert.equal(result.skipped, true);
+  assert.equal(seen.some(r => r.options.method), false);
+});
+
+test('AI dispatch failure releases its claim for retry, without overwriting completion', async () => {
+  const { requestAiQualification } = require('../api/_lib/space-phone-n8n');
+  const fx = fixtures(); fx.qualification.status = 'draft'; fx.qualification.updated_at = '2026-09-24T12:00:00Z';
+  const seen = [];
+  const result = await requestAiQualification({ call: fx.call, request: makeRequest(fx, seen), dispatch: async () => ({ ok: false }), now: new Date('2026-09-24T12:30:00Z') });
+  assert.equal(result.aiStatus, 'failed');
+  const writes = seen.filter(r => r.options.method === 'PATCH');
+  assert.equal(writes[0].options.body.status, 'ai_processing');
+  assert.equal(writes[1].options.body.status, 'draft');
+  assert.ok(writes[1].path.includes('status=eq.ai_processing&updated_at=eq.'));
+});
+
+test('AI requires real transcript and claim ownership before dispatch', async () => {
+  const { requestAiQualification } = require('../api/_lib/space-phone-n8n');
+  const fx = fixtures(); fx.qualification.status = 'draft'; fx.score.transcript = '';
+  let events = 0;
+  const seen = [];
+  await requestAiQualification({ call: fx.call, request: makeRequest(fx, seen), dispatch: async () => { events++; return { ok: true }; } });
+  assert.equal(events, 0);
+  assert.equal(seen.some(r => r.options.method), false);
+  fx.score.transcript = 'Real transcript';
+  const request = makeRequest(fx);
+  await requestAiQualification({ call: fx.call, request: (path, options) => options?.method === 'PATCH' ? { data: [] } : request(path, options), dispatch: async () => { events++; return { ok: true }; } });
+  assert.equal(events, 0);
+});
+
+test('worker processes pending transcript automatically without browser requests', async () => withEnv({ SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL: 'https://n8n.test/webhook' }, async () => {
+  const { processPendingQualifications } = require('../api/_lib/space-phone-n8n');
+  const fx = fixtures(); fx.qualification.status = 'draft'; fx.qualification.updated_at = '2026-09-24T12:00:00Z';
+  const previous = global.fetch; const events = [];
+  global.fetch = async (_url, opts) => { events.push(JSON.parse(opts.body)); return { ok: true, status: 200 }; };
+  try {
+    const result = await processPendingQualifications({ request: makeRequest(fx), now: new Date('2026-09-24T13:00:00Z') });
+    assert.equal(result.dispatched, 1);
+    assert.equal(events[0].event, 'qualification.ai_requested');
+  } finally { global.fetch = previous; }
+}));
+
+test('scheduled worker fails closed without its cron secret', async () => withEnv({ CRON_SECRET: '' }, async () => {
+  const handler = require('../api/space-phone-qualification-process');
+  const res = await invoke(handler);
+  assert.equal(res.status, 401);
+}));
+
+test('blocked Datacrazy write persists only handoff fields', async () => {
+  const { datacrazyNote } = require('../api/_lib/space-phone-n8n');
+  const seen = [];
+  const result = await datacrazyNote({ callId: 'call-1', request: makeRequest(fixtures(), seen) });
+  assert.equal(result.error, 'DATACRAZY_NOTE_WRITE_BLOCKED_API_ENDPOINT');
+  const write = seen.find(r => r.options.method === 'PATCH');
+  assert.equal(write.options.body.datacrazy_sync_status, 'blocked');
+  assert.equal(write.options.body.status, undefined);
+});
