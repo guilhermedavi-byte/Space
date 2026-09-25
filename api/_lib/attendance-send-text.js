@@ -69,26 +69,27 @@ async function sendInboxText({actor,conversationId,text,clientRequestId,canonica
         body: {
           p_actor_uid: actor.uid,
           p_conversation_id: conversationId,
-          p_message: { direction: 'outbound', kind: 'text', content: { text }, client_request_id: clientRequestId, metadata: { provider: 'evolution_whatsapp' } },
+          p_message: { direction: 'outbound', kind: 'text', content: { text }, client_request_id: clientRequestId, metadata: { provider: 'evolution_whatsapp', origin:'space_inbox' } },
         },
         timeoutMs: 15000,
       });
       const messageId = appended.data?.message_id;
       if(appended.data?.duplicate) return {...appended.data,ok:appended.data.status==='sent',conversation_id:conversationId};
+      let externalId=null;
       try {
         const provider = await sendEvolution(instance, number, text);
-        const externalId = clean(provider?.key?.id || provider?.id || provider?.messageId || '', 200) || null;
+        externalId = clean(provider?.key?.id || provider?.id || provider?.messageId || '', 200) || null;
         if(!externalId) fail('send_unconfirmed',409);
         await request('/rpc/attendance_set_message_transport', {
           method: 'POST',
-          body: { p_message_id: messageId, p_status: 'sent', p_external_message_id: externalId, p_metadata: { provider: 'evolution_whatsapp' } },
+          body: { p_message_id: messageId, p_status: 'sent', p_external_message_id: externalId, p_metadata: { provider: 'evolution_whatsapp', origin:'space_inbox' } },
           timeoutMs: 15000,
         });
         return { ok:true,message_id:messageId,external_message_id:externalId,status:'sent',conversation_id:conversationId };
       } catch (error) {
         await request('/rpc/attendance_set_message_transport', {
           method: 'POST',
-          body: { p_message_id: messageId, p_status: error.definiteFailure ? 'failed' : 'unknown', p_external_message_id: null, p_metadata: { provider: 'evolution_whatsapp', send_failed: true } },
+          body: { p_message_id: messageId, p_status: error.definiteFailure ? 'failed' : 'unknown', p_external_message_id: externalId, p_metadata: { provider: 'evolution_whatsapp', send_failed: true } },
           timeoutMs: 15000,
         }).catch(() => {});
         error.message_id=messageId; error.conversation_id=conversationId; error.uncertain=!error.definiteFailure; throw error;

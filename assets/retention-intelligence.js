@@ -17,7 +17,7 @@ const lifeLabels={active:'Ativo',cancellation_requested:'Pedido de cancelamento'
 const owner=row=>row.retention_owner||row.next_activity?.owner||'';
 const life=row=>lifeLabels[row.health_lifecycle||row.lifecycle]||row.lifecycle||'—';
 const valueOf=(row,key)=>key==='case_type'?caseInfo(row).type:key==='severity'?caseInfo(row).severity:key==='owner'?owner(row):key==='financial_status'?row.signals?.financial_status:key==='cohort'?row.started_at?.slice(0,7):key==='tenure'?tenure(row.tenure_days):row[key];
-const displayValue=(key,value)=>key==='teacher'?(S.data.rows.find(r=>r.teacher===value)?.teacher_name||'Professor sem nome'):lifeLabels[value]||caseLabels[value]||labels[value]||({current:'Em dia',overdue:'Em atraso',recovered:'Recuperado'}[value])||value;
+const displayValue=(key,value)=>key==='teacher'?(S.data.rows.find(r=>r.teacher===value)?.teacher_name||'Professor sem nome'):(key==='health_tier'?labels[value]:null)||lifeLabels[value]||caseLabels[value]||labels[value]||({current:'Em dia',overdue:'Em atraso',recovered:'Recuperado'}[value])||value;
 function filtered(){return(S.data?.rows||[]).filter(row=>Object.entries(S.filters).every(([key,val])=>!val||valueOf(row,key)===val));}
 const fold=(title,body)=>`<details class="ri-fold"><summary>${esc(title)}</summary><div>${body}</div></details>`;
 const mean=values=>values.length?values.reduce((n,v)=>n+Number(v),0)/values.length:null;
@@ -77,6 +77,7 @@ function openCase(id){
 }
 async function hydrateDirectory(container,fetcher){
  if(!S.bridge)S.bridge={fetch:fetcher};await load();if(!container.isConnected)return;
+ container.querySelectorAll('[data-ri-directory-lifecycle]').forEach(slot=>{const row=S.data?.rows?.find(r=>r.student_id===slot.dataset.riDirectoryLifecycle);if(row)slot.textContent=life(row);});
  container.querySelectorAll('[data-ri-directory-health]').forEach(slot=>{const row=S.data?.rows?.find(r=>r.student_id===slot.dataset.riDirectoryHealth);slot.innerHTML=row?`<span class="ri-directory-health">Health ${healthText(row)}</span>`:'<span class="ri-note" title="Health não disponível">Health —</span>';});
 }
 function trend(){const values=(S.data.trend||[]).slice().sort((a,b)=>a.date.localeCompare(b.date)),latest=values.at(-1),previous=values.at(-2);return !previous?empty('Comparativos disponíveis a partir de dois snapshots.'): `<p class="ri-note">Base completa · ${date(previous.date)} → ${date(latest.date)} · comparação entre snapshots</p><div class="ri-trends">${[['Health médio','health_mean'],['Críticos','critical'],['Pedidos em aberto','requested'],['Churn acumulado','churned']].map(([label,key])=>`<div><span>${label}</span><strong>${number(latest[key])}</strong><small>${latest[key]!=null&&previous[key]!=null?`${latest[key]-previous[key]>0?'+':''}${number(latest[key]-previous[key])} vs. anterior`:'Sem comparação disponível'}</small></div>`).join('')}</div>`;}

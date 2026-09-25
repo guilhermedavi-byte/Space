@@ -187,8 +187,8 @@ test('Admin and Growth direct inbox routes render shared panel', async () => {
   const originalFirestore = require.cache[firestorePath];
   const originalSession = require.cache[sessionPath], originalApp = require.cache[appPath];
   try {
-    require.cache[firestorePath] = { id: firestorePath, filename: firestorePath, loaded: true, exports: { getDocumentAsAdmin: async () => ({role:'admin',isSuperAdmin:true}) } };
     for (const role of ['admin', 'growth']) {
+      require.cache[firestorePath] = { id: firestorePath, filename: firestorePath, loaded: true, exports: { getDocumentAsAdmin: async () => ({role,isSuperAdmin:role==='admin',active:true}) } };
       require.cache[sessionPath] = { id: sessionPath, filename: sessionPath, loaded: true, exports: { getSessionFromRequest: () => ({ sub: 'test', role, name: 'Teste' }) } };
       delete require.cache[appPath]; const res = { setHeader(){}, end(body){ this.body = body; } };
       await require('../api/app')({ method: 'GET', headers: { host: 'localhost' }, url: `/api/app?path=${role}/atendimento/caixa-de-entrada` }, res);

@@ -33553,7 +33553,7 @@ const renderAdminPedagogicoStudentsPanel = () => {
                 <div class="admin-ped-row-meta">
                   <span class="admin-ped-pill ${getAdminStudentPlanToneClass(r.plan)}">${escapeHtml(r.plan)}</span>
                   ${r.teacherName ? `<span class="admin-ped-pill">${escapeHtml(r.teacherName)}</span>` : `<span class="admin-ped-pill">Sem professor</span>`}
-                  ${r.lifecycleLabel ? `<span class="admin-ped-pill is-${escapeHtml(r.lifecycleTone || "muted")}">${escapeHtml(r.lifecycleLabel)}</span>` : ""}
+                  <span class="admin-ped-pill is-${escapeHtml(r.lifecycleTone || "muted")}" data-ri-directory-lifecycle="${escapeHtml(r.id)}">${escapeHtml(r.lifecycleLabel || "—")}</span>
                   <span data-ri-directory-health="${escapeHtml(r.id)}" class="ri-directory-slot">Health —</span>
                 </div>
               </div>

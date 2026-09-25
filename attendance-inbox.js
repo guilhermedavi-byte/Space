@@ -159,10 +159,10 @@
   function renderMessages() {
     if (state.detailLoading && !state.detail) return '<div class="ai-messages"><div class="ai-skel"></div><div class="ai-skel"></div><div class="ai-skel"></div></div>';
     if (!state.selectedConversationId) return `<div class="ai-empty"><div><span class="ai-empty-symbol">${icon('inbox')}</span><h2>Um espaço para cada conversa</h2><p>Selecione uma conversa ao lado para continuar o atendimento com todo o contexto.</p></div></div>`;
-    const messages = state.detail?.messages || [];
+    const messages = [...(state.detail?.messages || [])].sort((a,b)=>Date.parse(a.provider_timestamp || a.received_at || 0)-Date.parse(b.provider_timestamp || b.received_at || 0)||(a.sequence||0)-(b.sequence||0));
     if (!messages.length) return '<div class="ai-empty"><div><h2>Sem mensagens</h2><p>As mensagens aparecerão aqui em ordem cronológica.</p></div></div>';
     let last = '';
-    return `<div class="ai-messages" data-ai-messages>${messages.map(msg => { const when = msg.received_at || msg.provider_timestamp; const day = dayLabel(when); const sep = day && day !== last ? (last = day, `<div class="ai-day">${esc(day)}</div>`) : ''; return `${sep}<article data-ai-message-id="${esc(msg.message_id)}" class="ai-msg ${esc(msg.direction || 'inbound')}">${renderMessageBody(msg, {contact:state.detail?.contact, author:msg.author || {name:'Space'}})}<div class="ai-msg-time">${esc(fmt(when))} · ${esc(msg.direction === 'outbound' ? label(msg.transport_status) : msg.direction === 'internal' ? 'Interna' : 'Recebida')}</div></article>`; }).join('')}</div>`;
+    return `<div class="ai-messages" data-ai-messages>${messages.map(msg => { const when = msg.provider_timestamp || msg.received_at; const day = dayLabel(when); const sep = day && day !== last ? (last = day, `<div class="ai-day">${esc(day)}</div>`) : ''; return `${sep}<article data-ai-message-id="${esc(msg.message_id)}" class="ai-msg ${esc(msg.direction || 'inbound')}">${renderMessageBody(msg, {contact:state.detail?.contact, author:msg.author || {name:'Space'}})}<div class="ai-msg-time">${esc(fmt(when))} · ${esc(msg.direction === 'outbound' ? label(msg.transport_status) : msg.direction === 'internal' ? 'Interna' : 'Recebida')}</div></article>`; }).join('')}</div>`;
   }
   const attachments = new Map();
   let composerPopover = '', quickReplies = [], quickCanManage = false, quickQuery = '', quickEdit = null, composerBusy = false, aiResult = '';

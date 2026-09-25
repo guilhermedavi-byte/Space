@@ -212,6 +212,8 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
           .catch(() => {});
       }
       payload.contact = sanitizePayload(canonicalAvatar(await resolveProfile(payload)));
+      const quotedById=new Map((payload.messages||[]).map(message=>[message.message_id,message]));
+      payload.messages=(payload.messages||[]).map(message=>{const quoted=quotedById.get(message.reply_to_message_id);return quoted?{...message,quoted:{kind:quoted.kind,direction:quoted.direction,text:String(quoted.content?.text||'').slice(0,300)}}:message;});
       const conn = payload?.conversation?.connection || {};
       const enabled = conn.provider === 'evolution_whatsapp' && conn.status === 'active' && conn.setup_pending !== true;
       payload.composer = enabled
