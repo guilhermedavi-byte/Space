@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const { resolveSdrNames } = require('./space-phone-sdr-names');
 const { resolveAdminRequestAuth } = require('./admin-request-auth');
 const { requireResolvedAdminPermission } = require('./admin-permissions');
 const { supabaseFetch } = require('./supabase-rest');
@@ -441,7 +442,7 @@ const statusKind = (row = {}) => {
   return raw || 'unknown';
 };
 
-const normalizeCall = (row = {}, analysis = null, crm = null, qualification = null) => {
+const normalizeCall = (row = {}, analysis = null, crm = null, qualification = null, sdrName = '') => {
   const to = clean(row.to_number || row.phone || '');
   const from = clean(row.from_number || '');
   return {
@@ -457,7 +458,8 @@ const normalizeCall = (row = {}, analysis = null, crm = null, qualification = nu
     toNumber: to,
     callerId: from,
     sdrUid: clean(row.space_user_uid || ''),
-    sdrName: clean(row.lead_name || row.space_user_email || 'SDR'),
+    leadName: clean(row.lead_name),
+    sdrName: clean(sdrName) || clean(row.space_user_email).split('@')[0].replace(/[._-]+/g, ' ') || 'SDR',
     sdrEmail: clean(row.space_user_email),
     status: statusKind(row),
     rawStatus: clean(row.status),
@@ -631,13 +633,14 @@ const loadCrmContext = async ({ request, phone }) => {
   return { found: false };
 };
 
-const listModel = async ({ request, user, isAdmin, query = {} }) => {
+const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = resolveSdrNames }) => {
   const range = rangeForPeriod(query.period);
   const userFilter = filterForUser({ user, isAdmin, sdr: query.sdr });
   const rows = await queryVoiceCalls({ request, range, userFilter, status: query.status, q: query.q, limit: query.limit });
   const analysisMap = await loadAnalysisMap({ request, calls: rows });
   const qualificationMap = await loadQualificationsMap({ request, callIds: rows.map(row => row.id) });
-  const calls = rows.map(row => normalizeCall(row, findAnalysis(row, analysisMap), null, qualificationMap.get(clean(row.id))));
+  const names = await resolveNames(rows, user);
+  const calls = rows.map(row => normalizeCall(row, findAnalysis(row, analysisMap), null, qualificationMap.get(clean(row.id)), names.get(clean(row.space_user_uid))));
   const callbacks = calls.filter(call => call.callbackAt && new Date(call.callbackAt).getTime() >= Date.now()).slice(0, 12);
   return { ok: true, range, scope: isAdmin ? 'admin' : 'self', analytics: summarize(calls), calls, callbacks };
 };
@@ -672,7 +675,8 @@ const detailModel = async ({ request, id, user, isAdmin }) => {
   const analysis = findAnalysis(row, analysisMap);
   const crm = await loadCrmContext({ request, phone: row.to_number || row.from_number }).catch(() => null);
   const qualification = await loadQualification({ request, voiceCallId: row.id }).catch(() => null);
-  const call = normalizeCall(row, analysis, crm, qualification);
+  const names = await resolveSdrNames([row], user);
+  const call = normalizeCall(row, analysis, crm, qualification, names.get(clean(row.space_user_uid)));
   if (analysis?.transcript && (!qualification || ['draft', 'ai_processing'].includes(qualification.status))) {
     const result = await requestAiQualification({ call: row, request }).catch(() => ({ aiStatus: 'failed' }));
     call.qualification = await loadQualification({ request, voiceCallId: row.id }).catch(() => qualification);

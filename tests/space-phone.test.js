@@ -157,7 +157,7 @@ test("space phone route boots the dedicated admin panel and script", async () =>
     assert.match(body, /data-initial-panel="space-phone"/);
     assert.match(body, /data-space-phone/);
     assert.match(body, /src="script\.js\?v=7"/);
-    assert.match(body, /src="space-phone\.js\?v=7"/);
+    assert.match(body, /src="space-phone\.js\?v=8"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
@@ -430,4 +430,60 @@ test('repeated SDR completion never resets sent or a reserved Datacrazy handoff'
   } finally {
     if (previous === undefined) delete process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL; else process.env.SPACE_PHONE_QUALIFICATION_N8N_WEBHOOK_URL = previous;
   }
+});
+
+test('last7 includes yesterday for Growth without allowing another SDR and Admin retains scope', async () => {
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1); yesterday.setHours(12, 0, 0, 0);
+  const data = [{ id: 'own-yesterday', space_user_uid: 'sdr-history', started_at: yesterday.toISOString(), status: 'completed', duration_seconds: 60, outcome: 'agendado' }, { id: 'other-yesterday', space_user_uid: 'sdr-other', started_at: yesterday.toISOString(), status: 'completed' }];
+  for (const role of ['growth', 'admin']) {
+    const handler = createHandler({
+      authResolver: async () => ({ ok: true, session: { role, sub: 'sdr-history' }, profile: { user: { commercialRoles: ['sdr'] } } }),
+      permissionResolver: async () => ({ ok: true }),
+      request: async path => {
+        if (!path.startsWith('/voice_calls')) return { data: [] };
+        const url = new URL(path, 'https://test'); const scope = url.searchParams.get('space_user_uid');
+        if (role === 'growth') assert.equal(scope, 'eq.sdr-history'); else assert.equal(scope, null);
+        const start = url.searchParams.getAll('or').find(x => x.includes('started_at.gte.')).match(/started_at.gte.([^,]+)/)[1];
+        return { data: data.filter(row => (!scope || row.space_user_uid === scope.slice(3)) && row.started_at >= start) };
+      },
+    });
+    for (const period of ['today', 'last7', 'last30']) {
+      const response = await invoke(handler, { url: `/api/space-phone?period=${period}` });
+      assert.equal(response.status, 200);
+      assert.equal(response.json.calls.length, period === 'today' ? 0 : role === 'growth' ? 1 : 2);
+      if (period !== 'today') assert.equal(response.json.calls[0].outcome, 'agendado');
+    }
+  }
+});
+
+test('SDR names resolve once per unique UID and are separate from the lead and email', async () => {
+  const { resolveSdrNames } = require('../api/_lib/space-phone-sdr-names');
+  let reads = 0;
+  const rows = [{ space_user_uid: 'batch-sdr-name', space_user_email: 'luana@space.test', lead_name: 'Lead Ronaldo' }, { space_user_uid: 'batch-sdr-name' }];
+  const names = await resolveSdrNames(rows, {}, { batchRead: async ids => { reads++; assert.deepEqual(ids, ['batch-sdr-name']); return new Map([['batch-sdr-name', 'Luana Mendonça']]); } });
+  const model = await __private.listModel({ request: async path => ({ data: path.startsWith('/voice_calls') ? [rows[0]] : [] }), user: { sub: 'batch-sdr-name' }, isAdmin: false, resolveNames: async () => names });
+  const c = model.calls[0];
+  assert.equal(c.sdrName, 'Luana Mendonça'); assert.equal(c.sdrEmail, 'luana@space.test'); assert.equal(c.leadName, 'Lead Ronaldo');
+  await resolveSdrNames(rows, {}, { batchRead: async () => { reads++; throw new Error('should use cache'); } });
+  assert.equal(reads, 1);
+});
+
+test('history search and status retain own-call scope and scheduled outcome', async () => {
+  const model = await __private.listModel({
+    user: { sub: 'history-owner' }, isAdmin: false,
+    query: { period: 'last7', q: '+16175551212', status: 'scheduled', sdr: 'someone-else' },
+    resolveNames: async () => new Map(),
+    request: async path => {
+      if (!path.startsWith('/voice_calls')) return { data: [] };
+      const params = new URL(path, 'https://test').searchParams;
+      assert.equal(params.get('space_user_uid'), 'eq.history-owner');
+      assert.ok(params.getAll('or').some(value => value.includes('to_number.ilike.*+16175551212*')));
+      return { data: [
+        { id: 'scheduled', space_user_uid: 'history-owner', outcome: 'agendado', status: 'completed' },
+        { id: 'missed', space_user_uid: 'history-owner', outcome: 'nao_atendeu', status: 'completed' },
+      ] };
+    },
+  });
+  assert.deepEqual(model.calls.map(call => call.id), ['scheduled']);
+  assert.equal(model.calls[0].outcome, 'agendado');
 });

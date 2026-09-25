@@ -28,8 +28,11 @@
   const ACTIVE = new Set(["connecting", "ringing", "active", "hold", "ending"]);
   const POST = new Set(["ended", "failed"]);
 
+  const PERIODS = new Set(['today', 'last7', 'last30']);
+  const readPeriod = () => { try { const value = localStorage.getItem('spacePhonePeriod'); return PERIODS.has(value) ? value : 'last7'; } catch { return 'last7'; } };
+  const setPeriod = value => { state.period = PERIODS.has(value) ? value : 'last7'; try { localStorage.setItem('spacePhonePeriod', state.period); } catch {} };
   const state = {
-    period: "today",
+    period: readPeriod(),
     status: "",
     sdr: "all",
     q: "",
@@ -203,7 +206,7 @@
     const missing = qualificationMissing();
     const aiReadyFields = Object.values(ai).some(Boolean) || q.finalSummary;
     const fields = QUAL_FIELDS.map(([key, label]) => `<label><span class="sphone-muted">${esc(label)}${QUAL_REQUIRED.has(key) ? ' *' : ''}</span><textarea class="sphone-textarea" data-sp-qual="${esc(key)}" placeholder="${esc(label)}">${esc(q.values[key] || '')}</textarea>${missing.includes(key) && post ? `<small class="sphone-warnline">Campo obrigatório para agendado.</small>` : ''}</label>`).join('');
-    return `<div class="sphone-card"><div class="sphone-qual-head"><strong>Qualificação</strong><span class="sphone-badge ${q.saveStatus === 'Salvo ✓' ? 'ok' : 'warn'}" data-sp-qual-status>${esc(q.saveStatus || (['complete','sent'].includes(q.status) ? 'Qualificação concluída ✓' : 'SDR preenchendo'))}</span></div><div class="sphone-qual">${fields}</div>${aiReadyFields ? `<div class="sphone-ai-suggestion"><strong>Resumo sugerido pela IA</strong><p class="sphone-muted">Revise antes de enviar. Campos sem evidência ficam como “Precisa ser validado”.</p>${QUAL_FIELDS.map(([key,label]) => ai[key] ? `<small><b>${esc(label)}:</b> ${esc(ai[key])}</small>` : '').join('')}<button class="sphone-btn" data-sp-apply-ai>Aplicar sugestões da IA</button></div>` : `<p class="sphone-muted">Durante a ligação o preenchimento é manual. Análise disponível após a ligação, quando a transcrição real estiver disponível.</p>`}${['complete','sent'].includes(q.status) && q.datacrazy?.syncStatus !== 'sent' ? '<p class="sphone-muted">Handoff Datacrazy pendente</p>' : ''}${q.aiStatus === 'failed' ? '<p class="sphone-muted">Sugestões IA pendentes. Você pode continuar preenchendo e concluir manualmente.</p>' : ''}${post && !aiReadyFields && !['complete','sent'].includes(q.status) ? '<button class="sphone-btn" data-sp-retry-ai>Buscar sugestões IA novamente</button>' : ''}${post ? `<textarea class="sphone-textarea" data-sp-final-summary placeholder="Resumo final para handoff">${esc(q.finalSummary || '')}</textarea>` : ''}</div>`;
+    return `<div class="sphone-card"><div class="sphone-qual-head"><strong>Qualificação</strong><span class="sphone-badge ${q.saveStatus === 'Salvo ✓' ? 'ok' : 'warn'}" data-sp-qual-status>${esc(q.saveStatus || (['complete','sent'].includes(q.status) ? 'Qualificação concluída ✓' : 'SDR preenchendo'))}</span></div><div class="sphone-qual">${fields}</div>${aiReadyFields ? `<div class="sphone-ai-suggestion"><strong>Resumo sugerido pela IA</strong><p class="sphone-muted">Revise antes de enviar. Campos sem evidência ficam como “Precisa ser validado”.</p>${QUAL_FIELDS.map(([key,label]) => ai[key] ? `<small><b>${esc(label)}:</b> ${esc(ai[key])}</small>` : '').join('')}<button class="sphone-btn" data-sp-apply-ai>Aplicar sugestões da IA</button></div>` : `<p class="sphone-muted">Durante a ligação o preenchimento é manual. Análise disponível após a ligação, quando a transcrição real estiver disponível.</p>`}<p class="sphone-muted" data-sp-handoff>${['complete','sent'].includes(q.status) && q.datacrazy?.syncStatus !== 'sent' ? 'Handoff Datacrazy pendente' : ''}</p>${q.aiStatus === 'failed' ? '<p class="sphone-muted">Sugestões IA pendentes. Você pode continuar preenchendo e concluir manualmente.</p>' : ''}${post && !aiReadyFields && !['complete','sent'].includes(q.status) ? '<button class="sphone-btn" data-sp-retry-ai>Buscar sugestões IA novamente</button>' : ''}${post ? `<textarea class="sphone-textarea" data-sp-final-summary placeholder="Resumo final para handoff">${esc(q.finalSummary || '')}</textarea>` : ''}</div>`;
   };
   const renderActiveRight = () => `<section class="sphone-pane"><h2>Qualificação</h2><div class="sphone-context">${renderQualificationForm()}</div></section>`;
 
@@ -224,9 +227,10 @@
   };
 
   const aiBadge = (c) => c.analysisStatus === "completed" || c.score != null ? `<span class="sphone-badge ok">● Pronta</span>` : `<span class="sphone-badge warn">○ Processando</span>`;
+  const historyPeriodLabel = () => ({ today: 'hoje', last7: 'nos últimos 7 dias', last30: 'nos últimos 30 dias' })[state.period];
   const renderHistory = () => {
     const calls = state.data?.calls || [];
-    return `<section class="sphone-history"><div class="sphone-history-head"><div><h2>Histórico</h2><p class="sphone-muted">Ligações recentes e análise IA pós-call.</p></div><button class="sphone-btn" data-sp-refresh>Atualizar</button></div><div class="sphone-table-wrap"><table class="sphone-table"><thead><tr><th>Número / nome</th><th>Horário</th><th>Status</th><th>Duração</th><th>Outcome</th><th>IA</th><th></th></tr></thead><tbody>${calls.map((c) => `<tr><td><strong>${esc(c.sdrName || c.number || "Lead")}</strong><br><span class="sphone-muted">${esc(c.number || "-")}</span></td><td>${esc(fmtDate(c.startedAt))}</td><td><span class="sphone-badge ${c.status === "connected" ? "ok" : c.status === "failed" ? "bad" : ""}">${esc(c.status)}</span></td><td>${fmtSec(c.durationSeconds)}</td><td>${esc(c.outcome || "-")}</td><td>${aiBadge(c)}</td><td><button class="sphone-btn" data-sp-detail="${esc(c.id)}">Detalhes</button></td></tr>`).join("") || `<tr><td colspan="7"><div class="sphone-empty">Nenhuma ligação encontrada.</div></td></tr>`}</tbody></table></div></section>`;
+    return `<section class="sphone-history"><div class="sphone-history-head"><div><h2>Histórico</h2><p class="sphone-muted">${state.period === "today" ? "Ligações de hoje" : `Ligações ${historyPeriodLabel()}`} · análise IA pós-call.</p></div><button class="sphone-btn" data-sp-refresh>Atualizar</button></div><div class="sphone-table-wrap"><table class="sphone-table"><thead><tr><th>Lead / número</th><th>SDR</th><th>Horário</th><th>Status</th><th>Duração</th><th>Resultado</th><th>IA</th><th></th></tr></thead><tbody>${calls.map((c) => `<tr><td><strong>${esc(c.leadName || c.number || "Lead")}</strong><br><span class="sphone-muted">${esc(c.number || "-")}</span></td><td>${esc(c.sdrName || "SDR")}</td><td>${esc(fmtDate(c.startedAt))}</td><td><span class="sphone-badge ${c.status === "connected" ? "ok" : c.status === "failed" ? "bad" : ""}">${esc(c.status)}</span></td><td>${fmtSec(c.durationSeconds)}</td><td>${esc(c.outcome || "-")}</td><td>${aiBadge(c)}</td><td><button class="sphone-btn" data-sp-detail="${esc(c.id)}">Detalhes</button></td></tr>`).join("") || `<tr><td colspan="8"><div class="sphone-empty">Nenhuma ligação encontrada ${historyPeriodLabel()}.${state.status || state.q ? ' Há filtros ativos de status ou busca.' : ''}<br><button class="sphone-btn" data-sp-clear-filters>Limpar filtros</button></div></td></tr>`}</tbody></table></div></section>`;
   };
 
   const renderDetailTab = (c) => {
@@ -272,11 +276,20 @@
     patchDialDom();
     return state.normalized;
   };
-  const load = async ({ silent = false } = {}) => {
-    if (!silent) { state.loading = true; render(); }
-    try { state.data = await api({ period: state.period, status: state.status, q: state.q, sdr: state.sdr }); state.error = ""; }
-    catch (error) { state.error = error.message || "Não foi possível carregar ligações."; }
-    finally { state.loading = false; render(); }
+  let loadVersion = 0;
+  const patchHistory = () => {
+    const history = root()?.querySelector('.sphone-history');
+    if (history) history.outerHTML = renderHistory();
+  };
+  const load = async ({ silent = false, patchOnly = false } = {}) => {
+    const version = ++loadVersion;
+    if (!silent) { state.loading = true; if (!patchOnly) render(); }
+    try {
+      const data = await api({ period: state.period, status: state.status, q: state.q, sdr: state.sdr });
+      if (version !== loadVersion) return;
+      state.data = data; state.error = '';
+    } catch (error) { if (version === loadVersion) state.error = error.message || 'Não foi possível carregar ligações.'; }
+    finally { if (version === loadVersion) { state.loading = false; if (patchOnly) patchHistory(); else render(); } }
   };
   const loadDevices = async () => {
     if (!navigator.mediaDevices?.enumerateDevices) return;
@@ -342,7 +355,7 @@
       return;
     }
     state.call = { ...state.call, status: snap.status === "idle" ? "ready" : snap.held ? "hold" : (snap.status || state.call.status || "ready"), number: context.phoneNumber || record.to_number || state.call.number || "", name: context.leadName || record.lead_name || state.call.name || "", muted: Boolean(snap.muted), held: Boolean(snap.held), id: record.id || state.call.id || "", callerId: record.from_number || state.call.callerId || "", origin: context.source || state.call.origin || "Discador", error: snap.error || "" };
-    if (!POST.has(previous) && POST.has(state.call.status) && state.call.id) { state.postCall = { ...state.postCall, id: state.call.id, status: "processing" }; pollPostCall(state.call.id); }
+    if (!POST.has(previous) && POST.has(state.call.status) && state.call.id) { state.postCall = { ...state.postCall, id: state.call.id, status: "processing" }; pollPostCall(state.call.id); void load({ silent: true, patchOnly: true }); }
   };
   const saveCallPatch = async (id, patch) => {
     if (!id) return;
@@ -384,6 +397,9 @@
   const completeQualification = async () => {
     const id = currentCallId();
     if (!id) return;
+    const buttons = [...document.querySelectorAll('[data-sp-complete-qualification]')];
+    if (buttons.some(button => button.dataset.saving === 'true')) return;
+    buttons.forEach(button => { button.dataset.saving = 'true'; button.disabled = true; button.textContent = 'Concluindo...'; });
     setQualificationStatus('Concluindo...', 'warn');
     try {
       const summary = document.querySelector('[data-sp-final-summary]')?.value || state.qualification.finalSummary || '';
@@ -396,11 +412,16 @@
       mergeQualification(response.qualification || response.call?.qualification);
       setQualificationStatus('Qualificação concluída ✓', 'ok');
       try { window.dispatchEvent(new CustomEvent('space-phone:call-updated', { detail: { id, qualificationStatus: state.qualification.status, datacrazyStatus: state.qualification.datacrazy?.syncStatus || 'blocked' } })); } catch {}
-      await load({ silent: true });
-      render();
+      buttons.forEach(button => { button.textContent = 'Qualificação concluída ✓'; button.disabled = true; });
+      document.querySelectorAll('[data-sp-handoff]').forEach(el => { el.textContent = state.qualification.datacrazy?.syncStatus === 'sent' ? '' : 'Handoff Datacrazy pendente'; });
+      if (state.detail?.call?.id === id) state.detail.call.qualification = response.qualification || response.call?.qualification;
+      await load({ silent: true, patchOnly: true });
     } catch (error) {
       state.qualification.error = error.message || 'Não foi possível concluir.';
       setQualificationStatus(error.message === 'qualification_incomplete' ? 'Campos obrigatórios pendentes' : 'Erro ao concluir', 'bad');
+      buttons.forEach(button => { button.disabled = !qualificationComplete(); button.textContent = 'Concluir qualificação'; });
+    } finally {
+      buttons.forEach(button => { delete button.dataset.saving; });
     }
   };
 
@@ -409,14 +430,15 @@
       state.popover = "";
       render();
     }
-    const t = event.target.closest("[data-sp-key],[data-sp-backspace],[data-sp-call],[data-sp-fill],[data-sp-refresh],[data-sp-period],[data-sp-detail],[data-sp-close-detail],[data-sp-mute],[data-sp-hold],[data-sp-hangup],[data-sp-popover],[data-sp-dtmf-toggle],[data-sp-dtmf],[data-sp-outcome],[data-sp-skip-outcome],[data-sp-reset-call],[data-sp-tab],[data-sp-test-device],[data-sp-apply-ai],[data-sp-complete-qualification],[data-sp-retry-ai]");
+    const t = event.target.closest("[data-sp-key],[data-sp-backspace],[data-sp-call],[data-sp-fill],[data-sp-refresh],[data-sp-period],[data-sp-detail],[data-sp-close-detail],[data-sp-mute],[data-sp-hold],[data-sp-hangup],[data-sp-popover],[data-sp-dtmf-toggle],[data-sp-dtmf],[data-sp-outcome],[data-sp-skip-outcome],[data-sp-reset-call],[data-sp-tab],[data-sp-test-device],[data-sp-apply-ai],[data-sp-complete-qualification],[data-sp-retry-ai],[data-sp-clear-filters]");
     if (!t || !root()) return;
     if (t.matches("[data-sp-key]")) { state.dial += t.dataset.spKey; normalize(); return; }
     if (t.matches("[data-sp-backspace]")) { state.dial = state.dial.slice(0, -1); normalize(); return; }
     if (t.matches("[data-sp-call]")) { await startCall(); return; }
     if (t.matches("[data-sp-fill]")) { state.dial = t.dataset.spFill || ""; normalize(); render(); return; }
+    if (t.matches("[data-sp-clear-filters]")) { setPeriod("last7"); state.status = ""; state.q = ""; state.sdr = "all"; clearTimeout(state.searchTimer); await load(); return; }
     if (t.matches("[data-sp-refresh]")) { await load(); return; }
-    if (t.matches("[data-sp-period]")) { state.period = t.dataset.spPeriod || "today"; await load(); return; }
+    if (t.matches("[data-sp-period]") && t.tagName !== "SELECT") { setPeriod(t.dataset.spPeriod); await load(); return; }
     if (t.matches("[data-sp-detail]")) { state.qualificationBeforeDetail = state.qualification; state.detail = await api({ id: t.dataset.spDetail }); state.detailTab = "summary"; state.qualification = normalizeQualification(state.detail.call?.qualification || { voiceCallId: t.dataset.spDetail }); render(); return; }
     if (t.matches("[data-sp-close-detail]")) { state.detail = null; if (state.qualificationBeforeDetail) state.qualification = state.qualificationBeforeDetail; render(); return; }
     if (t.matches("[data-sp-mute]")) { await callMethod(state.call.muted ? "unmute" : "mute"); render(); return; }
@@ -457,7 +479,7 @@
     const t = event.target;
     if (!root() || !(t instanceof HTMLElement)) return;
     if (t.matches("[data-sp-status]")) { state.status = t.value; await load(); }
-    if (t.matches("[data-sp-period]")) { state.period = t.value; await load(); }
+    if (t.matches("[data-sp-period]")) { setPeriod(t.value); await load(); }
     if (t.matches("[data-sp-mic]")) { state.devices.micId = t.value; saveLocal(); await adapter()?.setAudioInputDevice?.(t.value); }
     if (t.matches("[data-sp-speaker]")) { state.devices.speakerId = t.value; saveLocal(); await adapter()?.setAudioOutputDevice?.(t.value); }
   });
@@ -501,6 +523,6 @@
       else { lastCoreKey = nextKey; render(); }
     });
   };
-  window.SpacePhoneModule = { open: async () => { subscribeCore(); await loadDevices(); syncFromCore(adapter()?.getState?.()); render(); await load({ silent: true }); }, state };
+  window.SpacePhoneModule = { open: async () => { state.period = readPeriod(); subscribeCore(); await loadDevices(); syncFromCore(adapter()?.getState?.()); render(); await load({ silent: true }); }, state };
   if (document.body?.dataset.initialPanel === "space-phone") window.SpacePhoneModule.open();
 }());

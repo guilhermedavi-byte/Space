@@ -22,6 +22,7 @@ const createHandler = ({
 
   const user = {
     ...(auth.session || {}),
+    name: auth.profile?.user?.nome || auth.profile?.user?.name || auth.profile?.user?.displayName || auth.session?.name,
     commercialRoles: auth.profile?.user?.commercialRoles || auth.session?.commercialRoles || [],
   };
   const permissions = getCommercialPermissions(user);

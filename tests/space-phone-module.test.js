@@ -8,7 +8,7 @@ function jsonResponse(body, ok = true, status = 200) {
   return { ok, status, json: async () => body };
 }
 
-function createModuleDom() {
+function createModuleDom({ period } = {}) {
   const dom = new JSDOM('<body data-active-panel="space-phone"><section data-panel="space-phone"><div data-space-phone></div></section></body>', {
     url: 'https://space.test/app/admin/comercial/pre-vendas/ligacoes',
     runScripts: 'outside-only',
@@ -52,6 +52,7 @@ function createModuleDom() {
     return jsonResponse({ ok: true, analytics: { talkTimeSeconds: 60 }, calls: [], callbacks: [] });
   };
   dom.window.__spacePhoneTest = { calls, fetches, emit };
+  if (period !== undefined) dom.window.localStorage.setItem('spacePhonePeriod', period);
   dom.window.eval(fs.readFileSync(path.join(__dirname, '..', 'space-phone.js'), 'utf8'));
   return dom;
 }
@@ -284,4 +285,69 @@ test('qualification review applies suggestions and completes independently of bl
   assert.equal(q.status, 'complete');
   assert.match(dom.window.document.body.textContent, /Qualificação concluída ✓/);
   assert.match(dom.window.document.body.textContent, /Handoff Datacrazy pendente/);
+});
+
+test('history defaults to last7, restores valid preference and ignores invalid storage', async t => {
+  for (const [saved, expected] of [[undefined, 'last7'], ['today', 'today'], ['last7', 'last7'], ['last30', 'last30'], ['invalid', 'last7']]) {
+    const dom = createModuleDom({ period: saved }); t.after(() => dom.window.close());
+    await dom.window.SpacePhoneModule.open();
+    assert.equal(dom.window.SpacePhoneModule.state.period, expected);
+    assert.ok(dom.window.__spacePhoneTest.fetches.some(url => new URL(url, 'https://space.test').searchParams.get('period') === expected));
+  }
+});
+
+test('period selection persists and clear filters resets contextual empty history', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  await dom.window.SpacePhoneModule.open();
+  assert.match(dom.window.document.querySelector('.sphone-history').textContent, /Nenhuma ligação encontrada nos últimos 7 dias/);
+  let select = dom.window.document.querySelector('[data-sp-period]');
+  select.value = 'last30'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  await tick(20);
+  assert.equal(dom.window.localStorage.getItem('spacePhonePeriod'), 'last30');
+  await dom.window.SpacePhoneModule.open();
+  assert.equal(dom.window.SpacePhoneModule.state.period, 'last30');
+  const state = dom.window.SpacePhoneModule.state; state.q = '123'; state.status = 'failed';
+  await dom.window.SpacePhoneModule.open();
+  assert.match(dom.window.document.querySelector('.sphone-history').textContent, /Há filtros ativos/);
+  dom.window.document.querySelector('[data-sp-clear-filters]').click(); await tick(20);
+  assert.equal(state.period, 'last7'); assert.equal(state.q, ''); assert.equal(state.status, '');
+});
+
+test('history refreshes on call end without clicking Atualizar and separates lead from SDR', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  await dom.window.SpacePhoneModule.open();
+  let requests = 0;
+  dom.window.fetchWithAuth = async () => { requests++; return jsonResponse({ calls: [{ id: 'real-id', leadName: 'Lead A', sdrName: 'Luana Mendonça', number: '+16175551212', outcome: 'agendado', score: 80 }], analytics: {} }); };
+  dom.window.__spacePhoneTest.emit({ status: 'ended', callRecord: { id: 'real-id' } }); await tick(20);
+  assert.ok(requests > 0);
+  const cells = dom.window.document.querySelectorAll('.sphone-history tbody tr td');
+  assert.match(cells[0].textContent, /Lead A/); assert.equal(cells[1].textContent, 'Luana Mendonça');
+  assert.match(dom.window.document.querySelector('.sphone-history').textContent, /agendado/);
+});
+
+test('qualification completion keeps drawer, focused field and scroll nodes intact', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  let q = { status: 'review_required', context: 'Contexto', painGoal: 'Dor', experience: 'Sim', urgency: 'Alta', decisionInvestment: 'Sim', keyPoint: 'Objetivo' };
+  dom.window.fetchWithAuth = async (_url, opts = {}) => {
+    if (opts.method === 'PATCH') {
+      const body = JSON.parse(opts.body);
+      q = { ...q, ...body.qualification, ...(body.action === 'complete_qualification' ? { status: 'complete', datacrazy: { syncStatus: 'pending' } } : {}) };
+      return jsonResponse({ qualification: q });
+    }
+    return jsonResponse({ calls: [], analytics: {} });
+  };
+  const state = dom.window.SpacePhoneModule.state;
+  state.detail = { call: { id: 'call-scroll', outcome: 'agendado' } };
+  state.qualification = { values: { ...q }, status: 'review_required', ai: {}, finalSummary: '', datacrazy: {} };
+  await dom.window.SpacePhoneModule.open();
+  const drawer = dom.window.document.querySelector('.sphone-drawer-body'); drawer.scrollTop = 280;
+  const field = drawer.querySelector('[data-sp-qual=context]'); field.focus();
+  Object.defineProperty(dom.window, 'scrollY', { value: 700, configurable: true });
+  const shell = dom.window.document.querySelector('.sphone-shell');
+  drawer.querySelector('[data-sp-complete-qualification]').click(); await tick(50);
+  assert.equal(dom.window.document.querySelector('.sphone-shell'), shell);
+  assert.equal(dom.window.document.querySelector('.sphone-drawer-body'), drawer);
+  assert.equal(drawer.scrollTop, 280); assert.equal(dom.window.scrollY, 700);
+  assert.equal(dom.window.document.activeElement, field);
+  assert.match(drawer.textContent, /Qualificação concluída ✓/);
 });
