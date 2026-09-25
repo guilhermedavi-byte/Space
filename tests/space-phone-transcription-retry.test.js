@@ -19,3 +19,17 @@ test('retry transcription is isolated, fresh and idempotent', async t => {
   await t.test('lost CAS does not claim queued', async()=>assert.equal((await requeueTranscription({call,score,now,fetchImpl:async()=>({ok:true,json:async()=>({data:recording})}),request:async()=>({data:[]})})).queued,false));
  } finally { if(old===undefined) delete process.env.TELNYX_API_KEY; else process.env.TELNYX_API_KEY=old; }
 });
+test('recovery clears compromised AI without reopening human completion', async () => {
+ const {requestAiQualification}=require('../api/_lib/space-phone-n8n');
+ const patches=[];
+ const q={status:'complete',updated_at:now.toISOString(),context:'Human context',final_summary:'Human final'};
+ const request=async(path,options={})=>{
+  if(options.method==='PATCH'){patches.push({path,body:options.body});return {data:[q]};}
+  if(path.startsWith('/voice_call_qualifications'))return {data:[q]};
+  return {data:[{...score,call_leg_id:'leg',call_session_id:'session',status:'processing',updated_at:now.toISOString(),transcript:'Your call has been forwarded to voicemail.'}]};
+ };
+ await requestAiQualification({call:{...call,id:'call',outcome:'agendado'},retry:true,now,request,dispatch:()=>assert.fail()});
+ assert.equal(patches.length,1);
+ assert.deepEqual(Object.keys(patches[0].body).sort(),['ai_context','ai_decision_investment','ai_experience','ai_key_point','ai_pain_goal','ai_urgency']);
+ assert.ok(Object.values(patches[0].body).every(v=>v===null));
+});

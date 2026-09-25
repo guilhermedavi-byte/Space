@@ -211,7 +211,16 @@ const requestAiQualification = async ({ call, request = supabaseFetch, now = new
   }
   if (retry) {
     const score = await getScore(call, request);
-    if (!clean(score?.transcript) || analysisIntegrity(call, score).inconsistent) return requeueTranscription({ call, score, request, now });
+    const inconsistent = analysisIntegrity(call, score).inconsistent;
+    if (inconsistent && current) {
+      // Discard only compromised machine suggestions before recovering the recording.
+      // Human fields, final summary, completion and handoff state remain untouched.
+      const version = current.updated_at ? `&updated_at=eq.${enc(current.updated_at)}` : '';
+      await request(`/voice_call_qualifications?voice_call_id=eq.${enc(call.id)}${version}`, {
+        method: 'PATCH', body: { ai_context: null, ai_pain_goal: null, ai_experience: null, ai_urgency: null, ai_decision_investment: null, ai_key_point: null },
+      });
+    }
+    if (!clean(score?.transcript) || inconsistent) return requeueTranscription({ call, score, request, now });
   }
   if (!current || !(retry ? ['draft', 'ai_processing', 'review_required'] : ['draft', 'ai_processing']).includes(current.status)) return { skipped: true };
   const staleBefore = now.getTime() - 10 * 60 * 1000;
