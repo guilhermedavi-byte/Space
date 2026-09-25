@@ -9,10 +9,12 @@ module.exports = async (req, res) => {
   try {
     const body = await readJsonBody(req).catch(() => null);
     if (!body || typeof body !== 'object') return sendJson(res, 400, { error: 'invalid_json' });
-    return sendJson(res, 200, await n8n.resolveDatacrazy({ phone: body.phone, callId: body.callId }));
+    const result = await n8n.resolveDatacrazy({ phone: body.phone, callId: body.callId });
+    console.info('[n8n-datacrazy-resolve]', { matched: result.matched, count: result.matches.length, reason: result.reason, sources: [...new Set(result.matches.map(match => match.source))] });
+    return sendJson(res, 200, result);
   } catch (error) {
     const status = Number(error?.status) || 500;
-    console.error('[n8n-datacrazy-resolve]', { code: n8n.publicError(error), status });
+    console.error('[n8n-datacrazy-resolve]', { code: n8n.publicError(error), status, upstreamStatus: error.upstreamStatus || null });
     return sendJson(res, status, { error: n8n.publicError(error) });
   }
 };

@@ -2,14 +2,14 @@ const { getGoogleAccessToken } = require('../../_lib/google-service-account');
 const { PROJECT_ID, FIRESTORE_BASE, decodeFields } = require('./firestore-rest');
 const cache = new Map();
 const clean = value => String(value || '').trim();
-const profileName = profile => clean(profile?.nome || profile?.name || profile?.displayName);
+const profileName = profile => clean(profile?.nome || profile?.nomeCompleto || profile?.name || profile?.displayName);
 
 const readProfiles = async uids => {
   const { accessToken } = await getGoogleAccessToken({ scope: 'https://www.googleapis.com/auth/datastore' });
   const response = await fetch(`${FIRESTORE_BASE}:batchGet`, {
     method: 'POST', redirect: 'error', signal: AbortSignal.timeout(4000),
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ documents: uids.map(uid => `projects/${PROJECT_ID}/databases/(default)/documents/users/${uid}`), mask: { fieldPaths: ['nome', 'name', 'displayName'] } }),
+    body: JSON.stringify({ documents: uids.map(uid => `projects/${PROJECT_ID}/databases/(default)/documents/users/${uid}`), mask: { fieldPaths: ['nome', 'nomeCompleto', 'name', 'displayName'] } }),
   });
   if (!response.ok) throw new Error('sdr_names_unavailable');
   const results = await response.json();

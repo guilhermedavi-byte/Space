@@ -1,4 +1,6 @@
 const crypto = require('node:crypto');
+const { resolveSdrNames } = require('./space-phone-sdr-names');
+const { localMatches, remoteMatches } = require('./datacrazy-lead-resolver');
 const WRITE_IN_PROGRESS = 'DATACRAZY_WRITE_IN_PROGRESS';
 const WRITE_UNCERTAIN = 'DATACRAZY_WRITE_OUTCOME_UNKNOWN';
 const { supabaseFetch } = require('./supabase-rest');
@@ -14,7 +16,6 @@ const normalizePhone = value => {
   if (d.length === 11 && d.startsWith('1')) return d;
   return d;
 };
-const eq = (a, b) => normalizePhone(a) && normalizePhone(a) === normalizePhone(b);
 
 const timingSafeEqual = (a, b) => {
   const left = Buffer.from(clean(a));
@@ -85,13 +86,14 @@ const normalizeQualificationPayload = row => ({
 
 const handoffEligible = (call, qualification) => clean(call?.outcome) === 'agendado' && normalizeQualificationPayload(qualification).confirmedBySdr;
 
-const getQualificationPayload = async ({ callId, request = supabaseFetch }) => {
+const getQualificationPayload = async ({ callId, request = supabaseFetch, resolveNames = resolveSdrNames }) => {
   const call = await getCall(callId, request);
-  const [qualification, score] = await Promise.all([getQualification(call.id, request), getScore(call, request)]);
+  const [qualification, score, names] = await Promise.all([getQualification(call.id, request), getScore(call, request), resolveNames([call])]);
   return {
     callId: clean(call.id),
     phone: clean(call.to_number || call.from_number),
-    sdrName: clean(call.space_user_email || call.space_user_uid),
+    sdrName: clean(names.get(clean(call.space_user_uid))) || 'SDR',
+    sdrEmail: clean(call.space_user_email),
     outcome: clean(call.outcome),
     transcript: clean(score?.transcript),
     qualification: normalizeQualificationPayload(qualification),
@@ -177,7 +179,8 @@ const claimDatacrazyHandoff = async ({ callId, request = supabaseFetch }) => {
     body: { datacrazy_lead_id: resolved.leadId, datacrazy_sync_status: 'pending', datacrazy_sync_error: WRITE_IN_PROGRESS, updated_at: new Date().toISOString() }, timeoutMs: 12000,
   }));
   if (!rows.length) return { ok: true, shouldWrite: false, reason: 'claimed_or_sent' };
-  return { ok: true, shouldWrite: true, callId: call.id, leadId: resolved.leadId, note: clean(current.final_summary) || formatQualificationNote({ call, qualification: current }) };
+  const names = clean(current.final_summary) ? new Map() : await resolveSdrNames([call]);
+  return { ok: true, shouldWrite: true, callId: call.id, leadId: resolved.leadId, note: clean(current.final_summary) || formatQualificationNote({ call: { ...call, sdrName: names.get(clean(call.space_user_uid)) }, qualification: current }) };
 };
 
 const markDatacrazyFailed = async ({ callId, request = supabaseFetch }) => {
@@ -273,24 +276,25 @@ const makeMatch = (source, row = {}, extras = {}) => ({
 const matchResult = (candidates, truncated = false) => {
   const matches = [...new Map(candidates.filter(m => m.datacrazyContactId).map(m => [m.datacrazyContactId, m])).values()];
   const matched = !truncated && matches.length === 1;
-  return { matches, matched, leadId: matched ? matches[0].datacrazyContactId : null, reason: matched ? null : truncated ? 'match_search_incomplete' : matches.length ? 'ambiguous_match' : 'no_match' };
+  return { matches, matched, leadId: matched ? matches[0].datacrazyContactId : null, datacrazyContactId: matched ? matches[0].datacrazyContactId : null, reason: matched ? null : truncated ? 'match_search_incomplete' : matches.length ? 'ambiguous_match' : 'lead_not_found' };
 };
 
-const resolveDatacrazy = async ({ callId = '', phone = '', request = supabaseFetch }) => {
+const resolveDatacrazy = async ({ callId = '', phone = '', request = supabaseFetch, lookupRemote = remoteMatches }) => {
   const call = callId ? await getCall(callId, request) : null;
   // An actual lead relationship is authoritative; a deal/external ID is never a lead ID.
   if (call?.lead_id) return matchResult([makeMatch('voice_call', {}, { contactId: call.lead_id, dealId: call.opportunity_id, phone: call.to_number, name: call.lead_name })]);
   const normalized = normalizePhone(call?.to_number || phone);
   if (!normalized) return matchResult([]);
-  const estado = asRows(await request(`/n8n_estado_leads_comercial_space?select=*&telefone_normalizado=eq.${enc(normalized)}&limit=101`, { timeoutMs: 12000 }));
-  const candidates = estado.filter(row => eq(row.telefone_normalizado, normalized)).map(row => makeMatch('n8n_estado_leads_comercial_space', row));
-  // Fail closed on truncation/infra; suffix-only phone matches are not sufficient evidence.
-  return matchResult(candidates, estado.length >= 101);
+  const local = await localMatches(normalized, request);
+  const result = matchResult(local.matches, local.incomplete);
+  if (local.incomplete || result.matches.length) return result;
+  const remote = await lookupRemote(normalized);
+  return matchResult(remote.matches, remote.incomplete);
 };
 
 const formatQualificationNote = ({ call, qualification }) => {
   const q = normalizeQualificationPayload(qualification);
-  return ['Qualificação SDR — Space', '', `Contexto:\n${q.context || 'Precisa ser validado'}`, '', `Objetivo/Dor:\n${q.painGoal || 'Precisa ser validado'}`, '', `Experiência:\n${q.experience || 'Não identificado'}`, '', `Urgência:\n${q.urgency || 'Precisa ser validado'}`, '', `Decisão/Investimento:\n${q.decisionInvestment || 'Precisa ser validado'}`, '', `Ponto-chave:\n${q.keyPoint || 'Precisa ser validado'}`, '', `SDR:\n${clean(call.space_user_email || call.space_user_uid)}`, '', `Call ID:\n${clean(call.id)}`].join('\n');
+  return ['Qualificação SDR — Space', '', `Contexto:\n${q.context || 'Precisa ser validado'}`, '', `Objetivo/Dor:\n${q.painGoal || 'Precisa ser validado'}`, '', `Experiência:\n${q.experience || 'Não identificado'}`, '', `Urgência:\n${q.urgency || 'Precisa ser validado'}`, '', `Decisão/Investimento:\n${q.decisionInvestment || 'Precisa ser validado'}`, '', `Ponto-chave:\n${q.keyPoint || 'Precisa ser validado'}`, '', `SDR:\n${clean(call.sdrName) || 'SDR'}`, '', `Call ID:\n${clean(call.id)}`].join('\n');
 };
 
 const datacrazyNote = async ({ callId, datacrazyId, note = '', request = supabaseFetch }) => {

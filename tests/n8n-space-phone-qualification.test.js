@@ -278,7 +278,7 @@ for (const [name, contacts, expected] of [
   const fx = fixtures(); fx.call.lead_id = null;
   const base = makeRequest(fx);
   const { resolveDatacrazy } = require('../api/_lib/space-phone-n8n');
-  const result = await resolveDatacrazy({ callId: fx.call.id, request: (path, opts) => path.startsWith('/n8n_estado') ? { data: contacts.map(id => ({ lead_id: id, telefone_normalizado: '14077511479' })) } : base(path, opts) });
+  const result = await resolveDatacrazy({ callId: fx.call.id, lookupRemote: async () => ({ matches: [], incomplete: false }), request: (path, opts) => path.startsWith('/n8n_estado') ? { data: contacts.map(id => ({ lead_id: id, telefone_normalizado: '14077511479' })) } : base(path, opts) });
   assert.equal(result.matched, expected);
   assert.equal(result.leadId, expected ? 'one' : null);
 });
@@ -287,7 +287,7 @@ test('suffix coincidence and deal/external IDs are not a valid lead match', asyn
   const fx = fixtures(); fx.call.lead_id = null;
   const base = makeRequest(fx);
   const { resolveDatacrazy } = require('../api/_lib/space-phone-n8n');
-  const result = await resolveDatacrazy({ callId: fx.call.id, request: (path, opts) => path.startsWith('/n8n_estado') ? { data: [
+  const result = await resolveDatacrazy({ callId: fx.call.id, lookupRemote: async () => ({ matches: [], incomplete: false }), request: (path, opts) => path.startsWith('/n8n_estado') ? { data: [
     { lead_id: 'wrong-country', telefone_normalizado: '55477511479' },
     { external_id: 'deal-not-lead', telefone_normalizado: '14077511479' },
   ] } : base(path, opts) });
