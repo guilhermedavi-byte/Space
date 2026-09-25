@@ -364,7 +364,7 @@ test('changing period refreshes history and resets pagination', async t => {
   dom.window.document.querySelector('[data-sp-load-more]').click();await tick(30);
   assert.deepEqual(Array.from(dom.window.SpacePhoneModule.state.data.calls,c=>c.id),['yesterday','older']);
   const select=dom.window.document.querySelector('[data-sp-period]');select.value='today';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await tick(30);
-  assert.equal(seen.at(-1).get('view'),null);assert.equal(dom.window.SpacePhoneModule.state.data.analytics.totalCalls,0);
+  assert.equal(seen.filter(q=>q.get('view')!=='conversion').at(-1).get('view'),null);assert.equal(dom.window.SpacePhoneModule.state.data.analytics.totalCalls,0);
   assert.deepEqual(Array.from(dom.window.SpacePhoneModule.state.data.calls,c=>c.id),[]);
   assert.equal(dom.window.document.querySelectorAll('[data-sp-detail]').length,0);
 });
@@ -486,4 +486,20 @@ test('callback quick schedule, countdown, navigation alert, snooze and one-click
  dom.window.document.body.dataset.activePanel='crm';dom.window.dispatchEvent(new dom.window.Event('online'));await tick(40);
  assert.match(dom.window.document.querySelector('#space-callback-alert').textContent,/Aguardando retorno.*12 min/);
  dom.window.dispatchEvent(new dom.window.Event('online'));await tick(30);assert.equal(dom.window.document.querySelectorAll('#space-callback-alert').length,1);
+});
+
+test('conversion updates partially on outcome and booking events without stealing focus',async t=>{
+ const dom=createModuleDom();t.after(()=>dom.window.close());let scheduled=0,reads=0;
+ const rate=(n,d)=>({numerator:n,denominator:d,percent:d?n/d*100:null});
+ dom.window.fetchWithAuth=async url=>{
+  if(new URL(url,'https://space.test').searchParams.get('view')==='conversion'){reads++;return jsonResponse({conversion:{attendance:rate(2,4),callToBooking:rate(scheduled,4),answeredToBooking:rate(scheduled,2),bookingToDone:rate(0,0)}});}
+  return jsonResponse({calls:[],callbacks:[],analytics:{},scope:'self'});
+ };
+ await dom.window.SpacePhoneModule.open();await tick(20);
+ const input=dom.window.document.querySelector('[data-sp-dial]');input.focus();
+ assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent,/50,0%/);
+ scheduled=1;dom.window.dispatchEvent(new dom.window.CustomEvent('space-phone:call-updated'));await tick(20);
+ assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent,/25,0%/);assert.equal(dom.window.document.activeElement,input);
+ const before=reads;dom.window.dispatchEvent(new dom.window.CustomEvent('space-bookings:updated'));await tick(20);assert.ok(reads>before);
+ assert.equal(dom.window.document.querySelector('[data-sp-dial]'),input);
 });

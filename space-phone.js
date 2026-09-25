@@ -175,6 +175,33 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
     </section>`;
   };
 
+  let conversionData=null, conversionError='', conversionFlight=false, conversionQueued=false;
+  const pct = rate => rate?.percent == null ? '—' : `${Number(rate.percent).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`;
+  const renderConversion = () => {
+    const c=conversionData;
+    const labels=[['attendance','Taxa de atendimento'],['callToBooking','Ligação → Agendamento'],['answeredToBooking','Atendida → Agendamento'],['bookingToDone','Agendado → Feito']];
+    return `<section class="sphone-conversion" data-sp-conversion><h2>Conversão</h2><p class="sphone-muted">Agendadas = resultado comercial da chamada. Chamadas pelo início da ligação; bookings pela data da reunião. Atualização automática a cada 10 s</p>${conversionError ? `<p role="status">${esc(conversionError)}</p>` : ''}<div class="sphone-conversion-grid">${labels.map(([key,label])=>`<article class="sphone-kpi"><span>${label}</span><strong>${c?pct(c[key]):'—'}</strong><small>${c?`${c[key].numerator} / ${c[key].denominator}`:'Carregando…'}</small></article>`).join('')}</div>${c?.unlinked?`<p class="sphone-muted">${c.unlinked} booking(s) sem vínculo único com a reunião. Taxa de realizadas provisória; somente realizações verificadas são contadas.</p>`:''}${c?.ranking?`<h3>Ranking de Conversão por SDR</h3><div class="sphone-conversion-table"><table><thead><tr>${['SDR','Ligações','Atendidas','Agendadas','Feitas','Taxa atendimento','Call → Agendamento','Atendida → Agendamento','Agendado → Feito'].map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${c.ranking.map(r=>`<tr><td>${esc(r.displayName)}</td>${[r.calls,r.answered,r.scheduled,r.done,pct(r.attendance),pct(r.callToBooking),pct(r.answeredToBooking),pct(r.bookingToDone)].map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')||'<tr><td colspan="9">Sem dados no período.</td></tr>'}</tbody></table></div>`:''}</section>`;
+  };
+  const refreshConversion = async () => {
+    if(!document?.body || document.hidden || document.body.dataset.activePanel!=='space-phone')return;
+    if(conversionFlight){conversionQueued=true;return;}
+    conversionFlight=true;
+    const period=state.period,sdr=state.sdr;
+    try{
+      const result=await api({view:'conversion',period,sdr});
+      if(period!==state.period||sdr!==state.sdr){conversionQueued=true;return;}
+      conversionData=result.conversion||null;conversionError='';
+    }catch{conversionError='Conversão temporariamente indisponível. Tentaremos novamente.';conversionData=null;}
+    finally{
+      conversionFlight=false;
+      const el=document?.querySelector('[data-sp-conversion]');if(el)el.outerHTML=renderConversion();
+      if(conversionQueued){conversionQueued=false;void refreshConversion();}
+    }
+  };
+  every(refreshConversion,10000);
+  ['space-phone:call-updated','space-bookings:updated','online'].forEach(name=>window.addEventListener(name,refreshConversion));
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshConversion();});
+
   const renderKeypad = (mode) => `<div class="sphone-keypad">${["1","2","3","4","5","6","7","8","9","*","0","#"].map((key) => `<button class="sphone-key" data-${mode}="${esc(key)}">${esc(key)}</button>`).join("")}</div>`;
   const renderDialer = () => `
     <section class="sphone-pane">
@@ -306,7 +333,7 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
     const focusValue = focusAttr ? focused.getAttribute(focusAttr) : '';
     const selection = [focused?.selectionStart, focused?.selectionEnd];
     const ps = phoneStatus();
-    el.innerHTML = `<div class="sphone"><div class="sphone-shell"><header class="sphone-head"><div class="sphone-title"><h1>Ligações</h1><span>Central de voz comercial</span></div><div class="sphone-online"><span class="sphone-dot" data-tone="${ps.tone}"></span>${esc(ps.label)}</div></header>${renderKpis()}<div class="sphone-toolbar"><div class="sphone-filters"><select class="sphone-select" data-sp-period aria-label="Período das ligações"><option value="today">Hoje</option><option value="last7">7 dias</option><option value="last30">30 dias</option></select>${state.data?.scope === "admin" ? `<select class="sphone-select" data-sp-sdr aria-label="SDR"><option value="all">Todos os SDRs</option>${(state.data.sdrs || []).map(sdr => `<option value="${esc(sdr.uid)}">${esc(sdr.displayName)}</option>`).join("")}</select>` : ""}<select class="sphone-select" data-sp-status><option value="">Todos</option><option value="answered">Atendida</option><option value="unanswered">Não atendida</option><option value="scheduled">Agendada</option><option value="failed">Falhou</option></select><input class="sphone-input" type="search" data-sp-search placeholder="Buscar número" value="${esc(state.q)}" /></div><button class="sphone-btn" data-sp-refresh>Atualizar</button></div>${state.error ? `<div class="sphone-empty">${esc(state.error)}</div>` : ""}<main class="sphone-grid">${renderDialer()}${renderCenter()}${renderRight()}</main>${renderCallbacks()}${renderHistory()}</div></div>`;
+    el.innerHTML = `<div class="sphone"><div class="sphone-shell"><header class="sphone-head"><div class="sphone-title"><h1>Ligações</h1><span>Central de voz comercial</span></div><div class="sphone-online"><span class="sphone-dot" data-tone="${ps.tone}"></span>${esc(ps.label)}</div></header>${renderKpis()}<div class="sphone-toolbar"><div class="sphone-filters"><select class="sphone-select" data-sp-period aria-label="Período das ligações"><option value="today">Hoje</option><option value="last7">7 dias</option><option value="last30">30 dias</option></select>${state.data?.scope === "admin" ? `<select class="sphone-select" data-sp-sdr aria-label="SDR"><option value="all">Todos os SDRs</option>${(state.data.sdrs || []).map(sdr => `<option value="${esc(sdr.uid)}">${esc(sdr.displayName)}</option>`).join("")}</select>` : ""}<select class="sphone-select" data-sp-status><option value="">Todos</option><option value="answered">Atendida</option><option value="unanswered">Não atendida</option><option value="scheduled">Agendada</option><option value="failed">Falhou</option></select><input class="sphone-input" type="search" data-sp-search placeholder="Buscar número" value="${esc(state.q)}" /></div><button class="sphone-btn" data-sp-refresh>Atualizar</button></div>${state.error ? `<div class="sphone-empty">${esc(state.error)}</div>` : ""}<main class="sphone-grid">${renderDialer()}${renderCenter()}${renderRight()}</main>${renderConversion()}${renderCallbacks()}${renderHistory()}</div></div>`;
     let portal = document.getElementById('sphone-detail-portal');
     if (!portal) { portal = document.createElement('div'); portal.id = 'sphone-detail-portal'; document.body.appendChild(portal); }
     portal.innerHTML = renderDetail();
@@ -354,7 +381,7 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
       state.sdr = data.scope === 'admin' ? (data.selectedSdr || 'all') : 'all';
       if (data.scope === 'admin') { try { localStorage.setItem('spacePhoneSdr', state.sdr); } catch {} }
       if (selectionReset && (analyticsOnly || appendHistory)) return load({ silent });
-      state.data = analyticsOnly ? { ...state.data, ...data, calls: state.data?.calls || [], history: state.data?.history } : appendHistory ? { ...state.data, ...data, callbacks: state.data?.callbacks || [], calls: [...new Map([...(state.data?.calls || []), ...(data.calls || [])].map(call => [call.id, call])).values()] } : data; if (data.callbacks) { callbackItems = data.callbacks; tickCallbacks(); } state.error = '';
+      state.data = analyticsOnly ? { ...state.data, ...data, calls: state.data?.calls || [], history: state.data?.history } : appendHistory ? { ...state.data, ...data, callbacks: state.data?.callbacks || [], calls: [...new Map([...(state.data?.calls || []), ...(data.calls || [])].map(call => [call.id, call])).values()] } : data; void refreshConversion(); if (data.callbacks) { callbackItems = data.callbacks; tickCallbacks(); } state.error = '';
     } catch (error) { if (version === loadVersion) state.error = error.message || 'Não foi possível carregar ligações.'; }
     finally { if (version === loadVersion) { state.loading = false; if (patchOnly) patchHistory(); else render(); } }
   };
@@ -630,9 +657,9 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
   document.addEventListener("change", async (event) => {
     const t = event.target;
     if (!root() || !(t instanceof HTMLElement)) return;
-    if (t.matches("[data-sp-sdr]") && state.data?.scope === 'admin') { state.sdr = t.value; await load(); }
+    if (t.matches("[data-sp-sdr]") && state.data?.scope === 'admin') { state.sdr = t.value; conversionData=null; await load(); }
     if (t.matches("[data-sp-status]")) { state.status = t.value; await load(); }
-    if (t.matches("[data-sp-period]")) { setPeriod(t.value); await load(); }
+    if (t.matches("[data-sp-period]")) { setPeriod(t.value); conversionData=null; await load(); }
     if (t.matches("[data-sp-mic]")) { state.devices.micId = t.value; saveLocal(); await adapter()?.setAudioInputDevice?.(t.value); }
     if (t.matches("[data-sp-speaker]")) { state.devices.speakerId = t.value; saveLocal(); await adapter()?.setAudioOutputDevice?.(t.value); }
   });
@@ -673,7 +700,7 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
       const nextKey = snapshotKey(snap);
       syncFromCore(snap);
       if (nextKey === lastCoreKey) patchLiveDom();
-      else { lastCoreKey = nextKey; render(); }
+      else { lastCoreKey = nextKey; render(); void refreshConversion(); }
     });
   };
   window.SpacePhoneModule = { open: async () => { window.SpaceAgenda?.refresh(currentCallId()).catch(()=>{}); state.period = readPeriod(); subscribeCore(); await loadDevices(); syncFromCore(adapter()?.getState?.()); render(); await load({ silent: true }); }, state };

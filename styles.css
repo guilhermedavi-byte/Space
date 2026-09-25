@@ -31557,3 +31557,18 @@ body[data-page="app"] .ri-cockpit .ri-trends .ri-metric{background:none;border:0
 .sphone-callback-row .sphone-call-actions { flex-wrap:wrap; }
 .sphone-callback-row summary { cursor:pointer; padding:8px; font-size:13px; }
 .sphone-callback-alert { position:fixed; top:76px; right:20px; z-index:1100; width:min(360px,calc(100vw - 40px)); padding:16px; border:1px solid #775133; border-radius:18px; background:#142033; color:#fff; display:grid; gap:12px; }
+
+.sphone-conversion { margin:24px 0; padding:20px; background:#111c2c; border:1px solid #263344; border-radius:20px; }
+.sphone-conversion h2 { margin:0 0 8px; }
+.sphone-conversion-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:16px 0; }
+.sphone-conversion .sphone-kpi { border-bottom:2px solid #649aca; box-shadow:none; }
+.sphone-conversion .sphone-kpi:nth-child(2) { border-bottom-color:#6db8a6; }
+.sphone-conversion .sphone-kpi:nth-child(3) { border-bottom-color:#d3b76c; }
+.sphone-conversion .sphone-kpi:nth-child(4) { border-bottom-color:#a6adbb; }
+.sphone-conversion small { color:#aab8c9; }
+.sphone-conversion-table { overflow:auto; }
+.sphone-conversion table { width:100%; border-collapse:collapse; font-size:13px; }
+.sphone-conversion th,.sphone-conversion td { text-align:left; padding:12px 10px; border-bottom:1px solid #263344; white-space:nowrap; }
+.sphone-conversion th { color:#aab8c9; font-weight:500; }
+@media(max-width:1000px) { .sphone-conversion-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:480px) { .sphone-conversion { padding:12px; } .sphone-conversion-grid { gap:8px; } }

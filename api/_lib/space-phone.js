@@ -609,6 +609,11 @@ const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = re
   const selectedSdr = isAdmin && sdrs.some(sdr => sdr.uid === clean(query.sdr)) ? clean(query.sdr) : 'all';
   const userFilter = filterForUser({ user, isAdmin, sdr: selectedSdr });
   const historyOnly = query.view === 'history';
+  const conversionOnly = query.view === 'conversion';
+  if(conversionOnly){
+    const conversionCalls=await queryMetricCalls({request,range,userFilter});
+    return {ok:true,scope:isAdmin?'admin':'self',selectedSdr,conversion:await require('./space-phone-conversion').conversion({request,calls:conversionCalls,user,isAdmin,sdr:selectedSdr,range,resolveNames,sdrs})};
+  }
   const analyticsOnly = query.view === 'analytics';
   const offset = Math.max(0, Math.min(1000000, Math.floor(Number(query.historyOffset) || 0)));
   const [metricRows, recentRows] = await Promise.all([
