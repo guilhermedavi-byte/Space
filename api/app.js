@@ -63,6 +63,7 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
     if (segments[2] === "conexoes") return { panel: "attendance-connections" };
     return { panel: "attendance-inbox" };
   }
+  if (slug === "admin" && sub === "growth-control") return { panel: "growth-control" };
   if (slug === "admin" && sub === "atividades") return { panel: "activities" };
   if (slug === "admin" && (sub === "notificacoes" || sub === "notifications")) return { panel: "notifications" };
   if (slug === "professor" && (sub === "notificacoes" || sub === "notifications")) return { panel: "notifications" };
@@ -150,7 +151,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
   const raw = String(templateHtml || "");
   const platformStart = raw.indexOf('<div class="platform-shell"');
   const modalStart = raw.indexOf('<div class="modal-overlay"');
-  const scriptStart = raw.lastIndexOf('<script src="script.js?v=8"></script>');
+  const scriptStart = raw.lastIndexOf('<script src="script.js?v=9"></script>');
 
   if (platformStart < 0 || modalStart < 0 || scriptStart < 0 || modalStart <= platformStart) {
     throw new Error("template_missing_sections");
@@ -181,7 +182,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <link rel="stylesheet" href="/assets/international-phone.css">
     <script src="/assets/international-phone.bundle.js"></script>
     <script src="/api/runtime-config.js"></script>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=gc1" />
     <link rel="stylesheet" href="finance-v1.css?v=8" />
     <link rel="stylesheet" href="dashboard-system.css?v=1" />
   </head>
@@ -206,14 +207,15 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="/assets/retention-intelligence.js"></script>
     <script src="finance-customer-link.js?v=1"></script>
     <script src="finance-v1.js?v=31"></script>
-    <script src="script.js?v=8"></script>
+    <script src="script.js?v=9"></script>
     <script src="/assets/space-phone.bundle.js?v=4"></script>
     <script src="space-agenda.js?v=3"></script>
-    <script src="space-phone.js?v=16"></script>
+    <script src="space-phone.js?v=17"></script>
     <script src="admin-sdr.js?v=7"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>
     <script src="attendance-connections.js"></script>
+    <script src="growth-control.js"></script>
     <script src="attendance-inbox.js"></script>
   </body>
 </html>`;

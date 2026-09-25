@@ -503,3 +503,11 @@ test('conversion updates partially on outcome and booking events without stealin
  const before=reads;dom.window.dispatchEvent(new dom.window.CustomEvent('space-bookings:updated'));await tick(20);assert.ok(reads>before);
  assert.equal(dom.window.document.querySelector('[data-sp-dial]'),input);
 });
+
+test('conversion is directly after KPIs and before the operational grid/history',async t=>{
+ const dom=createModuleDom();t.after(()=>dom.window.close());await dom.window.SpacePhoneModule.open();
+ const d=dom.window.document,kpis=d.querySelector('.sphone-kpis'),conversion=d.querySelector('[data-sp-conversion]');
+ assert.equal(kpis.nextElementSibling,conversion);
+ assert.ok(conversion.compareDocumentPosition(d.querySelector('.sphone-grid'))&dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+ assert.equal(conversion.querySelectorAll('.sphone-conversion-grid article').length,4);
+});

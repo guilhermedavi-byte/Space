@@ -933,6 +933,7 @@ const permissionForPanel = (panelName) => {
   if (panel === "status-plataforma") return "settings.status.view";
   if (panel === "space-office") return "spaceOffice.overview.view";
   if (panel === "attendance-inbox") return "attendance.inbox.view";
+  if (panel === "growth-control") return "pedagogico.users.view";
   if (panel === "attendance-connections") return "attendance.connections.view";
   if (panel === "configuracoes-admin") {
     if (adminSettingsState?.activeSection === "acessos") return "settings.accesses.view";
@@ -44430,6 +44431,12 @@ const showPanel = (panelName) => {
     return;
   }
 
+  if (panelName === "growth-control") {
+    if (currentRole !== "admin") return navigateApp(roleBasePath(currentRole), { replace: true });
+    window.SpaceGrowthControl?.open();
+    return;
+  }
+
   if (panelName === "attendance-connections") {
     if (!["admin", "growth"].includes(currentRole)) return navigateApp(roleBasePath(currentRole), { replace: true });
     window.SpaceAttendanceConnections?.open();
@@ -44559,6 +44566,7 @@ const applyParsedAppRouteState = (parsed) => {
 const panelPathForRole = (role, panel) => {
   const normalized = normalizeRole(role);
   const p = String(panel || "");
+  if (p === "growth-control" && normalized === "admin") return "/app/admin/growth-control";
   if (p === "attendance-inbox" && ["admin", "growth"].includes(normalized)) return `/app/${normalized}/atendimento/caixa-de-entrada`;
   if (p === "attendance-connections" && ["admin", "growth"].includes(normalized)) return `/app/${normalized}/atendimento/conexoes`;
 
@@ -44646,6 +44654,7 @@ const parseAppRoute = (path) => {
               ? "growth"
             : "";
   if (!role) return null;
+  if (role === "admin" && sub === "growth-control") return {role,panel:"growth-control"};
   if (["admin", "growth"].includes(role) && sub === "atendimento") return { role, panel: detail === "conexoes" ? "attendance-connections" : "attendance-inbox" };
 
   if (roleSlug === "financeiro" && (sub === "notificacoes" || sub === "notifications")) {
