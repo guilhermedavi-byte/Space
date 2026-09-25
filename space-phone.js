@@ -34,7 +34,7 @@
   const state = {
     period: readPeriod(),
     status: "",
-    sdr: "all",
+    sdr: (() => { try { return localStorage.getItem("spacePhoneSdr") || "all"; } catch { return "all"; } })(),
     q: "",
     data: null,
     loading: false,
@@ -256,11 +256,13 @@
     const el = root();
     if (!el) return;
     const ps = phoneStatus();
-    el.innerHTML = `<div class="sphone"><div class="sphone-shell"><header class="sphone-head"><div class="sphone-title"><h1>Ligações</h1><span>Central de voz comercial</span></div><div class="sphone-online"><span class="sphone-dot" data-tone="${ps.tone}"></span>${esc(ps.label)}</div></header>${renderKpis()}<div class="sphone-toolbar"><div class="sphone-filters"><select class="sphone-select" data-sp-period aria-label="Período dos indicadores"><option value="today">Hoje</option><option value="last7">7 dias</option><option value="last30">30 dias</option></select><select class="sphone-select" data-sp-status><option value="">Todos</option><option value="answered">Atendida</option><option value="unanswered">Não atendida</option><option value="scheduled">Agendada</option><option value="failed">Falhou</option></select><input class="sphone-input" type="search" data-sp-search placeholder="Buscar número" value="${esc(state.q)}" /></div><button class="sphone-btn" data-sp-refresh>Atualizar</button></div>${state.error ? `<div class="sphone-empty">${esc(state.error)}</div>` : ""}<main class="sphone-grid">${renderDialer()}${renderCenter()}${renderRight()}</main>${renderHistory()}</div></div>${renderDetail()}`;
+    el.innerHTML = `<div class="sphone"><div class="sphone-shell"><header class="sphone-head"><div class="sphone-title"><h1>Ligações</h1><span>Central de voz comercial</span></div><div class="sphone-online"><span class="sphone-dot" data-tone="${ps.tone}"></span>${esc(ps.label)}</div></header>${renderKpis()}<div class="sphone-toolbar"><div class="sphone-filters"><select class="sphone-select" data-sp-period aria-label="Período dos indicadores"><option value="today">Hoje</option><option value="last7">7 dias</option><option value="last30">30 dias</option></select>${state.data?.scope === "admin" ? `<select class="sphone-select" data-sp-sdr aria-label="SDR"><option value="all">Todos os SDRs</option>${(state.data.sdrs || []).map(sdr => `<option value="${esc(sdr.uid)}">${esc(sdr.displayName)}</option>`).join("")}</select>` : ""}<select class="sphone-select" data-sp-status><option value="">Todos</option><option value="answered">Atendida</option><option value="unanswered">Não atendida</option><option value="scheduled">Agendada</option><option value="failed">Falhou</option></select><input class="sphone-input" type="search" data-sp-search placeholder="Buscar número" value="${esc(state.q)}" /></div><button class="sphone-btn" data-sp-refresh>Atualizar</button></div>${state.error ? `<div class="sphone-empty">${esc(state.error)}</div>` : ""}<main class="sphone-grid">${renderDialer()}${renderCenter()}${renderRight()}</main>${renderHistory()}</div></div>${renderDetail()}`;
     const status = el.querySelector("[data-sp-status]");
     if (status) status.value = state.status;
     const period = el.querySelector("[data-sp-period]");
     if (period) period.value = state.period;
+    const sdr = el.querySelector("[data-sp-sdr]");
+    if (sdr) sdr.value = state.sdr;
   };
 
   const patchDialDom = () => {
@@ -292,6 +294,10 @@
     try {
       const data = await api({ period: state.period, status: state.status, q: state.q, sdr: state.sdr, view: analyticsOnly ? "analytics" : appendHistory ? "history" : undefined, historyOffset: appendHistory ? state.data?.history?.nextOffset : 0 });
       if (version !== loadVersion) return;
+      const selectionReset = data.scope === 'admin' && data.selectedSdr !== state.sdr;
+      state.sdr = data.scope === 'admin' ? (data.selectedSdr || 'all') : 'all';
+      if (data.scope === 'admin') { try { localStorage.setItem('spacePhoneSdr', state.sdr); } catch {} }
+      if (selectionReset && (analyticsOnly || appendHistory)) return load({ silent });
       state.data = analyticsOnly ? { ...state.data, ...data, calls: state.data?.calls || [], history: state.data?.history } : appendHistory ? { ...state.data, ...data, callbacks: state.data?.callbacks || [], calls: [...new Map([...(state.data?.calls || []), ...(data.calls || [])].map(call => [call.id, call])).values()] } : data; state.error = '';
     } catch (error) { if (version === loadVersion) state.error = error.message || 'Não foi possível carregar ligações.'; }
     finally { if (version === loadVersion) { state.loading = false; if (patchOnly) patchHistory(); else render(); } }
@@ -513,6 +519,7 @@
   document.addEventListener("change", async (event) => {
     const t = event.target;
     if (!root() || !(t instanceof HTMLElement)) return;
+    if (t.matches("[data-sp-sdr]") && state.data?.scope === 'admin') { state.sdr = t.value; await load(); }
     if (t.matches("[data-sp-status]")) { state.status = t.value; await load(); }
     if (t.matches("[data-sp-period]")) { setPeriod(t.value); await load({ analyticsOnly: true }); }
     if (t.matches("[data-sp-mic]")) { state.devices.micId = t.value; saveLocal(); await adapter()?.setAudioInputDevice?.(t.value); }

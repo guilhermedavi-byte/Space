@@ -486,7 +486,8 @@ const filterForUser = ({ user, isAdmin, sdr }) => {
   const requested = clean(sdr);
   if (isAdmin && requested && requested !== 'all') return { userUid: requested };
   if (isAdmin) return {};
-  return { userUid: clean(user?.sub) };
+  if (!clean(user?.sub)) throw Object.assign(new Error('forbidden'), { status: 403 });
+  return { userUid: clean(user.sub) };
 };
 
 const filterCallStatus = (rows, status) => {
@@ -517,6 +518,15 @@ const queryVoiceCalls = async ({ request, range, userFilter, status = '', q = ''
   }
   const rows = asRows(await request(`/voice_calls?${params.join('&')}`, { timeoutMs: 15000 }));
   return filterCallStatus(rows, status);
+};
+
+const queryMetricCalls = async options => {
+  const rows = [];
+  for (let offset = 0; ; offset += 200) {
+    const page = await queryVoiceCalls({ ...options, status: '', limit: 200, offset });
+    rows.push(...page);
+    if (page.length < 200) return filterCallStatus(rows, options.status);
+  }
 };
 
 const indexAnalysis = (map, row, analysis) => {
@@ -586,12 +596,20 @@ const loadCrmContext = async ({ request, phone }) => {
 
 const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = resolveSdrNames }) => {
   const range = rangeForPeriod(query.period);
-  const userFilter = filterForUser({ user, isAdmin, sdr: query.sdr });
+  let sdrs = [];
+  if (isAdmin) {
+    const identities = asRows(await request('/voice_phone_identities?select=space_user_uid&enabled=eq.true&order=space_user_uid.asc', { timeoutMs: 15000 }));
+    const names = await resolveNames(identities, user);
+    sdrs = identities.map(row => ({ uid: clean(row.space_user_uid), displayName: clean(names.get(clean(row.space_user_uid))) || 'SDR sem nome cadastrado' }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'));
+  }
+  const selectedSdr = isAdmin && sdrs.some(sdr => sdr.uid === clean(query.sdr)) ? clean(query.sdr) : 'all';
+  const userFilter = filterForUser({ user, isAdmin, sdr: selectedSdr });
   const historyOnly = query.view === 'history';
   const analyticsOnly = query.view === 'analytics';
   const offset = Math.max(0, Math.min(1000000, Math.floor(Number(query.historyOffset) || 0)));
   const [metricRows, recentRows] = await Promise.all([
-    historyOnly ? [] : queryVoiceCalls({ request, range, userFilter, status: query.status, q: query.q, limit: query.limit }),
+    historyOnly ? [] : queryMetricCalls({ request, range, userFilter, status: query.status, q: query.q }),
     analyticsOnly ? [] : queryVoiceCalls({ request, userFilter, q: query.q, limit: 51, offset }),
   ]);
   const rows = filterCallStatus(recentRows.slice(0, 50), query.status);
@@ -600,7 +618,7 @@ const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = re
   const names = await resolveNames(rows, user);
   const calls = rows.map(row => normalizeCall(row, findAnalysis(row, analysisMap), null, qualificationMap.get(clean(row.id)), names.get(clean(row.space_user_uid))));
   const callbacks = calls.filter(call => call.callbackAt && new Date(call.callbackAt).getTime() >= Date.now()).slice(0, 12);
-  return { ok: true, range, scope: isAdmin ? 'admin' : 'self',
+  return { ok: true, range, scope: isAdmin ? 'admin' : 'self', ...(isAdmin ? { sdrs, selectedSdr } : {}),
     ...(!historyOnly ? { analytics: summarize(metricRows.map(row => normalizeCall(row))) } : {}),
     ...(!analyticsOnly ? { calls, callbacks, history: { hasMore: recentRows.length > 50, nextOffset: offset + 50 } } : {}),
   };

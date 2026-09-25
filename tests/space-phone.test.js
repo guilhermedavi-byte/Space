@@ -102,6 +102,7 @@ test("admin can list all calls or select an SDR", async () => {
     permissionResolver: async () => ({ ok: true }),
     request: async (path) => {
       seen.push(path);
+      if (path.startsWith("/voice_phone_identities")) return { data: [{ space_user_uid: "sdr-2" }] };
       return { data: path.startsWith("/voice_calls") ? [{ id: "c2", space_user_uid: "sdr-2", space_user_email: "sdr2@space.test", to_number: "+16175550000", status: "completed", started_at: "2026-09-24T12:00:00Z" }] : [] };
     },
   });
@@ -157,7 +158,7 @@ test("space phone route boots the dedicated admin panel and script", async () =>
     assert.match(body, /data-initial-panel="space-phone"/);
     assert.match(body, /data-space-phone/);
     assert.match(body, /src="script\.js\?v=7"/);
-    assert.match(body, /src="space-phone\.js\?v=11"/);
+    assert.match(body, /src="space-phone\.js\?v=12"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
@@ -508,4 +509,40 @@ test('history pages are 50 recent calls without period; analytics-only never rel
   seen.length=0;
   const metrics=await __private.listModel({...args,query:{view:'analytics',period:'last30'}});
   assert.equal(seen.length,1);assert.equal(metrics.calls,undefined);assert.equal(metrics.analytics.totalCalls,0);
+});
+
+test('Admin SDR and Growth spoof isolation apply to metrics, recent history and callbacks', async () => {
+  const now = new Date().toISOString();
+  const yesterday = new Date(Date.now() - 86400000).toISOString();
+  const source = [
+    { id: 'own-now', space_user_uid: 'luana', started_at: now, callback_at: '2099-01-01T00:00:00Z' },
+    { id: 'own-old', space_user_uid: 'luana', started_at: yesterday },
+    { id: 'other', space_user_uid: 'other', started_at: now },
+  ];
+  const request = async path => {
+    if (path.startsWith('/voice_phone_identities')) return { data: [{ space_user_uid: 'luana' }, { space_user_uid: 'other' }] };
+    if (!path.startsWith('/voice_calls')) return { data: [] };
+    const p = new URL(path, 'https://test').searchParams;
+    let rows = source.filter(r => !p.has('space_user_uid') || p.get('space_user_uid') === `eq.${r.space_user_uid}`);
+    if (p.getAll('or').some(v => v.includes('started_at.gte'))) rows = rows.filter(r => r.started_at === now);
+    return { data: rows };
+  };
+  const args = { request, user: { sub: 'luana' }, resolveNames: async () => new Map([['luana', 'Luana Mendonça'], ['other', 'Guilherme Davi']]) };
+  for (const [isAdmin, sdr, count, history] of [[true,'all',2,3],[true,'luana',1,2],[false,'other',1,2],[false,'all',1,2],[true,'inactive',2,3]]) {
+    const model = await __private.listModel({ ...args, isAdmin, query: { period: 'today', sdr } });
+    assert.equal(model.analytics.totalCalls,count); assert.equal(model.calls.length,history);
+    assert.equal(model.calls[0].sdrName,'Luana Mendonça');
+    if (!isAdmin || sdr === 'luana') assert.ok([...model.calls,...model.callbacks].every(c => c.sdrUid === 'luana'));
+    if (isAdmin) { assert.equal(model.sdrs.find(s => s.uid === 'luana').displayName,'Luana Mendonça'); assert.equal(model.selectedSdr,sdr === 'luana' ? 'luana' : 'all'); }
+    else assert.equal(model.sdrs,undefined);
+  }
+});
+
+test('KPI pagination counts more than 200 calls without truncating totals', async () => {
+  const model = await __private.listModel({ user:{sub:'owner'},isAdmin:false,query:{view:'analytics'},resolveNames:async()=>new Map(),request:async path=> {
+    const p = new URL(path,'https://test').searchParams;
+    const offset = Number(p.get('offset'));
+    return {data:Array.from({length:offset===0?200:5},(_,i)=>({id:`c-${offset+i}`,space_user_uid:'owner'}))};
+  }});
+  assert.equal(model.analytics.totalCalls,205);
 });

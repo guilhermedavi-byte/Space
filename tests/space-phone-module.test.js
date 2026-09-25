@@ -419,3 +419,23 @@ test('qualification shows waiting, delayed transcript retry, generating and avai
   mod.state.qualification.ai={context:'suggestion'};await mod.open();
   assert.match(dom.window.document.body.textContent,/Sugestões IA disponíveis/);
 });
+
+test('SDR selector is Admin-only, persists selection and reloads both history and KPIs', async () => {
+  const dom = createModuleDom();
+  const urls = [];
+  let scope = 'admin';
+  dom.window.fetchWithAuth = async url => {
+    urls.push(String(url));
+    const p = new URL(url, 'https://space.test').searchParams;
+    return jsonResponse({ scope, selectedSdr: p.get('sdr') === 'luana' ? 'luana' : 'all', sdrs: [{ uid:'luana', displayName:'Luana Mendonça' }], calls:[], analytics:{} });
+  };
+  await dom.window.SpacePhoneModule.open();
+  const select = dom.window.document.querySelector('[data-sp-sdr]');
+  assert.ok(select); assert.match(select.textContent,/Luana Mendonça/);
+  select.value = 'luana'; select.dispatchEvent(new dom.window.Event('change',{bubbles:true})); await tick(20);
+  assert.equal(dom.window.localStorage.getItem('spacePhoneSdr'),'luana');
+  assert.ok(urls.at(-1).includes('sdr=luana')); assert.ok(!urls.at(-1).includes('view=analytics'));
+  scope = 'self'; await dom.window.SpacePhoneModule.open();
+  assert.equal(dom.window.document.querySelector('[data-sp-sdr]'),null);
+  dom.window.close();
+});
