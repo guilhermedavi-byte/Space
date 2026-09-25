@@ -293,3 +293,23 @@ test('SDK nested IDs persist while call is active and getter IDs survive hangup'
   assert.ok(requests.some(r=>r.method==='PATCH'&&r.body.status==='ended'&&r.body.telnyx_call_session_id==='getter-session'));
   await phone.cleanup(); dom.window.close();
 });
+
+test('SPA panel changes/remount preserve client, call, clock, mute and hold', async t => {
+  const dom=createDom('<body><main id="panel"></main></body>');t.after(()=>dom.window.close());
+  const requests=[],FakeTelnyxRTC=fakeTelnyxFactory(requests);
+  const phone=createSpacePhone({window:dom.window,document:dom.window.document,TelnyxRTC:FakeTelnyxRTC,bootstrap:{enabled:true,tokenEndpoint:'/token',callEndpoint:'/calls'},fetchWithAuth:createFetch(requests)});
+  phone.mount();await phone.call({phoneNumber:'+16175551212'});
+  FakeTelnyxRTC.instances[0].emit('telnyx.notification',{type:'callUpdate',call:{state:'active',call_leg_id:'leg-one'}});
+  await phone.mute();await phone.hold();const before=phone.getState();
+  for(const panel of ['space-agenda','admin-sdr','native-crm','space-phone']){
+    dom.window.history.pushState({},'',`/app/admin/${panel}`);dom.window.document.body.dataset.activePanel=panel;
+    dom.window.document.querySelector('#panel').innerHTML=panel;phone.mount();
+  }
+  const after=phone.getState();assert.equal(FakeTelnyxRTC.instances.length,1);assert.equal(FakeTelnyxRTC.instances[0].disconnected,false);
+  assert.equal(after.callRecord.id,before.callRecord.id);assert.equal(after.activeStartedAt,before.activeStartedAt);
+  assert.equal(after.muted,true);assert.equal(after.held,true);assert.equal(requests.filter(x=>x.type==='newCall').length,1);
+  assert.equal(dom.window.document.querySelectorAll('#space-phone-remote-media').length,1);
+  dom.window.document.querySelector('[data-phone-hangup]').click();await new Promise(r=>setTimeout(r,20));
+  assert.equal(requests.filter(x=>x.type==='hangup').length,1);
+  phone.cleanup();
+});

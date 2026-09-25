@@ -50,7 +50,7 @@ const PEDAGOGICO_SIDEBAR_ACTIVE_TARGET_BY_TAB = {
   onboarding: "admin-controle-pedagogico-onboarding",
   relatorios: "admin-controle-pedagogico-relatorios",
 };
-const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["native-crm", "admin-comercial-metas", "admin-comercial-visao-geral", "admin-comercial-atividade-sdr", "space-phone", "admin-sdr", "admin-comercial-usuarios"]);
+const COMERCIAL_SIDEBAR_PANEL_TARGETS = new Set(["native-crm", "admin-comercial-metas", "admin-comercial-visao-geral", "admin-comercial-atividade-sdr", "space-phone", "space-agenda", "admin-sdr", "admin-comercial-usuarios"]);
 const greetingElement = document.querySelector("[data-greeting]");
 const roleEyebrow = document.querySelector("[data-role-eyebrow]");
 const roleSidebarSubtitle = document.querySelector("[data-role-sidebar-subtitle]");
@@ -940,7 +940,7 @@ const permissionForPanel = (panelName) => {
   if (panel === "admin-comercial-visao-geral") return "comercial.overview.view";
   if (panel === "native-crm") return "comercial.crm.view";
   if (panel === "admin-comercial-atividade-sdr") return "comercial.preSales.view";
-  if (panel === "space-phone") return "comercial.spacePhone.view";
+  if (["space-phone", "space-agenda"].includes(panel)) return "comercial.spacePhone.view";
   if (panel === "admin-sdr") return "comercial.sdrPanel.view";
   if (panel === "admin-comercial-metas") return "comercial.goals.view";
   if (panel === "admin-comercial-usuarios") return "comercial.users.view";
@@ -1074,6 +1074,7 @@ const syncRoleUI = () => {
     const allowedGrowthPanels = new Set(["growth-dashboard", "native-crm", "growth", "activities", "notifications", "attendance-inbox", "attendance-connections"]);
     if (canUseSdrWorkspace) {
       allowedGrowthPanels.add("space-phone");
+      allowedGrowthPanels.add("space-agenda");
       allowedGrowthPanels.add("admin-sdr");
     }
     document.querySelectorAll("[data-panel-target]").forEach((el) => {
@@ -44305,13 +44306,14 @@ const showPanel = (panelName) => {
     return;
   }
 
-  if (panelName === "space-phone") {
+  if (panelName === "space-phone" || panelName === "space-agenda") {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (!["admin", "growth"].includes(String(currentRole || ""))) {
       navigateApp(roleBasePath(currentRole), { replace: true });
       return;
     }
-    window.SpacePhoneModule?.open();
+    if (panelName === "space-agenda") window.SpaceAgenda?.open();
+    else window.SpacePhoneModule?.open();
     return;
   }
 
@@ -44570,6 +44572,7 @@ const panelPathForRole = (role, panel) => {
     if (p === "activities") return "/app/admin/atividades";
     if (p === "admin-sdr") return "/app/admin/comercial/pre-vendas/painel-sdr";
     if (p === "space-phone") return "/app/admin/comercial/pre-vendas/ligacoes";
+    if (p === "space-agenda") return "/app/admin/comercial/pre-vendas/agenda";
     if (p === "professores" || p === "alunos") return adminPedagogicoPathForState();
     if (p === "admin-controle-pedagogico") return adminPedagogicoPathForState();
     if (["admin-controle-pedagogico-aulas", "admin-controle-pedagogico-pessoas", "admin-controle-pedagogico-retencao", "admin-controle-pedagogico-reposicoes", "admin-controle-pedagogico-qualidade", "admin-controle-pedagogico-onboarding", "admin-controle-pedagogico-relatorios"].includes(p)) return adminPedagogicoPathForState();
@@ -44594,6 +44597,7 @@ const panelPathForRole = (role, panel) => {
     if (p === "notifications") return "/app/growth/notificacoes";
     if (p === "native-crm") return "/app/growth/comercial/crm";
     if (p === "space-phone") return "/app/growth/comercial/pre-vendas/ligacoes";
+    if (p === "space-agenda") return "/app/growth/comercial/pre-vendas/agenda";
     if (p === "activities") return "/app/growth/atividades";
     if (["sdr", "scripts-vendas", "objecoes", "training"].includes(p)) return growthCommercialPathForState("growth", p);
     if (p === "growth") return growthCommercialPathForState("growth");
@@ -44686,6 +44690,7 @@ const parseAppRoute = (path) => {
       if (detail === "crm") return { role, panel: "native-crm" };
       if (detail === "metas") return { role, panel: "admin-comercial-metas" };
       if (detail === "usuarios") return { role, panel: "admin-comercial-usuarios" };
+      if (detail === "pre-vendas" && segments[4] === "agenda") return { role, panel: "space-agenda" };
       if (detail === "pre-vendas" && segments[4] === "ligacoes") return { role, panel: "space-phone" };
       if (detail === "pre-vendas" && segments[4] === "painel-sdr") return { role, panel: "admin-sdr" };
       if (detail === "atividade-sdr" || detail === "pre-vendas") return { role, panel: "admin-comercial-atividade-sdr" };
@@ -44703,6 +44708,7 @@ const parseAppRoute = (path) => {
     if (sub === "dashboard" || !sub) return { role, panel: "growth-dashboard" };
     if (sub === "comercial") {
       if (detail === "crm") return { role, panel: "native-crm" };
+      if (detail === "pre-vendas" && segments[4] === "agenda") return { role, panel: "space-agenda" };
       if (detail === "pre-vendas" && segments[4] === "ligacoes") return { role, panel: "space-phone" };
       const growthTab = detail === "painel-sdr" ? "sdr" : ["scripts-vendas", "objecoes", "training"].includes(detail) ? detail : "";
       if (growthTab) return { role, panel: "growth", growthTab };
@@ -46670,6 +46676,16 @@ document.addEventListener(
       return;
     }
   }
+
+    const internalLink = target.closest('a[href]');
+    if (internalLink && !event.defaultPrevented && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && !internalLink.hasAttribute('download') && (!internalLink.target || internalLink.target === '_self')) {
+      const destination = new URL(internalLink.href, window.location.origin);
+      if (destination.origin === window.location.origin && destination.pathname.startsWith('/app/')) {
+        event.preventDefault();
+        navigateApp(destination.pathname + destination.search + destination.hash);
+        return;
+      }
+    }
 
     const sidebarPanel = target.closest("[data-panel-target]");
     if (sidebarPanel instanceof HTMLButtonElement) {

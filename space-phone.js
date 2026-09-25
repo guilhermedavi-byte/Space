@@ -344,42 +344,17 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
     catch (error) { state.call = { ...state.call, status: "failed", error: error?.message || "Falha ao iniciar ligação" }; }
     render();
   };
-  let bookingRequest = 0;
-  const bookings = new Map();
+  const bookings = { get: id => { const b=window.SpaceAgenda?.get(id); return b ? {message:window.SpaceAgenda.message(b)} : null; } };
   const openBooking = async () => {
-    const id = currentCallId();
-    if (!id) return;
-    const request = ++bookingRequest;
-    const response = await api({ id }); // Server enforces current user's scope.
-    const c = response.call;
-    if (request !== bookingRequest || !c || c.id !== id || c.outcome !== 'agendado') return;
-    document.getElementById('sphone-booking')?.remove();
-    const modal = document.createElement('div'); modal.id = 'sphone-booking';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:11000;background:#000a;display:grid;place-items:center;padding:16px';
-    modal.innerHTML = `<section style="background:#0c141e;color:white;border-radius:18px;width:min(1100px,100%);height:min(850px,94dvh);display:flex;flex-direction:column;overflow:hidden"><header style="display:flex;justify-content:space-between;padding:16px"><strong>Agendar reunião</strong><button class="sphone-btn" data-sp-close-booking>Fechar</button></header><p style="padding:0 16px" data-sp-booking-result></p><div id="sphone-cal-embed" style="flex:1;min-height:0;overflow:auto"></div></section>`;
-    document.body.appendChild(modal);
-    modal.querySelector('[data-sp-close-booking]').onclick = () => { modal.remove(); bookingRequest++; };
-    if (!window.Cal) {
-      const cal = function () { const args = arguments; if (args[0] === 'init' && typeof args[1] === 'string') { const ns = args[1]; if (!cal.ns[ns]) { const api = function () { api.q.push(arguments); }; api.q = []; cal.ns[ns] = api; } cal.ns[ns].q.push(args); cal.q.push(['initNamespace', ns]); } else cal.q.push(args); }; cal.q = []; cal.ns = {}; cal.loaded = true; window.Cal = cal;
-      const script = document.createElement('script'); script.src = 'https://app.cal.com/embed/embed.js'; script.async = true;
-      script.onerror = () => { modal.querySelector('[data-sp-booking-result]').textContent = 'Não foi possível carregar a agenda. Feche e tente novamente.'; delete window.Cal; };
-      document.head.appendChild(script);
-      window.Cal('init', { origin: 'https://cal.com' });
-    }
-    const namespace = `space-booking-${request}`;
-    window.Cal('init', namespace, { origin: 'https://cal.com' });
-    const cal = window.Cal.ns[namespace];
-    cal('on', { action: 'bookingSuccessfulV2', callback: event => {
-        const d = event.detail?.data;
-        if (request !== bookingRequest || !modal.isConnected || !d?.uid || !Number.isFinite(Date.parse(d.startTime))) return;
-        const confirmed = d.status === 'ACCEPTED' && !d.paymentRequired;
-        const message = confirmed ? `Reunião agendada ✓ · ${fmtDate(d.startTime)}` : 'Agendamento solicitado — aguardando confirmação';
-        bookings.set(id, { confirmed, message });
-        const result = document.querySelector('[data-sp-booking-result]'); if (result) result.textContent = message;
-        render();
-      }});
-    cal('inline', { elementOrSelector: '#sphone-cal-embed', calLink: 'team/closers-space-idiomas/reuniao-com-mentor-do-space', config: { theme: 'dark', name: c.leadName || c.crm?.name || '', email: c.crm?.email || '', 'attendeePhoneNumber': c.number || '', metadata: { voiceCallId: c.id, sdrUid: c.sdrUid } } });
+    window.SpaceAgenda?.forCall(currentCallId());
+    state.detail = null;
+    if (state.qualificationBeforeDetail) state.qualification = state.qualificationBeforeDetail;
+    render();
+    document.querySelector('button[data-panel-target="space-agenda"]')?.click();
   };
+  window.addEventListener('space-bookings:updated', event => {
+    if(event.detail?.callId===currentCallId()) render();
+  });
   const callMethod = async (name, ...args) => {
     const a = adapter();
     if (typeof a?.[name] !== "function") { state.call.error = `Controle ${name} indisponível.`; render(); return false; }
@@ -502,7 +477,7 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
     if (t.matches("[data-sp-clear-filters]")) { setPeriod("last7"); state.status = ""; state.q = ""; state.sdr = "all"; clearTimeout(state.searchTimer); await load(); return; }
     if (t.matches("[data-sp-refresh]")) { await load(); return; }
     if (t.matches("[data-sp-period]") && t.tagName !== "SELECT") { setPeriod(t.dataset.spPeriod); await load(); return; }
-    if (t.matches("[data-sp-detail]")) { const version = ++detailRequest; const result = await api({ id: t.dataset.spDetail }); if (version !== detailRequest || result.call?.id !== t.dataset.spDetail) return; state.qualificationBeforeDetail = state.qualification; state.detail = result; state.detailTab = "summary"; state.qualification = normalizeQualification(state.detail.call?.qualification || { voiceCallId: t.dataset.spDetail }); render(); return; }
+    if (t.matches("[data-sp-detail]")) { const version = ++detailRequest; const result = await api({ id: t.dataset.spDetail }); if (version !== detailRequest || result.call?.id !== t.dataset.spDetail) return; state.qualificationBeforeDetail = state.qualification; state.detail = result; window.SpaceAgenda?.refresh(result.call.id).catch(()=>{}); state.detailTab = "summary"; state.qualification = normalizeQualification(state.detail.call?.qualification || { voiceCallId: t.dataset.spDetail }); render(); return; }
     if (t.matches("[data-sp-close-detail]")) { detailRequest++; state.detail = null; if (state.qualificationBeforeDetail) state.qualification = state.qualificationBeforeDetail; render(); return; }
     if (t.matches("[data-sp-mute]")) { await callMethod(state.call.muted ? "unmute" : "mute"); render(); return; }
     if (t.matches("[data-sp-hold]")) { await callMethod(state.call.held ? "unhold" : "hold"); render(); return; }
@@ -625,6 +600,6 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
       else { lastCoreKey = nextKey; render(); }
     });
   };
-  window.SpacePhoneModule = { open: async () => { state.period = readPeriod(); subscribeCore(); await loadDevices(); syncFromCore(adapter()?.getState?.()); render(); await load({ silent: true }); }, state };
+  window.SpacePhoneModule = { open: async () => { window.SpaceAgenda?.refresh(currentCallId()).catch(()=>{}); state.period = readPeriod(); subscribeCore(); await loadDevices(); syncFromCore(adapter()?.getState?.()); render(); await load({ silent: true }); }, state };
   if (document.body?.dataset.initialPanel === "space-phone") window.SpacePhoneModule.open();
 }());

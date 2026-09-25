@@ -114,6 +114,7 @@
         <div class="space-phone-controls">
           <span class="space-phone-timer" data-phone-timer>00:00</span>
           <button type="button" data-phone-mute>Mutar</button>
+          <button type="button" data-panel-target="space-phone">Voltar para ligação</button>
           <button type="button" class="is-danger" data-phone-hangup>Encerrar</button>
         </div>
       </div>
@@ -546,8 +547,10 @@
       });
     }
 
+    let mounted = false;
     function mount() {
-      if (!state.enabled) return api;
+      if (!state.enabled || mounted) return api;
+      mounted = true;
       if (!root.parentNode) document.body.appendChild(root);
       bindDom();
       startClock();

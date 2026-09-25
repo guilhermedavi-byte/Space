@@ -31523,3 +31523,8 @@ button.automations-row:focus-visible,
   border: 1px solid rgba(148, 163, 184, .18);
   border-radius: 12px;
 }
+
+/* Persistent phone stays outside page panels; only the shell is hidden in Ligações. */
+body[data-active-panel="space-phone"] > .space-phone .space-phone-shell { display:none; }
+.space-phone-controls { flex-wrap:wrap; }
+.space-phone-controls [data-panel-target="space-phone"] { font-size:12px; padding-inline:10px; }

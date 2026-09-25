@@ -440,29 +440,20 @@ test('SDR selector is Admin-only, persists selection and reloads both history an
   dom.window.close();
 });
 
-test('booking stays in-page, requires provider confirmation and ignores events after close', async t => {
-  const dom = createModuleDom(); t.after(() => dom.window.close());
-  const state = dom.window.SpacePhoneModule.state;
-  state.call = { ...state.call, id: 'booking-call', status: 'ended' };
-  state.postCall = { ...state.postCall, id: 'booking-call', savedOutcome: 'agendado' };
-  state.qualification = { ...state.qualification, voiceCallId: 'booking-call', values: { context: 'Preservar humano' } };
-  dom.window.fetchWithAuth = async url => jsonResponse(String(url).includes('id=booking-call') ? { call: { id: 'booking-call', outcome: 'agendado', number: '+15555550123' } } : { calls: [], analytics: {} });
+test('booking opens Agenda through SPA and preserves human qualification', async t => {
+  const dom=createModuleDom();t.after(()=>dom.window.close());
+  const state=dom.window.SpacePhoneModule.state;
+  state.call={...state.call,id:'booking-call',status:'ended'};
+  state.postCall={...state.postCall,id:'booking-call',savedOutcome:'agendado'};
+  state.qualification={...state.qualification,voiceCallId:'booking-call',values:{context:'Preservar humano'}};
+  let selected,navigations=0;
+  dom.window.SpaceAgenda={forCall:id=>selected=id,refresh:async()=>{},get:()=>null};
+  const button=dom.window.document.createElement('button');button.dataset.panelTarget='space-agenda';button.onclick=()=>navigations++;dom.window.document.body.appendChild(button);
   await dom.window.SpacePhoneModule.open();
-  dom.window.document.querySelector('[data-sp-booking]').click(); await tick(20);
-  const ns = Object.values(dom.window.Cal.ns)[0];
-  const config = ns.q.find(args => args[0] === 'inline')[1];
-  assert.equal(config.calLink, 'team/closers-space-idiomas/reuniao-com-mentor-do-space');
-  assert.equal(config.config.metadata.voiceCallId, 'booking-call');
-  const callback = ns.q.find(args => args[0] === 'on')[1].callback;
-  const event = status => ({ detail: { data: { uid: 'booking', startTime: '2026-10-01T14:00:00Z', status } } });
-  callback(event('PENDING'));
-  assert.doesNotMatch(dom.window.document.body.textContent, /Reunião agendada ✓/);
-  callback(event('ACCEPTED'));
-  assert.match(dom.window.document.body.textContent, /Reunião agendada ✓/);
-  dom.window.document.querySelector('[data-sp-close-booking]').click();
-  callback(event('PENDING'));
-  assert.equal(dom.window.document.getElementById('sphone-booking'), null);
-  assert.equal(state.qualification.values.context, 'Preservar humano');
+  dom.window.document.querySelector('[data-sp-booking]').click();await tick(20);
+  assert.equal(selected,'booking-call');assert.equal(navigations,1);
+  assert.equal(state.qualification.values.context,'Preservar humano');
+  assert.equal(dom.window.document.getElementById('sphone-booking'),null);
 });
 
 test('placeholder AI values are never offered as applicable suggestions', async t => {

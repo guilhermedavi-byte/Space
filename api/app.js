@@ -79,6 +79,7 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
   if (slug === "admin" && sub === "automacoes") return { panel: "automations" };
   if (slug === "admin" && sub === "comercial") {
     if (segments[2] === "crm") return { panel: "native-crm" };
+    if (segments[2] === "pre-vendas" && segments[3] === "agenda") return { panel: "space-agenda" };
     if (segments[2] === "pre-vendas" && segments[3] === "ligacoes") return { panel: "space-phone" };
     if (segments[2] === "pre-vendas" && segments[3] === "painel-sdr") return { panel: "admin-sdr" };
     if (segments[2] === "pre-vendas" || segments[2] === "atividade-sdr") return { panel: "admin-comercial-atividade-sdr" };
@@ -89,7 +90,8 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
   if (slug === "growth") {
     if (sub === "comercial") {
       if (segments[2] === "crm") return { panel: "native-crm" };
-      if (segments[2] === "pre-vendas" && segments[3] === "ligacoes") return { panel: "space-phone" };
+      if (segments[2] === "pre-vendas" && segments[3] === "agenda") return { panel: "space-agenda" };
+    if (segments[2] === "pre-vendas" && segments[3] === "ligacoes") return { panel: "space-phone" };
       if (segments[2] === "pre-vendas" && segments[3] === "painel-sdr") return { panel: "admin-sdr" };
       if (["painel-sdr", "scripts-vendas", "objecoes", "training"].includes(segments[2])) return { panel: segments[2] === "painel-sdr" ? "admin-sdr" : "growth" };
       return { panel: "growth-dashboard" };
@@ -148,7 +150,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
   const raw = String(templateHtml || "");
   const platformStart = raw.indexOf('<div class="platform-shell"');
   const modalStart = raw.indexOf('<div class="modal-overlay"');
-  const scriptStart = raw.lastIndexOf('<script src="script.js?v=7"></script>');
+  const scriptStart = raw.lastIndexOf('<script src="script.js?v=8"></script>');
 
   if (platformStart < 0 || modalStart < 0 || scriptStart < 0 || modalStart <= platformStart) {
     throw new Error("template_missing_sections");
@@ -202,9 +204,10 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="/assets/retention-intelligence.js"></script>
     <script src="finance-customer-link.js?v=1"></script>
     <script src="finance-v1.js?v=31"></script>
-    <script src="script.js?v=7"></script>
-    <script src="/assets/space-phone.bundle.js?v=3"></script>
-    <script src="space-phone.js?v=12"></script>
+    <script src="script.js?v=8"></script>
+    <script src="/assets/space-phone.bundle.js?v=4"></script>
+    <script src="space-agenda.js?v=1"></script>
+    <script src="space-phone.js?v=13"></script>
     <script src="admin-sdr.js?v=7"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>

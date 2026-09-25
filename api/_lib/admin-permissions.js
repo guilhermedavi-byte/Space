@@ -76,7 +76,7 @@ const ADMIN_PERMISSION_REGISTRY = {
       crm: withActions({ label: "CRM", panel: "native-crm", routes: ["/app/admin/comercial/crm"], apis: ["/api/crm"], legacyKey: "comercial.crm" }, ["view", "create", "update", { key: "delete", label: "Excluir", sensitive: true }]),
       crmLive: withActions({ label: "CRM Live", href: "/tv/crm-live", routes: ["/tv/crm-live"], apis: ["/api/crm-live-data", "/api/crm-live-events"], legacyKey: "comercial.crmLive" }, ["view", { key: "update", label: "Atualizar/gerenciar TV", sensitive: true }]),
       preSales: withActions({ label: "Pré-Vendas", panel: "admin-comercial-atividade-sdr", routes: ["/app/admin/comercial/pre-vendas"], apis: ["/api/admin-commercial-sdr-activity"], legacyKey: "comercial.preSales" }),
-      spacePhone: withActions({ label: "Ligações", panel: "space-phone", routes: ["/app/admin/comercial/pre-vendas/ligacoes"], apis: ["/api/space-phone"], legacyKey: "comercial.spacePhone" }, ["view", "update"]),
+      spacePhone: withActions({ label: "Ligações", panel: "space-phone", routes: ["/app/admin/comercial/pre-vendas/ligacoes", "/app/admin/comercial/pre-vendas/agenda"], apis: ["/api/space-phone", "/api/commercial-bookings"], legacyKey: "comercial.spacePhone" }, ["view", "update"]),
       sdrPanel: withActions({ label: "Painel SDR", panel: "admin-sdr", routes: ["/app/admin/comercial/pre-vendas/painel-sdr"], apis: ["/api/admin-sdr", "/api/admin/sdr/calls/:id/audio"], legacyKey: "comercial.sdrPanel" }, ["view", "update"]),
       goals: withActions({ label: "Metas", panel: "admin-comercial-metas", routes: ["/app/admin/comercial/metas"], apis: ["/api/growth-dashboard?api=growth-goals"], legacyKey: "comercial.goals" }, ["view", "create", "update", { key: "delete", label: "Excluir", sensitive: true }]),
       users: withActions({ label: "Usuários", panel: "admin-comercial-usuarios", routes: ["/app/admin/comercial/usuarios"], apis: ["/api/admin-create-growth-user", "/api/admin-users"], legacyKey: "comercial.users" }, ["view", "create", "update", "deactivate", { key: "delete", label: "Excluir", sensitive: true }]),
@@ -252,6 +252,7 @@ const permissionForAdminPanel = (panel, state = {}) => {
     return "settings.profile.view";
   }
   if (safePanel === "admin-comercial-visao-geral") return "comercial.overview.view";
+  if (safePanel === "space-agenda") return "comercial.spacePhone.view";
   if (safePanel === "native-crm") return "comercial.crm.view";
   if (safePanel === "admin-comercial-atividade-sdr") return "comercial.preSales.view";
   if (safePanel === "admin-sdr") return "comercial.sdrPanel.view";
