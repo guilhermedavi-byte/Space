@@ -1,3 +1,4 @@
+const callbacksQueue = require('./space-phone-callbacks');
 const { analysisIntegrity, logIntegrity } = require('./space-phone-analysis-integrity');
 const { businessDisposition } = require('./business-disposition');
 const crypto = require('node:crypto');
@@ -159,6 +160,16 @@ const createVoiceCall = async ({ session, identity, toNumber, context = {}, supa
     const error = new Error('caller_id_not_configured');
     error.status = 409;
     throw error;
+  }
+  if (context.callbackSourceCallId) {
+    const isAdmin = require('./commercial-permissions').getCommercialPermissions(session).isAdmin;
+    const parent = await callbacksQueue.list({request:supabase,user:session,isAdmin});
+    const original = parent.find(c => c.id === context.callbackSourceCallId);
+    if (!original || normalizePhoneNumber(original.number) !== row.to_number) throw Object.assign(new Error('callback_not_found'),{status:404});
+    row.callback_source_call_id = original.id;
+    row.lead_id = original.leadId || null;
+    row.opportunity_id = original.opportunityId || null;
+    row.lead_name = original.name || null;
   }
   const response = await supabase('/voice_calls', { method: 'POST', body: row, headers: { Prefer: 'return=representation' } });
   const created = Array.isArray(response.data) ? response.data[0] : response.data;
@@ -609,7 +620,7 @@ const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = re
   const qualificationMap = await loadQualificationsMap({ request, callIds: rows.map(row => row.id) });
   const names = await resolveNames(rows, user);
   const calls = rows.map(row => normalizeCall(row, findAnalysis(row, analysisMap), null, qualificationMap.get(clean(row.id)), names.get(clean(row.space_user_uid))));
-  const callbacks = calls.filter(call => call.callbackAt && new Date(call.callbackAt).getTime() >= Date.now()).slice(0, 12);
+  const callbacks = analyticsOnly ? [] : await callbacksQueue.list({ request, user, isAdmin, sdr: selectedSdr });
   return { ok: true, range, scope: isAdmin ? 'admin' : 'self', ...(isAdmin ? { sdrs, selectedSdr } : {}),
     ...(!historyOnly ? { analytics: summarize(metricRows.map(row => normalizeCall(row))) } : {}),
     ...(!analyticsOnly ? { calls, callbacks, history: { hasMore: recentRows.length > 50, nextOffset: offset + 50 } } : {}),
@@ -722,6 +733,7 @@ const syncQualificationToSdrActivity = async ({ call, qualification, user, now =
 };
 
 const updateCall = async ({ request, id, user, isAdmin, patch = {}, bridgeCommit } = {}) => {
+  if (['callback_schedule','callback_snooze','callback_complete','callback_cancel'].includes(patch.action)) return callbacksQueue.update({request,user,isAdmin,id,patch});
   const current = (await detailModel({ request, id, user, isAdmin })).call;
   const body = {};
   if (Object.prototype.hasOwnProperty.call(patch, 'notes')) body.notes = clean(patch.notes).slice(0, 5000);
@@ -734,7 +746,12 @@ const updateCall = async ({ request, id, user, isAdmin, patch = {}, bridgeCommit
     }
     body.outcome = outcome || null;
   }
-  if (Object.prototype.hasOwnProperty.call(patch, 'callbackAt')) body.callback_at = isoOrNull(patch.callbackAt);
+  if (Object.prototype.hasOwnProperty.call(patch, 'callbackAt')) {
+    body.callback_at = isoOrNull(patch.callbackAt);
+    if (patch.callbackAt && (!body.callback_at || Date.parse(body.callback_at) <= Date.now())) throw Object.assign(new Error('callback_future_time_required'), {status:400});
+    body.callback_status = body.callback_at ? 'scheduled' : 'cancelled';
+  }
+  if (body.outcome && body.outcome !== 'retornar_depois') body.callback_status = 'cancelled';
   if (Object.prototype.hasOwnProperty.call(patch, 'endedReason')) body.ended_reason = clean(patch.endedReason).slice(0, 120) || null;
   if (clean(patch.action) === 'retry_ai_qualification') {
     const call = { id: current.id, space_user_uid: current.sdrUid, from_number: current.fromNumber, to_number: current.toNumber, started_at: current.startedAt, duration_seconds: current.durationSeconds, outcome: current.outcome, telnyx_call_leg_id: current.callLegId, telnyx_call_session_id: current.callSessionId };

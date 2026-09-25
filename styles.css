@@ -31547,3 +31547,13 @@ body[data-active-panel="space-phone"] > .space-phone .space-phone-shell { displa
 body[data-page="app"] .ri-cockpit .ri-kpi-strip .ri-metric{background:none;border:0;border-radius:0;box-shadow:none;padding:0;min-height:0}
 body[data-page="app"] .ri-cockpit .ri-cockpit-grid .ri-section{background:none;border:0;border-radius:0;box-shadow:none;padding:0}
 body[data-page="app"] .ri-cockpit .ri-trends .ri-metric{background:none;border:0;border-radius:0;box-shadow:none;min-height:0}
+
+/* Callback queue shares the existing Space Phone surfaces and controls. */
+.sphone-callbacks { margin:20px 0; max-height:480px; overflow:auto; }
+.sphone-callback-row { display:grid; gap:8px; padding:16px 0; border-top:1px solid rgba(255,255,255,.08); }
+.sphone-callback-row > span { font-size:13px; color:#aab8c9; }
+.sphone-callback-row .sphone-badge { justify-self:start; color:#efc770; }
+.sphone-callback-row [data-overdue="true"] { color:#ff9696; }
+.sphone-callback-row .sphone-call-actions { flex-wrap:wrap; }
+.sphone-callback-row summary { cursor:pointer; padding:8px; font-size:13px; }
+.sphone-callback-alert { position:fixed; top:76px; right:20px; z-index:1100; width:min(360px,calc(100vw - 40px)); padding:16px; border:1px solid #775133; border-radius:18px; background:#142033; color:#fff; display:grid; gap:12px; }

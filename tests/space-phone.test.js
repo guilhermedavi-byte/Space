@@ -125,11 +125,11 @@ test("space phone persists notes, outcome and callback on the real voice call", 
       return { data: [] };
     },
   });
-  const res = await invoke(handler, { method: "PATCH", body: { id: "call-1", notes: "Cliente pediu retorno.", outcome: "retornar_depois", callbackAt: "2026-09-25T17:00:00.000Z" } });
+  const res = await invoke(handler, { method: "PATCH", body: { id: "call-1", notes: "Cliente pediu retorno.", outcome: "retornar_depois", callbackAt: "2099-09-25T17:00:00.000Z" } });
   assert.equal(res.status, 200);
   assert.equal(patches.length, 1);
   assert.equal(patches[0].path, "/voice_calls?id=eq.call-1");
-  assert.deepEqual(patches[0].body, { notes: "Cliente pediu retorno.", outcome: "retornar_depois", callback_at: "2026-09-25T17:00:00.000Z" });
+  assert.deepEqual(patches[0].body, { notes: "Cliente pediu retorno.", outcome: "retornar_depois", callback_at: "2099-09-25T17:00:00.000Z", callback_status: "scheduled" });
   assert.equal(res.json.call.outcome, "retornar_depois");
 });
 
@@ -158,7 +158,7 @@ test("space phone route boots the dedicated admin panel and script", async () =>
     assert.match(body, /data-initial-panel="space-phone"/);
     assert.match(body, /data-space-phone/);
     assert.match(body, /src="script\.js\?v=8"/);
-    assert.match(body, /src="space-phone\.js\?v=13"/);
+    assert.match(body, /src="space-phone\.js\?v=14"/);
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
@@ -479,6 +479,7 @@ test('history search and status retain own-call scope and scheduled outcome', as
       if (!path.startsWith('/voice_calls')) return { data: [] };
       const params = new URL(path, 'https://test').searchParams;
       assert.equal(params.get('space_user_uid'), 'eq.history-owner');
+      if(params.has('callback_status')) return {data:[]};
       assert.ok(params.getAll('or').some(value => value.includes('to_number.ilike.*+16175551212*')));
       return { data: [
         { id: 'scheduled', space_user_uid: 'history-owner', outcome: 'agendado', status: 'completed' },
@@ -497,6 +498,7 @@ test('history pages retain period; analytics-only does not reload history', asyn
     if (!path.startsWith('/voice_calls')) return {data:[]};
     const q=new URL(path,'https://test').searchParams; seen.push(q);
     assert.equal(q.get('space_user_uid'),'eq.owner');
+    if(q.has('callback_status')) return {data:[]};
     assert.ok(q.getAll('or').some(v=>v.includes('started_at.gte')));
     if(q.get('limit') === '200') return {data:[]};
     assert.equal(q.get('order'),'started_at.desc.nullslast,created_at.desc,id.desc');

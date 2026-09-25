@@ -36,6 +36,7 @@ const createHandler = ({
   try {
     const url = new URL(req.url || "/api/space-phone", "https://space.local");
     if (req.method === "GET") {
+      if (url.searchParams.get("view") === "callbacks") return sendJson(res,200,{ok:true,callbacks:await require("./_lib/space-phone-callbacks").list({request,user,isAdmin,sdr:url.searchParams.get("sdr")})});
       const id = url.searchParams.get("id");
       if (id) return sendJson(res, 200, await phone.detailModel({ request, id, user, isAdmin }));
       if (url.searchParams.get("normalize")) {

@@ -466,3 +466,24 @@ test('placeholder AI values are never offered as applicable suggestions', async 
   assert.equal(dom.window.document.querySelector('[data-sp-apply-ai]'), null);
   assert.equal(state.qualification.values.context, 'Humano real');
 });
+
+test('callback quick schedule, countdown, navigation alert, snooze and one-click call preserve context', async t=>{
+ const dom=createModuleDom();t.after(()=>dom.window.close());
+ let items=[{id:'00000000-0000-4000-8000-000000000001',name:'Lead teste',number:'+14075550123',leadId:'lead-1',callbackAt:new Date(Date.now()+1800000).toISOString()}];
+ const writes=[];
+ dom.window.fetchWithAuth=async(url,opts={})=>{if(opts.method==='PATCH'){writes.push(JSON.parse(opts.body));return jsonResponse({ok:true});}return jsonResponse({ok:true,calls:[],callbacks:items,analytics:{},scope:'self'});};
+ await dom.window.SpacePhoneModule.open();
+ assert.match(dom.window.document.querySelector('[data-callback-clock]').textContent,/Retornar em 30:/);
+ const state=dom.window.SpacePhoneModule.state;state.postCall.id=items[0].id;state.postCall.savedOutcome='retornar_depois';state.call.status='ended';state.call.id=items[0].id;
+ dom.window.__spacePhoneTest.emit({status:'ended',callRecord:{id:items[0].id}});
+ dom.window.document.querySelector('[data-callback-schedule="30"]').click();await tick(30);
+ assert.equal(writes[0].action,'callback_schedule');assert.ok(Math.abs(Date.parse(writes[0].callbackAt)-Date.now()-1800000)<2000);
+ dom.window.document.querySelector('[data-callback-action="10"]').click();await tick(30);assert.equal(writes.at(-1).action,'callback_snooze');
+ dom.window.document.querySelector('[data-callback-action="call"]').click();await tick(30);
+ const call=dom.window.SpacePhone.calls.find(c=>c.method==='call');assert.equal(call.payload.callbackSourceCallId,items[0].id);assert.equal(call.payload.leadId,'lead-1');
+ assert.ok(dom.window.document.querySelector('[data-callback-action="call"]').disabled);
+ items=[{...items[0],callbackAt:new Date(Date.now()-720000).toISOString()}];
+ dom.window.document.body.dataset.activePanel='crm';dom.window.dispatchEvent(new dom.window.Event('online'));await tick(40);
+ assert.match(dom.window.document.querySelector('#space-callback-alert').textContent,/Aguardando retorno.*12 min/);
+ dom.window.dispatchEvent(new dom.window.Event('online'));await tick(30);assert.equal(dom.window.document.querySelectorAll('#space-callback-alert').length,1);
+});
