@@ -51,3 +51,17 @@ test('callback call keeps source relation and canonical lead context; spoof deni
  const created=await createVoiceCall(args);assert.equal(created.callback_source_call_id,id);assert.equal(created.lead_name,'Lead teste');
  await assert.rejects(createVoiceCall({...args,session:{sub:'other',role:'growth'}}),{status:404});
 });
+test('notifications force SELF even for Admin selecting another SDR or all',async()=>{
+ const db=store();
+ for(const isAdmin of [true,false])for(const sdr of ['all','other']){
+  const result=await queue.notifications({...db,user:{sub:'luana'},isAdmin,sdr});
+  assert.equal(result.length,1);assert.equal(result[0].sdrUid,'luana');
+ }
+ assert.deepEqual(await queue.notifications({...db,user:{sub:'admin'},isAdmin:true,sdr:'luana'}),[]);
+ await assert.rejects(queue.notifications({...db,user:{},isAdmin:true}),{status:403});
+});
+test('cancel persists and removes callback without altering other owners',async()=>{
+ const db=store();await queue.update({...db,user:{sub:'luana'},isAdmin:false,id,now,patch:{action:'callback_cancel'}});
+ assert.equal(db.data[0].callback_status,'cancelled');assert.equal(db.data[1].callback_status,'scheduled');
+ assert.equal((await queue.list({...db,user:{sub:'luana'},isAdmin:false})).length,0);
+});

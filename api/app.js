@@ -182,7 +182,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <link rel="stylesheet" href="/assets/international-phone.css">
     <script src="/assets/international-phone.bundle.js"></script>
     <script src="/api/runtime-config.js"></script>
-    <link rel="stylesheet" href="styles.css?v=gc2" />
+    <link rel="stylesheet" href="styles.css?v=phone-ux1" />
     <link rel="stylesheet" href="finance-v1.css?v=8" />
     <link rel="stylesheet" href="dashboard-system.css?v=1" />
   </head>
@@ -208,9 +208,9 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="finance-customer-link.js?v=1"></script>
     <script src="finance-v1.js?v=31"></script>
     <script src="script.js?v=9"></script>
-    <script src="/assets/space-phone.bundle.js?v=4"></script>
-    <script src="space-agenda.js?v=3"></script>
-    <script src="space-phone.js?v=18"></script>
+    <script src="/assets/space-phone.bundle.js?v=5"></script>
+    <script src="space-agenda.js?v=4"></script>
+    <script src="space-phone.js?v=19"></script>
     <script src="admin-sdr.js?v=7"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>

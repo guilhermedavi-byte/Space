@@ -148,6 +148,7 @@
         return;
       }
       const active = ACTIVE_STATUSES.has(state.status) || state.error;
+      root.hidden = win?.__SPACE_SESSION__?.role === 'admin' && !ACTIVE_STATUSES.has(state.status);
       root.className = `space-phone ${active ? 'is-visible' : 'is-idle'} is-${state.status}`;
       root.querySelector('[data-phone-status]').textContent = statusLabel(state.status);
       root.querySelector('[data-phone-title]').textContent = safeText(state.context?.leadName) || 'Space Phone';

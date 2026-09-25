@@ -8,8 +8,9 @@ function setup(t){
 }
 test('Agenda uses official embed and opaque server context; browser accepted status cannot confirm',async t=>{
  const h=setup(t),w=h.dom.window;w.SpaceAgenda.forCall('call-1');await w.SpaceAgenda.open();
- const form=w.document.querySelector('[data-agenda-contact]');form.elements.name.value='Test Contact';form.elements.email.value='contact@example.test';form.dispatchEvent(new w.Event('submit',{cancelable:true}));
- const ns=Object.values(w.Cal.ns)[0],config=ns.q.find(a=>a[0]==='inline')[1];assert.equal(config.calLink,'team/closers-space-idiomas/reuniao-com-mentor-do-space');assert.equal(config.config['metadata[spaceBookingContext]'],'server-context');assert.equal(config.config.metadata,undefined);
+ const form=w.document.querySelector('[data-agenda-contact]');form.elements.name.value='Test Contact';form.elements.attendeePhoneNumber.value='+5534999569129';form.dispatchEvent(new w.Event('submit',{cancelable:true}));
+ assert.equal(form.querySelector('[name=email]'),null);
+ const ns=Object.values(w.Cal.ns)[0],config=ns.q.find(a=>a[0]==='inline')[1];assert.equal(config.calLink,'team/closers-space-idiomas/reuniao-com-mentor-do-space');assert.equal(config.config['metadata[spaceBookingContext]'],'server-context');assert.equal(config.config.metadata,undefined);assert.equal(config.config.email,undefined);assert.equal(config.config.attendeePhoneNumber,'+5534999569129');
  const cb=ns.q.find(a=>a[0]==='on')[1].callback;
  await cb({detail:{data:{uid:'real-booking',status:'ACCEPTED'}}});assert.doesNotMatch(w.document.querySelector('[data-agenda-status]').textContent,/Reunião agendada ✓/);
  h.confirm();await cb({detail:{data:{uid:'real-booking',status:'ACCEPTED'}}});assert.match(w.document.querySelector('[data-agenda-status]').textContent,/Reunião agendada ✓/);

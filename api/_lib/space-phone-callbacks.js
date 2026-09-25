@@ -35,4 +35,8 @@ async function update({ request, user, isAdmin, id, patch, now = Date.now() }) {
   if (!saved) throw fail('callback_not_saved',409);
   return {ok:true,callback:{id,callbackAt:saved.callback_at,callbackStatus:status(saved,now)}};
 }
-module.exports = { list, update, status, scope };
+// Operational notifications never inherit the Admin management filter.
+async function notifications(args) {
+  return list({ ...args, isAdmin: false, sdr: undefined });
+}
+module.exports = { list, notifications, update, status, scope };
