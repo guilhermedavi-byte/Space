@@ -511,7 +511,7 @@ const studentIdentityKey = (row) => {
   if (id) return `id:${id}`;
   const email = normalizeIdentity(row?.email || row?.aluno_email || row?.student_email);
   if (email) return `email:${email}`;
-  const phone = onlyDigits(row?.telefone || row?.whatsapp || row?.phone);
+  const phone = require('../../src/international-phone/core').normalizePhoneToE164(row?.telefone || row?.whatsapp || row?.phone, {defaultCountry:'BR',preferCountry:true});
   if (phone) return `phone:${phone}`;
   const source = String(row?.source || "unknown").trim().toLowerCase();
   const fallbackName = normalizeIdentity(row?.aluno_nome || row?.nome || row?.name || row?.student_name);

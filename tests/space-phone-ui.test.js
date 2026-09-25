@@ -1,4 +1,8 @@
+// Keep Node alive while exercising the production client's intentionally unref'd readiness timeout.
+let testKeepAlive;
 const test = require('node:test');
+test.before(() => { testKeepAlive = setInterval(() => {}, 2000); });
+test.after(() => clearInterval(testKeepAlive));
 const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
 const { createSpacePhone, normalizePhone, normalizeSdkStatus, formatDuration } = require('../src/space-phone/core');

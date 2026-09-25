@@ -1,3 +1,5 @@
+const phoneDisplay = (value, flag = true) => window.SpaceInternationalPhone?.formatPhoneForDisplay(value, { flag }) || String(value || "");
+const canonicalPhone = value => window.SpaceInternationalPhone?.normalizePhoneToE164(value, { defaultCountry: "BR", preferCountry: true }) || "";
 const body = document.body;
 const getFirebaseRuntimeConfig = () => {
   if (typeof window.__SPACE_GET_FIREBASE_CONFIG__ === "function") {
@@ -14872,7 +14874,7 @@ const renderNativeCrmList = () => {
               const contact = opportunity.contact || {};
               const stageName = getNativeCrmData().stages.find((stage) => stage.id === opportunity.stageId)?.name || "—";
               const primaryTitle = contact.name || opportunity.title || "Lead sem nome";
-              const secondaryTitle = [contact.email, contact.phone].filter(Boolean).join(" · ")
+              const secondaryTitle = [contact.email, phoneDisplay(contact.phone, false)].filter(Boolean).join(" · ")
                 || (opportunity.title && contact.name && opportunity.title.trim().toLowerCase() !== contact.name.trim().toLowerCase() ? opportunity.title : "");
               return `
                 <tr data-crm-row="${escapeHtml(opportunity.id)}" tabindex="0">
@@ -15491,7 +15493,7 @@ const nativeCrmDrawerViewHtml = (opportunity, { pipelineName, stageName, money }
       <h3>Contato</h3>
       <div class="native-crm-detail-list">
         ${nativeCrmDetailItemHtml("Nome", contact.name || "")}
-        ${nativeCrmDetailItemHtml("Telefone", contact.phone || "")}
+        ${nativeCrmDetailItemHtml("Telefone", phoneDisplay(contact.phone))}
         ${nativeCrmDetailItemHtml("E-mail", contact.email || "")}
         ${nativeCrmDetailItemHtml("País", countryName)}
       </div>
@@ -15534,7 +15536,7 @@ const nativeCrmDrawerEditHtml = ({ isNew, opportunity, contact, pipelineId, stag
     <h3>Contato</h3>
     <label><span>Nome *</span><input name="name" required value="${escapeHtml(contact.name || "")}" /></label>
     <div class="native-crm-form-grid">
-      <label><span>Telefone</span><input name="phone" value="${escapeHtml(contact.phone || "")}" /></label>
+      <label><span>Telefone</span><input type="tel" name="phone" value="${escapeHtml(contact.phone || "")}" /></label>
       <label><span>E-mail</span><input name="email" type="email" value="${escapeHtml(contact.email || "")}" /></label>
     </div>
     <label><span>País</span><select name="countryCode">${renderNativeCrmCountryOptions(contact.countryCode || contact.country || contact.location?.country)}</select></label>
@@ -18555,14 +18557,14 @@ const financeMatchesSearch = (row, search = "") => {
 
 const financeOpenCharge = (charges = [], row = {}) => {
   const email = String(row?.email || "").trim().toLowerCase();
-  const phone = String(row?.telefone || "").replace(/\D+/g, "");
+  const phone = canonicalPhone(row?.telefone);
   const name = String(row?.aluno_nome || "").trim().toLowerCase();
   return charges
     .filter((charge) => {
       const status = String(charge?.status || "").toLowerCase();
       if (status === "pago" || charge?.pago_em) return false;
       const cEmail = String(charge?.email || "").trim().toLowerCase();
-      const cPhone = String(charge?.telefone || "").replace(/\D+/g, "");
+      const cPhone = canonicalPhone(charge?.telefone);
       const cName = String(charge?.aluno_nome || "").trim().toLowerCase();
       return (email && cEmail === email) || (phone && cPhone === phone) || (name && cName === name);
     })
@@ -18573,7 +18575,7 @@ const financeStudentOperationalStatus = (row, charges = []) => {
   const status = String(row?.status || "").trim().toLowerCase();
   const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
   const hasAsaas = Boolean(String(row?.asaas_customer_id || row?.asaas_subscription_id || "").trim());
-  const phone = Boolean(String(row?.telefone || "").replace(/\D+/g, ""));
+  const phone = Boolean(canonicalPhone(row?.telefone));
   const open = financeOpenCharge(charges, row);
   const hasInvoice = Boolean(String(open?.link_fatura || open?.link_boleto || "").trim());
   const issues = [];
@@ -19062,7 +19064,7 @@ const renderFinancePanel = () => {
           return `
             <div class="finance-row finance-row-alunos" data-finance-student-row="${escapeHtml(String(row?.id || ""))}">
               <span class="finance-student">${escapeHtml(row?.aluno_nome || "—")} ${financeReadyBadgeForAluno(row)}</span>
-              <span>${escapeHtml(row?.telefone || "—")}</span>
+              <span>${escapeHtml(phoneDisplay(row?.telefone || "—"))}</span>
               <span>${escapeHtml(row?.email || "—")}</span>
               <span>${financeBadgeHtml(row?.status || "—", financeStatusTone(row?.status))}</span>
               <span>${escapeHtml(row?.asaas_customer_id || "—")}</span>
@@ -19599,12 +19601,12 @@ const financeChatFinancialSummary = (row = {}) => {
       const conv = normalizeFinanceConversationId(row?.id_conversa_chatwoot);
       const chargeConv = normalizeFinanceConversationId(charge?.id_conversa_chatwoot);
       const email = String(row?.email || "").trim().toLowerCase();
-      const phone = String(row?.telefone || "").replace(/\D+/g, "");
+      const phone = canonicalPhone(row?.telefone);
       const name = String(row?.aluno_nome || "").trim().toLowerCase();
       return (
         (conv && chargeConv === conv) ||
         (email && String(charge?.email || "").trim().toLowerCase() === email) ||
-        (phone && String(charge?.telefone || "").replace(/\D+/g, "") === phone) ||
+        (phone && canonicalPhone(charge?.telefone) === phone) ||
         (name && String(charge?.aluno_nome || "").trim().toLowerCase() === name)
       );
     })
@@ -19707,7 +19709,7 @@ const renderFinanceChatWorkspace = (items) => {
             <span class="finance-chat-avatar is-large">${escapeHtml(financeStudentInitials(row?.aluno_nome || row?.email || "Aluno").toUpperCase())}</span>
             <div>
               <strong>${escapeHtml(row?.aluno_nome || row?.email || "Selecione uma conversa")}</strong>
-              <span>${escapeHtml(row?.telefone || "Sem telefone")} · ${escapeHtml(financeLocationForRow(row))}</span>
+              <span>${escapeHtml(phoneDisplay(row?.telefone || "Sem telefone"))} · ${escapeHtml(financeLocationForRow(row))}</span>
             </div>
           </div>
           <div class="finance-chat-head-actions">
@@ -19752,7 +19754,7 @@ const renderFinanceChatWorkspace = (items) => {
           </div>
         </div>
         <dl class="finance-chat-profile-list">
-          <div><dt>Telefone</dt><dd>${escapeHtml(row?.telefone || "—")}</dd></div>
+          <div><dt>Telefone</dt><dd>${escapeHtml(phoneDisplay(row?.telefone || "—"))}</dd></div>
           <div><dt>E-mail</dt><dd>${escapeHtml(row?.email || "—")}</dd></div>
           <div><dt>Localização</dt><dd>${escapeHtml(financeLocationForRow(row))}</dd></div>
           <div><dt>Status cobrança</dt><dd>${escapeHtml(latestCharge?.status || row?.status || "—")}</dd></div>
@@ -19871,7 +19873,7 @@ const renderFinanceChatModal = () => {
       <header class="finance-chat-head">
         <div>
           <strong>${escapeHtml(row?.aluno_nome || row?.email || "Conversa financeira")}</strong>
-          <span>${escapeHtml(row?.telefone || "Sem telefone")} • ${escapeHtml(row?.email || "Sem e-mail")}</span>
+          <span>${escapeHtml(phoneDisplay(row?.telefone || "Sem telefone"))} • ${escapeHtml(row?.email || "Sem e-mail")}</span>
         </div>
         <div class="finance-chat-head-actions">
           <span class="admin-student-fin-status is-${escapeHtml(financeStatusTone(row?.status))}">${escapeHtml(row?.status || "—")}</span>
@@ -25357,7 +25359,7 @@ const getStudentCancellationWindowRange = (cancelamento, referenceDate = new Dat
 const resolveStudentFinanceBinding = ({ aluno, financeStudents = [], charges = [] } = {}) => {
   const studentId = String(aluno?.id || aluno?.alunoId || "").trim();
   const email = String(aluno?.email || "").trim().toLowerCase();
-  const phone = String(aluno?.telefone || "").replace(/\D+/g, "");
+  const phone = canonicalPhone(aluno?.telefone);
   const financeRows = Array.isArray(financeStudents) ? financeStudents : [];
   const chargeRows = Array.isArray(charges) ? charges : [];
 
@@ -25377,7 +25379,7 @@ const resolveStudentFinanceBinding = ({ aluno, financeStudents = [], charges = [
   }
 
   const phoneMatches = phone
-    ? chargeRows.filter((row) => String(row?.telefone || "").replace(/\D+/g, "") === phone)
+    ? chargeRows.filter((row) => canonicalPhone(row?.telefone) === phone)
     : [];
   if (phone && phoneMatches.length) {
     return { status: "linked", strategy: "telefone", charges: phoneMatches, financeRow: null };
@@ -25393,11 +25395,11 @@ const resolveStudentFinanceBinding = ({ aluno, financeStudents = [], charges = [
   }
 
   const financeByPhone = phone
-    ? financeRows.filter((row) => String(row?.telefone || "").replace(/\D+/g, "") === phone)
+    ? financeRows.filter((row) => canonicalPhone(row?.telefone) === phone)
     : [];
   if (financeByPhone.length === 1) {
     const financeRow = financeByPhone[0];
-    const relatedCharges = chargeRows.filter((row) => String(row?.telefone || "").replace(/\D+/g, "") === phone);
+    const relatedCharges = chargeRows.filter((row) => canonicalPhone(row?.telefone) === phone);
     return { status: relatedCharges.length ? "linked" : "student_only", strategy: "finance_telefone", charges: relatedCharges, financeRow };
   }
 
@@ -26823,7 +26825,7 @@ const buildAdminStudentInlineFieldHtml = ({
   help = "",
 } = {}) => {
   const safeValue = String(value || "").trim();
-  const safeDisplayValue = String(displayValue || "").trim() || safeValue || placeholder || "—";
+  const safeDisplayValue = (kind === "tel" ? phoneDisplay(safeValue) : String(displayValue || "").trim() || safeValue) || placeholder || "—";
   const editorAttrs = readonly ? 'disabled aria-disabled="true"' : "";
   const keepEditorMounted = field === "plano";
   const editorMarkup =
@@ -27003,7 +27005,7 @@ const buildAdminTeacherInlineFieldHtml = ({
   help = "",
 } = {}) => {
   const safeValue = String(value || "").trim();
-  const safeDisplayValue = String(displayValue || "").trim() || safeValue || placeholder || "—";
+  const safeDisplayValue = (kind === "tel" ? phoneDisplay(safeValue) : String(displayValue || "").trim() || safeValue) || placeholder || "—";
   const editorAttrs = readonly ? 'disabled aria-disabled="true"' : "";
   const editorMarkup =
     kind === "select"
@@ -27080,8 +27082,8 @@ const resolveAdminTeacherInlinePatch = ({ field, value } = {}) => {
   }
   if (key === "telefone") {
     return {
-      patch: { telefone: nextValue },
-      displayValue: nextValue || "—",
+      patch: { telefone: canonicalPhone(nextValue) || nextValue },
+      displayValue: phoneDisplay(nextValue) || "—",
     };
   }
   if (key === "especialidade") {
@@ -27117,6 +27119,7 @@ const saveAdminTeacherInlineField = async ({ field, sheetEl } = {}) => {
     cancelAdminTeacherInlineEditing({ sheetEl, field });
     return;
   }
+  if (field === "telefone" && control instanceof HTMLInputElement && !control.reportValidity()) return;
   const resolved = resolveAdminTeacherInlinePatch({ field, value: nextValue });
   if (!resolved) {
     cancelAdminTeacherInlineEditing({ sheetEl, field });
@@ -27292,7 +27295,7 @@ const getAdminStudentMergeKeys = (row = {}) => {
   const keys = new Set();
   const email = String(row?.email || "").trim().toLowerCase();
   if (email) keys.add(`email:${email}`);
-  const phone = String(row?.telefone || "").replace(/\D+/g, "");
+  const phone = canonicalPhone(row?.telefone);
   if (phone) keys.add(`phone:${phone}`);
   const sourceBusinessId = String(row?.sourceBusinessId || row?.alunoChave || row?.aluno_chave || "").trim();
   if (sourceBusinessId) keys.add(`source:${sourceBusinessId}`);
@@ -27433,9 +27436,9 @@ const resolveAdminStudentInlinePatch = ({ field, value, alunoMeta } = {}) => {
   if (key === "telefone") {
     return {
       patch: {
-        telefone: nextValue,
+        telefone: canonicalPhone(nextValue) || nextValue,
       },
-      displayValue: nextValue || "—",
+      displayValue: phoneDisplay(nextValue) || "—",
     };
   }
   if (key === "plano") {
@@ -27527,6 +27530,7 @@ const saveAdminStudentInlineField = async ({ field, sheetEl } = {}) => {
     if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) control.focus?.();
     return;
   }
+  if (field === "telefone" && control instanceof HTMLInputElement && !control.reportValidity()) return;
   const resolved = resolveAdminStudentInlinePatch({ field, value: nextValue, alunoMeta: hist.alunoMeta });
   if (!resolved) {
     cancelAdminStudentInlineEditing({ sheetEl, field });
@@ -36987,7 +36991,7 @@ const renderAdminControlePedagogicoPanel = async ({ force = false } = {}) => {
       }
       const email = String(row?.email || "").trim().toLowerCase();
       if (email) return `email:${email}`;
-      const phone = String(row?.telefone || "").replace(/\D+/g, "");
+      const phone = canonicalPhone(row?.telefone);
       if (phone) return `phone:${phone}`;
       const name = String(row?.nome || row?.aluno_nome || "").trim().toLowerCase();
       return name ? `name:${name}` : `id:${String(row?.id || "")}`;
@@ -40030,7 +40034,7 @@ const buildAdminSettingsInlineFieldHtml = ({
   help = "",
 } = {}) => {
   const safeValue = String(value || "").trim();
-  const safeDisplayValue = String(displayValue || "").trim() || safeValue || placeholder || "—";
+  const safeDisplayValue = (kind === "tel" ? phoneDisplay(safeValue) : String(displayValue || "").trim() || safeValue) || placeholder || "—";
   const editorAttrs = readonly ? 'disabled aria-disabled="true"' : "";
   const controlHtml = `<input class="admin-student-input admin-student-inline-control" type="${kind === "email" ? "email" : kind === "tel" ? "tel" : "text"}" value="${escapeHtml(safeValue)}" data-admin-settings-inline-control data-admin-settings-inline-editor="${escapeHtml(field)}" ${editorAttrs} />`;
   return `
@@ -40074,7 +40078,7 @@ const resolveAdminSettingsProfilePatch = ({ field, value } = {}) => {
   const key = String(field || "").trim();
   const nextValue = String(value || "").trim();
   if (key === "nome") return { patch: { nome: nextValue }, displayValue: nextValue || "—" };
-  if (key === "telefone") return { patch: { telefone: nextValue }, displayValue: nextValue ? `+55 ${nextValue}` : "—" };
+  if (key === "telefone") return { patch: { telefone: nextValue }, displayValue: phoneDisplay(nextValue) || "—" };
   return null;
 };
 
@@ -40089,6 +40093,7 @@ const saveAdminSettingsInlineField = async (field) => {
     cancelAdminSettingsInlineEditing(field);
     return;
   }
+  if (field === "telefone" && control instanceof HTMLInputElement && !control.reportValidity()) return;
   const resolved = resolveAdminSettingsProfilePatch({ field, value: nextValue });
   if (!resolved) {
     cancelAdminSettingsInlineEditing(field);
@@ -40372,7 +40377,7 @@ const renderAdminSettingsProfile = () => {
           <div class="admin-student-panel-title">Informações</div>
           <div class="admin-student-inline-list">
             ${buildAdminSettingsInlineFieldHtml({ field: "nome", label: "Nome", value: name, placeholder: "—" })}
-            ${buildAdminSettingsInlineFieldHtml({ field: "telefone", label: "Telefone", value: phone, placeholder: "—", prefix: "+55", kind: "tel" })}
+            ${buildAdminSettingsInlineFieldHtml({ field: "telefone", label: "Telefone", value: phone, placeholder: "—", kind: "tel" })}
             ${buildAdminSettingsInlineFieldHtml({ field: "email", label: "E-mail", value: email, placeholder: "—", kind: "email", readonly: true, help: "O e-mail de login permanece somente leitura nesta etapa." })}
           </div>
           <div class="admin-settings-actions">

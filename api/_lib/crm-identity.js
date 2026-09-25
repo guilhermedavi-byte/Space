@@ -8,23 +8,13 @@ const normalizeEmail = (value) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? raw : "";
 };
 
-const normalizePhone = (value, { defaultCountryCode = "55" } = {}) => {
-  const raw = clean(value);
-  if (!raw) return "";
-  const digits = raw.replace(/\D/g, "");
-  if (!digits) return "";
-  if (raw.startsWith("+")) return `+${digits}`;
-  if (defaultCountryCode === "55" && (digits.length === 10 || digits.length === 11) && !digits.startsWith("0")) {
-    return `+55${digits}`;
-  }
-  if (defaultCountryCode === "1" && digits.length === 10 && /^[2-9]/.test(digits)) {
-    return `+1${digits}`;
-  }
-  return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : "";
-};
+const { normalizePhoneToE164 } = require('../../src/international-phone/core');
+const normalizePhone = (value, { defaultCountryCode = '55', defaultCountry } = {}) => normalizePhoneToE164(value, {
+  defaultCountry: defaultCountry || ({'55':'BR','1':'US','351':'PT'})[defaultCountryCode], preferCountry: true,
+});
 
 const normalizeCrmContactIdentity = (contact = {}) => ({
-  phone: normalizePhone(contact.phone || contact.telefone || contact.whatsapp || contact.normalized_phone || contact.phone_raw),
+  phone: normalizePhone(contact.phone || contact.telefone || contact.whatsapp || contact.normalized_phone || contact.phone_raw, { defaultCountry: contact.countryCode || contact.country_code }),
   email: normalizeEmail(contact.email),
 });
 

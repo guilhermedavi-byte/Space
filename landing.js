@@ -200,7 +200,8 @@ if (leadForm instanceof HTMLFormElement) {
 
     const nameOk = Boolean(name);
     const emailOk = isValidEmail(email);
-    const whatsappOk = whatsappDigits.length >= 10;
+    const whatsappCanonical = window.SpaceInternationalPhone?.normalizePhoneToE164(whatsappRaw);
+    const whatsappOk = !!whatsappCanonical;
 
     if (nameErr instanceof HTMLElement) nameErr.hidden = nameOk;
     if (emailErr instanceof HTMLElement) emailErr.hidden = emailOk;
@@ -224,14 +225,14 @@ if (leadForm instanceof HTMLFormElement) {
         body: JSON.stringify({
         nome: name,
         email,
-        whatsapp: `+55${whatsappDigits}`,
+        whatsapp: whatsappCanonical,
         }),
       });
       if (response.status === 503) {
         await submitLeadDirectlyToFirestore({
           nome: name,
           email,
-          whatsapp: `+55${whatsappDigits}`,
+          whatsapp: whatsappCanonical,
         });
       } else if (!response.ok) {
         throw new Error("lead_submit_failed");

@@ -7,9 +7,10 @@ const lead = { id: 'lead-ronaldo', name: 'Lead', phone };
 const none = async () => ({ matches: [], incomplete: false });
 
 test('reported phone variants include digits, E164, national and last eight', () => {
-  assert.deepEqual(variants(phone), ['14075917081', '+14075917081', '4075917081', '75917081']);
-  for (const stored of [phone, '1 (407) 591-7081', '4075917081', '75917081']) assert.equal(phoneMatches(stored, phone), true);
+  assert.deepEqual(variants(phone), ['14075917081', '+14075917081', '4075917081']);
+  for (const stored of [phone, '1 (407) 591-7081', '4075917081']) assert.equal(phoneMatches(stored, phone), true);
   assert.equal(phoneMatches('55475917081', phone), false);
+  assert.equal(phoneMatches('75917081', phone), false);
 });
 for (const [table, row] of [
   ['n8n_estado_leads_comercial_space', { telefone_normalizado: '4075917081', datacrazy_contact_id: lead.id }],

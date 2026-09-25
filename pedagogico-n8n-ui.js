@@ -98,7 +98,7 @@
             <div>
               <div class="ped-n8n-name">${escapeHtml(row.aluno_nome || "Aluno sem nome")}</div>
               <div class="ped-n8n-meta">
-                ${escapeHtml(row.plano || "Plano não informado")} · ${escapeHtml(row.email || row.telefone || "")}<br/>
+                ${escapeHtml(row.plano || "Plano não informado")} · ${escapeHtml(row.email || window.SpaceInternationalPhone?.formatPhoneForDisplay(row.telefone) || "")}<br/>
                 Primeira aula: ${escapeHtml(formatDate(row.primeira_aula_em))} · Professor: ${escapeHtml(row.professor_nome || "-")}
               </div>
               <span class="ped-n8n-pill ${status.includes("erro") ? "warn" : "good"}">${escapeHtml(status)}</span>
@@ -217,7 +217,7 @@
       if (!data_primeira_aula) return;
       const professor_id = window.prompt("ID do professor (opcional):") || professor_nome;
       const professor_email = window.prompt("E-mail do professor (recomendado):") || "";
-      const professor_telefone = window.prompt("Telefone do professor (opcional):") || "";
+      const professor_telefone = await window.SpaceInternationalPhone.requestPhone("Telefone do professor (opcional)") || "";
       const observacoes = window.prompt("Observações (opcional):") || "";
       await api("/api/pedagogico/professor-primeira-aula", {
         method: "POST",

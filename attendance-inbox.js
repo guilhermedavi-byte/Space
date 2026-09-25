@@ -139,14 +139,14 @@
       return `<a class="ai-doc" href="${esc(mediaUrl(msg))}" target="_blank" rel="noopener"><span class="ai-doc-icon">DOC</span><span><strong>${esc(name)}</strong>${details ? `<br><small>${esc(details)}</small>` : ''}</span></a>`;
     }
     if (msg.kind === 'location') return `<div class="ai-location">${esc(msg.content?.address || 'Localização compartilhada')}</div>`;
-    if (msg.kind === 'contact') return `<div class="ai-location">${esc(msg.content?.name || 'Contato compartilhado')}<br>${esc(msg.content?.phone || '')}</div>`;
+    if (msg.kind === 'contact') return `<div class="ai-location">${esc(msg.content?.name || 'Contato compartilhado')}<br>${esc(window.SpaceInternationalPhone?.formatPhoneForDisplay(msg.content?.phone) || msg.content?.phone || '')}</div>`;
     return `<div>${esc(msgText(msg))}</div>`;
   }
   function renderMessageBody(msg, context) {
     const mediaKinds = ['audio', 'image', 'video', 'document', 'sticker', 'location', 'contact'];
     return `${renderQuoted(msg)}${mediaKinds.includes(msg.kind) ? renderMedia(msg, context) : `<div>${esc(msgText(msg))}</div>`}`;
   }
-  const field = ([name, value]) => value ? `<div class="ai-info"><p class="ai-info-label">${esc(name)}</p><p class="ai-info-value">${esc(value)}</p></div>` : '';
+  const field = ([name, value]) => value ? `<div class="ai-info"><p class="ai-info-label">${esc(name)}</p><p class="ai-info-value">${name === "Telefone" && window.SpaceInternationalPhone ? window.SpaceInternationalPhone.PhoneDisplay(value) : esc(value)}</p></div>` : '';
   const section = (title, rows) => {
     const body = rows.map(field).join('');
     return body ? `<details class="ai-section" data-ai-accordion="${esc(title)}" ${ui.accordions[title] === false ? '' : 'open'}><summary class="ai-card-title">${esc(title)}</summary>${body}</details>` : '';

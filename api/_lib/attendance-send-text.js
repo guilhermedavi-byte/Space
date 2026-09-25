@@ -51,7 +51,7 @@ async function sendInboxText({actor,conversationId,text,clientRequestId,canonica
       const number = String(contact.phone || '').replace(/\D/g, '');
       if (!instance || !/^\d{7,16}$/.test(number)) fail('attendance_invalid_recipient', 422);
 
-      if (canonicalPhone && number !== canonicalPhone) fail('canonical_phone_mismatch',422);
+      if (canonicalPhone && number !== require('../../src/international-phone/core').normalizePhoneToE164(canonicalPhone, {defaultCountry:'BR',preferCountry:true}).replace(/^\+/, '')) fail('canonical_phone_mismatch',422);
       if (actor.role === 'admin') {
         await request('/rpc/attendance_ensure_admin_member', {
           method: 'POST',

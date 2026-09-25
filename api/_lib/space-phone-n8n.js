@@ -11,13 +11,7 @@ const clean = value => String(value == null ? '' : value).trim();
 const asRows = result => Array.isArray(result?.data) ? result.data : [];
 const enc = value => encodeURIComponent(clean(value));
 const digits = value => clean(value).replace(/\D+/g, '');
-const normalizePhone = value => {
-  const d = digits(value);
-  if (!d) return '';
-  if (d.length === 10) return `1${d}`;
-  if (d.length === 11 && d.startsWith('1')) return d;
-  return d;
-};
+const normalizePhone = value => require('../../src/international-phone/core').normalizePhoneToE164(value, { defaultCountry: 'US', preferCountry: true }).replace(/^\+/, '');
 
 const timingSafeEqual = (a, b) => {
   const left = Buffer.from(clean(a));

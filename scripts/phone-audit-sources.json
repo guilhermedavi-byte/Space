@@ -1,0 +1,237 @@
+[
+  {
+    "table_name": "billing_accounts",
+    "fields": [
+      "phone"
+    ]
+  },
+  {
+    "table_name": "closed_sales_events",
+    "fields": [
+      "student_phone"
+    ]
+  },
+  {
+    "table_name": "commercial_bookings",
+    "fields": [
+      "attendee_phone"
+    ]
+  },
+  {
+    "table_name": "contact_identities",
+    "fields": [
+      "normalized_phone",
+      "phone_raw"
+    ]
+  },
+  {
+    "table_name": "datacrazy_conversas",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "lead_notification_dedup",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "mensagens_processadas",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_agendamentos_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_alunos_financeiro_space",
+    "fields": [
+      "telefone",
+      "telefone_normalizado"
+    ]
+  },
+  {
+    "table_name": "n8n_aulas_pedagogicas_space",
+    "fields": [
+      "aluno_telefone",
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_chatwoot_contatos_space",
+    "fields": [
+      "telefone",
+      "telefone_normalizado"
+    ]
+  },
+  {
+    "table_name": "n8n_cobrancas_financeiras_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_contatos_internos_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_datacrazy_alunos_space",
+    "fields": [
+      "telefone",
+      "telefone_normalizado"
+    ]
+  },
+  {
+    "table_name": "n8n_estado_leads_comercial_space",
+    "fields": [
+      "telefone_normalizado"
+    ]
+  },
+  {
+    "table_name": "n8n_eventos_cobranca_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_fechamentos_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_fila_mensagens",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_logs_cobranca_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_mensagens_processadas_assistente_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_no_show_recuperados_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_ocorrencias_pedagogicas_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_onboarding_alunos_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_onboarding_pedagogico_space",
+    "fields": [
+      "professor_telefone",
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_pagamentos_asaas_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_professores_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_registros_aula_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_reunioes_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_satisfacao_alunos_space",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "n8n_vexa_onboarding_summaries",
+    "fields": [
+      "lead_phone"
+    ]
+  },
+  {
+    "table_name": "outbound_leads",
+    "fields": [
+      "phone",
+      "phone_normalized"
+    ]
+  },
+  {
+    "table_name": "outbound_opt_out",
+    "fields": [
+      "phone_normalized"
+    ]
+  },
+  {
+    "table_name": "sdr_meetings",
+    "fields": [
+      "lead_phone"
+    ]
+  },
+  {
+    "table_name": "sdr_message_buffer",
+    "fields": [
+      "lead_phone"
+    ]
+  },
+  {
+    "table_name": "space_financeiro_cpf_exceptions",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "space_financeiro_cpf_identity",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "space_financeiro_cpf_sources",
+    "fields": [
+      "telefone"
+    ]
+  },
+  {
+    "table_name": "students",
+    "fields": [
+      "phone"
+    ]
+  }
+]

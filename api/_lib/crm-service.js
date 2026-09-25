@@ -1,3 +1,4 @@
+const { requirePhone } = require('../../src/international-phone/core');
 const crypto = require("crypto");
 
 const {
@@ -115,7 +116,7 @@ const normalizeContact = (row) => ({
   id: clean(row.id || row.firestoreDocId),
   scopeId: clean(row.scopeId) || CRM_SCOPE_ID,
   name: clean(row.name),
-  phone: clean(row.phone),
+  phone: normalizeCrmContactIdentity(row).phone || clean(row.phone),
   email: clean(row.email),
   countryCode: normalizeCountryCode(row.countryCode || row.country || row.country_code || row.location?.country),
   searchName: normalizeSearchText(row.searchName || row.name),
@@ -534,7 +535,7 @@ const loadCrmReadModel = async (options = {}) => {
 
 const findOrBuildContact = ({ contacts, body, stamp }) => {
   const name = clean(body.name || body.contactName);
-  const phone = clean(body.phone);
+  const phone = requirePhone(body.phone, { defaultCountry: normalizeCountryCode(body.countryCode || body.country) || "BR", preferCountry: true });
   const email = clean(body.email);
   const countryCode = normalizeCountryCode(body.countryCode || body.country);
   if (!name) throw Object.assign(new Error("contact_name_required"), { status: 400 });
@@ -542,8 +543,7 @@ const findOrBuildContact = ({ contacts, body, stamp }) => {
   const existing = contacts.find((contact) => {
     if (identitiesMatch(contact, targetIdentity)) return true;
     const sameEmail = email && lower(contact.email) === lower(email);
-    const samePhone = phone && clean(contact.phone).replace(/\D/g, "") === phone.replace(/\D/g, "");
-    return sameEmail || samePhone;
+    return sameEmail;
   });
   if (existing) {
     const contact = {

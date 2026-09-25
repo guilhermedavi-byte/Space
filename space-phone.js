@@ -82,14 +82,7 @@
   const localNormalize = (value) => {
     const raw = String(value || "").trim();
     if (!raw) return "";
-    const fromAdapter = adapter()?.normalizePhone?.(raw, "US");
-    if (fromAdapter) return fromAdapter;
-    const digits = raw.replace(/\D+/g, "");
-    if (raw.startsWith("+") && /^\+[1-9]\d{7,14}$/.test(raw.replace(/[\s().-]+/g, ""))) return raw.replace(/[\s().-]+/g, "");
-    if (digits.length === 10) return `+1${digits}`;
-    if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-    if (digits.length >= 8 && digits.length <= 15 && raw.startsWith("+")) return `+${digits}`;
-    return "";
+    return window.SpaceInternationalPhone?.normalizePhoneToE164(raw, { defaultCountry: 'US', preferCountry: true }) || adapter()?.normalizePhone?.(raw, 'US') || '';
   };
   const operationState = () => ACTIVE.has(state.call.status) ? (state.call.status === "active" || state.call.status === "hold" ? "ACTIVE" : "CALLING") : POST.has(state.call.status) ? "POST_CALL" : "IDLE";
   const saveLocal = () => {
@@ -206,7 +199,7 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
   const renderDialer = () => `
     <section class="sphone-pane">
       <h2>Discador</h2>
-      <input class="sphone-input sphone-dial-input" data-sp-dial value="${esc(state.dial)}" type="tel" autocomplete="tel" placeholder="+1 (___) ___-____" />
+      <input class="sphone-input sphone-dial-input" data-sp-dial data-phone-country="US" value="${esc(state.dial)}" type="tel" autocomplete="tel" placeholder="+1 (___) ___-____" />
       <div class="sphone-muted" data-sp-normalized>${state.normalized ? `E.164 ${esc(state.normalized)}` : state.dialError ? esc(state.dialError) : "Digite ou cole um número com DDI."}</div>
       <div class="sphone-dial-actions">
         <button class="sphone-btn primary" data-sp-call ${ACTIVE.has(state.call.status) ? "disabled" : ""}>${state.call.status === "connecting" ? "Conectando..." : "Ligar"}</button>

@@ -281,7 +281,7 @@ const updateOnboardingFirstLesson = async ({ onboardingId, payload }) => {
     professor_id: payload.professor_id || null,
     professor_nome: payload.professor_nome || null,
     professor_email: payload.professor_email || null,
-    professor_telefone: payload.professor_telefone || null,
+    professor_telefone: require('../../src/international-phone/core').requirePhone(payload.professor_telefone, {defaultCountry:'BR',preferCountry:true}) || null,
     primeira_aula_em: payload.data_primeira_aula || payload.data_aula || null,
     horario_fixo_texto: payload.horario_fixo_texto || null,
     coordenacao_nome: payload.coordenacao_nome || null,

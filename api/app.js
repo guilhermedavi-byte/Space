@@ -178,6 +178,8 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/assets/international-phone.css">
+    <script src="/assets/international-phone.bundle.js"></script>
     <script src="/api/runtime-config.js"></script>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="finance-v1.css?v=8" />

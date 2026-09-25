@@ -1308,8 +1308,9 @@ const createContract = async (sendNow) => {
 
   const nomeCompleto = nomeEl instanceof HTMLInputElement ? nomeEl.value.trim() : "";
   const email = emailEl instanceof HTMLInputElement ? emailEl.value.trim().toLowerCase() : "";
-  const whatsapp = whatsappEl instanceof HTMLInputElement ? digitsOnly(whatsappEl.value) : "";
-  const telefoneCountry = countryEl instanceof HTMLSelectElement ? String(countryEl.value || "55") : "55";
+  if (whatsappEl instanceof HTMLInputElement && !whatsappEl.reportValidity()) return;
+  const whatsapp = whatsappEl instanceof HTMLInputElement ? whatsappEl.value : "";
+  const telefoneCountry = window.SpaceInternationalPhone?.inspectPhone(whatsapp).callingCode || "55";
   const contrato = contratoEl instanceof HTMLSelectElement ? String(contratoEl.value || "").trim().toLowerCase() : "";
   const cpf = cpfEl instanceof HTMLInputElement ? digitsOnly(cpfEl.value) : "";
   const endereco = endEl instanceof HTMLInputElement ? endEl.value.trim() : "";
@@ -1519,12 +1520,12 @@ const openDetailsModal = (contract) => {
 
   const country = contract?.telefoneCountry ? String(contract.telefoneCountry) : "55";
   const phoneDigits = digitsOnly(contract?.whatsapp || "");
-  const phoneDisplay = phoneDigits ? `+${country} ${country === "55" ? formatWhatsapp(phoneDigits) : phoneDigits}` : "—";
+  const phoneDisplay = window.SpaceInternationalPhone?.formatPhoneForDisplay(contract?.whatsapp) || "—";
 
   contractsEls.detailsBody.innerHTML = `
     <div class="modal-list-row"><strong>Nome</strong><span>${contract?.nomeCompleto || "—"}</span></div>
     <div class="modal-list-row"><strong>E-mail</strong><span>${contract?.email || "—"}</span></div>
-    <div class="modal-list-row"><strong>WhatsApp</strong><span>${phoneDisplay}</span></div>
+    <div class="modal-list-row"><strong>WhatsApp</strong><span>${escapeHtml(phoneDisplay)}</span></div>
     <div class="modal-list-row"><strong>CPF</strong><span>${formatCpf(contract?.cpf || "")}</span></div>
     <div class="modal-list-row"><strong>Endereço</strong><span>${contract?.endereco || "—"}</span></div>
     <div class="modal-list-row"><strong>Valor original</strong><span>${currencyPtBr(contract?.valorOriginal)}</span></div>
@@ -1667,27 +1668,6 @@ const initContracts = () => {
         clearCreateFieldError("cpf");
       }
       applyCpfSendGate();
-    });
-  }
-
-  const whatsappInput = getCreateField("whatsapp");
-  if (whatsappInput instanceof HTMLInputElement) {
-    whatsappInput.addEventListener("input", () => {
-      const countryEl = getCreateCountry();
-      const country = countryEl instanceof HTMLSelectElement ? String(countryEl.value || "55") : "55";
-      if (country === "55") whatsappInput.value = formatWhatsapp(whatsappInput.value);
-    });
-  }
-
-  const countrySelect = getCreateCountry();
-  if (countrySelect instanceof HTMLSelectElement && whatsappInput instanceof HTMLInputElement) {
-    countrySelect.addEventListener("change", () => {
-      const country = String(countrySelect.value || "55");
-      if (country === "55") {
-        whatsappInput.value = formatWhatsapp(whatsappInput.value);
-      } else {
-        whatsappInput.value = digitsOnly(whatsappInput.value);
-      }
     });
   }
 
