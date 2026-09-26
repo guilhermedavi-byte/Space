@@ -532,7 +532,7 @@ test('history pages retain period; analytics-only does not reload history', asyn
   assert.equal(second.calls.length,13);assert.equal(second.calls[0].id,'recent-50');assert.equal(second.history.hasMore,false);
   seen.length=0;
   const metrics=await __private.listModel({...args,query:{view:'analytics',period:'last30'}});
-  assert.equal(seen.length,1);assert.equal(metrics.calls,undefined);assert.equal(metrics.analytics.totalCalls,0);
+  assert.equal(seen.filter(q => q.get('limit') !== '200').length,0);assert.equal(metrics.calls,undefined);assert.equal(metrics.analytics.totalCalls,0);
 });
 
 test('Admin SDR and Growth spoof isolation apply to metrics, recent history and callbacks', async () => {

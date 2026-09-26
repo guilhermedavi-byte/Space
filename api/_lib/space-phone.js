@@ -91,17 +91,52 @@ const normalizePeriod = value => {
   const raw = clean(value).toLowerCase();
   if (raw === 'today' || raw === 'hoje') return 'today';
   if (raw === '30' || raw === '30d' || raw === 'last30') return 'last30';
+  if (raw === 'custom' || raw === 'personalizado') return 'custom';
   return 'last7';
 };
 
-const rangeForPeriod = (period, now = new Date()) => {
+const validDateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(clean(value)) && Number.isFinite(Date.parse(`${clean(value)}T12:00:00-03:00`));
+
+const rangeForPeriod = (period, now = new Date(), options = {}) => {
   const normalized = normalizePeriod(period);
+  if (normalized === 'custom') {
+    const fromKey = validDateKey(options.customFrom || options.from) ? clean(options.customFrom || options.from) : '';
+    const toKey = validDateKey(options.customTo || options.to) ? clean(options.customTo || options.to) : '';
+    if (fromKey && toKey) {
+      const start = new Date(`${fromKey}T00:00:00-03:00`);
+      const end = new Date(`${toKey}T23:59:59.999-03:00`);
+      if (end >= start) return { period: 'custom', from: start.toISOString(), to: end.toISOString(), customFrom: fromKey, customTo: toKey };
+    }
+  }
+  const fallback = normalized === 'custom' ? 'last7' : normalized;
   const today = dateKeyFor(now).dateKey;
   const end = new Date(`${today}T23:59:59.999-03:00`);
   const start = new Date(`${today}T00:00:00-03:00`);
-  start.setUTCDate(start.getUTCDate() - (normalized === 'today' ? 0 : normalized === 'last30' ? 29 : 6));
-  return { period: normalized, from: start.toISOString(), to: end.toISOString() };
+  start.setUTCDate(start.getUTCDate() - (fallback === 'today' ? 0 : fallback === 'last30' ? 29 : 6));
+  return { period: fallback, from: start.toISOString(), to: end.toISOString() };
 };
+
+const previousRange = range => {
+  const from = Date.parse(range.from), to = Date.parse(range.to);
+  const duration = Math.max(86400000, to - from + 1);
+  return { period: `${range.period}_previous`, from: new Date(from - duration).toISOString(), to: new Date(to - duration).toISOString() };
+};
+
+const pctDelta = (current, previous) => {
+  const c = Number(current) || 0, p = Number(previous) || 0;
+  if (!p && !c) return { value: 0, label: 'sem variação', tone: 'neutral' };
+  if (!p) return { value: null, label: '+ novo', tone: 'positive' };
+  const value = ((c - p) / p) * 100;
+  return { value, label: `${value >= 0 ? '+' : ''}${value.toFixed(1).replace('.', ',')}%`, tone: value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral' };
+};
+
+const analyticsComparison = (current, previous) => ({
+  totalCalls: { delta: (current.totalCalls || 0) - (previous.totalCalls || 0), relative: pctDelta(current.totalCalls, previous.totalCalls) },
+  connectedCalls: { delta: (current.connectedCalls || 0) - (previous.connectedCalls || 0), relative: pctDelta(current.connectedCalls, previous.connectedCalls) },
+  connectRate: { delta: (current.connectRate || 0) - (previous.connectRate || 0) },
+  talkTimeSeconds: { delta: (current.talkTimeSeconds || 0) - (previous.talkTimeSeconds || 0), relative: pctDelta(current.talkTimeSeconds, previous.talkTimeSeconds) },
+  scheduledCalls: { delta: (current.scheduledCalls || 0) - (previous.scheduledCalls || 0), relative: pctDelta(current.scheduledCalls, previous.scheduledCalls) },
+});
 
 const publicError = (error, fallback = 'space_phone_unavailable') => {
   const code = clean(error?.code || error?.message);
@@ -591,6 +626,73 @@ const summarize = calls => {
   };
 };
 
+const localHour = value => {
+  const date = new Date(value || 0);
+  if (!Number.isFinite(date.getTime())) return null;
+  const label = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false }).format(date);
+  return Number(label);
+};
+
+const localDateKey = value => {
+  const date = new Date(value || 0);
+  if (!Number.isFinite(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+};
+
+const bucketCall = row => {
+  const d = businessDisposition(row);
+  return { calls: 1, answered: Number(d.humanContact), scheduled: Number(d.scheduled), talkTimeSeconds: d.humanTalkTimeSeconds || 0 };
+};
+
+const mergeBucket = (target, addition) => {
+  target.calls = (target.calls || 0) + (addition.calls || 0);
+  target.answered = (target.answered || 0) + (addition.answered || 0);
+  target.scheduled = (target.scheduled || 0) + (addition.scheduled || 0);
+  target.talkTimeSeconds = (target.talkTimeSeconds || 0) + (addition.talkTimeSeconds || 0);
+  return target;
+};
+
+const buildEvolution = ({ rows, range }) => {
+  const today = range.period === 'today';
+  const map = new Map();
+  for (const row of rows || []) {
+    const started = row.started_at || row.created_at;
+    const key = today ? `${String(localHour(started) ?? 0).padStart(2, '0')}:00` : localDateKey(started);
+    if (!key) continue;
+    mergeBucket(map.get(key) || map.set(key, { label: key, calls: 0, answered: 0, scheduled: 0, talkTimeSeconds: 0 }).get(key), bucketCall(row));
+  }
+  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
+};
+
+const blockLabel = hour => `${String(hour).padStart(2, '0')}–${String(hour + 2).padStart(2, '0')}`;
+const operationalBlocks = [8, 10, 12, 14, 16, 18];
+
+const buildTeamPace = ({ rows, sdrs, selectedSdr, range }) => {
+  const selected = selectedSdr && selectedSdr !== 'all' ? new Set([selectedSdr]) : new Set((sdrs || []).map(s => s.uid));
+  const names = new Map((sdrs || []).map(s => [s.uid, s.displayName]));
+  const bySdr = new Map();
+  for (const sdr of sdrs || []) {
+    if (!selected.has(sdr.uid)) continue;
+    bySdr.set(sdr.uid, { uid: sdr.uid, displayName: sdr.displayName, calls: 0, answered: 0, scheduled: 0, expected: null, blocks: operationalBlocks.map(hour => ({ label: blockLabel(hour), calls: 0, answered: 0, scheduled: 0, expected: null })) });
+  }
+  for (const row of rows || []) {
+    if (!bySdr.has(row.space_user_uid)) continue;
+    const hour = localHour(row.started_at || row.created_at);
+    const blockHour = operationalBlocks.find(start => hour >= start && hour < start + 2);
+    const item = bySdr.get(row.space_user_uid);
+    const add = bucketCall(row);
+    mergeBucket(item, add);
+    const block = item.blocks.find(b => b.label === blockLabel(blockHour));
+    if (block) mergeBucket(block, add);
+  }
+  return {
+    mode: range.period === 'today' ? 'today' : 'distribution',
+    metaSource: 'blocked:no_daily_calls_target',
+    blocks: operationalBlocks.map(blockLabel),
+    rows: [...bySdr.values()].filter(row => row.calls || row.answered || row.scheduled || range.period === 'today'),
+  };
+};
+
 const loadCrmContext = async ({ request, phone }) => {
   const normalized = normalizePhoneInput(phone).normalized || clean(phone);
   if (!normalized) return null;
@@ -620,21 +722,23 @@ const loadOperationalSdrs = async resolver => {
 };
 
 const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = resolveSdrNames, resolveOperationalSdrs: operationalResolver = resolveOperationalSdrs }) => {
-  const range = rangeForPeriod(query.period);
+  const range = rangeForPeriod(query.period, new Date(), query);
   const sdrs = isAdmin ? await loadOperationalSdrs(operationalResolver) : [];
   const eligibleSdrUids = sdrs.map(sdr => sdr.uid);
   const selectedSdr = isAdmin && sdrs.some(sdr => sdr.uid === clean(query.sdr)) ? clean(query.sdr) : 'all';
   const userFilter = filterForUser({ user, isAdmin, sdr: selectedSdr, eligibleSdrUids });
   const historyOnly = query.view === 'history';
   const conversionOnly = query.view === 'conversion';
-  if(conversionOnly){
-    const conversionCalls=await queryMetricCalls({request,range,userFilter});
-    return {ok:true,scope:isAdmin?'admin':'self',selectedSdr,conversion:await require('./space-phone-conversion').conversion({request,calls:conversionCalls,user,isAdmin,sdr:selectedSdr,range,resolveNames,sdrs})};
+  if (conversionOnly) {
+    const conversionCalls = await queryMetricCalls({ request, range, userFilter });
+    return { ok: true, scope: isAdmin ? 'admin' : 'self', selectedSdr, conversion: await require('./space-phone-conversion').conversion({ request, calls: conversionCalls, user, isAdmin, sdr: selectedSdr, range, resolveNames, sdrs }) };
   }
   const analyticsOnly = query.view === 'analytics';
   const offset = Math.max(0, Math.min(1000000, Math.floor(Number(query.historyOffset) || 0)));
-  const [metricRows, recentRows] = await Promise.all([
+  const previous = previousRange(range);
+  const [metricRows, previousRows, recentRows] = await Promise.all([
     historyOnly ? [] : queryMetricCalls({ request, range, userFilter, status: query.status, q: query.q }),
+    historyOnly ? [] : queryMetricCalls({ request, range: previous, userFilter, status: query.status, q: query.q }).catch(error => optionalSpacePhoneFallback('comparison', error, [])),
     analyticsOnly ? [] : queryVoiceCalls({ request, range, userFilter, q: query.q, limit: 51, offset }),
   ]);
   const rows = filterCallStatus(recentRows.slice(0, 50), query.status);
@@ -643,8 +747,12 @@ const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = re
   const names = await resolveNames(rows, user).catch(error => optionalSpacePhoneFallback('sdr_names', error, new Map()));
   const calls = rows.map(row => normalizeCall(row, findAnalysis(row, analysisMap), null, qualificationMap.get(clean(row.id)), names.get(clean(row.space_user_uid))));
   const callbacks = analyticsOnly ? [] : await callbacksQueue.list({ request, user, isAdmin, sdr: selectedSdr, eligibleSdrUids }).catch(error => optionalSpacePhoneFallback('callbacks', error, []));
-  return { ok: true, range, scope: isAdmin ? 'admin' : 'self', ...(isAdmin ? { sdrs, selectedSdr } : {}),
-    ...(!historyOnly ? { analytics: summarize(metricRows.map(row => normalizeCall(row))) } : {}),
+  const normalizedMetricRows = metricRows.map(row => normalizeCall(row));
+  const analytics = summarize(normalizedMetricRows);
+  const previousAnalytics = summarize(previousRows.map(row => normalizeCall(row)));
+  const conversion = historyOnly ? null : await require('./space-phone-conversion').conversion({ request, calls: metricRows, user, isAdmin, sdr: selectedSdr, range, resolveNames, sdrs }).catch(error => optionalSpacePhoneFallback('conversion', error, null));
+  return { ok: true, range, previousRange: previous, scope: isAdmin ? 'admin' : 'self', ...(isAdmin ? { sdrs, selectedSdr } : {}),
+    ...(!historyOnly ? { analytics, comparison: analyticsComparison(analytics, previousAnalytics), conversion, evolution: buildEvolution({ rows: metricRows, range }), ...(isAdmin ? { teamPace: buildTeamPace({ rows: metricRows, sdrs, selectedSdr, range }) } : {}) } : {}),
     ...(!analyticsOnly ? { calls, callbacks, history: { hasMore: recentRows.length > 50, nextOffset: offset + 50 } } : {}),
   };
 };

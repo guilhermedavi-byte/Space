@@ -536,19 +536,24 @@ test('conversion updates partially on outcome and booking events without stealin
  };
  await dom.window.SpacePhoneModule.open();await tick(20);
  const input=dom.window.document.querySelector('[data-sp-dial]');input.focus();
- assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent,/50,0%/);
+ assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent,/50,0% taxa atendimento/);
  scheduled=1;dom.window.dispatchEvent(new dom.window.CustomEvent('space-phone:call-updated'));await tick(20);
- assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent,/25,0%/);assert.equal(dom.window.document.activeElement,input);
+ assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent,/25,0% lig → agenda/);assert.equal(dom.window.document.activeElement,input);
  const before=reads;dom.window.dispatchEvent(new dom.window.CustomEvent('space-bookings:updated'));await tick(20);assert.ok(reads>before);
  assert.equal(dom.window.document.querySelector('[data-sp-dial]'),input);
 });
 
-test('conversion is directly after KPIs and before the operational grid/history',async t=>{
- const dom=createModuleDom();t.after(()=>dom.window.close());await dom.window.SpacePhoneModule.open();
+test('conversion rates are embedded in KPIs before the operational grid/history',async t=>{
+ const dom=createModuleDom();t.after(()=>dom.window.close());
+ const rate=(n,d)=>({numerator:n,denominator:d,percent:d?n/d*100:null});
+ dom.window.fetchWithAuth=async()=>jsonResponse({ok:true,scope:'self',analytics:{totalCalls:4,connectedCalls:2,connectRate:.5,talkTimeSeconds:90,scheduledCalls:1},conversion:{attendance:rate(2,4),callToBooking:rate(1,4),answeredToBooking:rate(1,2),bookingToDone:rate(1,1)},calls:[],callbacks:[]});
+ await dom.window.SpacePhoneModule.open();
  const d=dom.window.document,kpis=d.querySelector('.sphone-kpis'),conversion=d.querySelector('[data-sp-conversion]');
  assert.equal(kpis.nextElementSibling,conversion);
+ assert.equal(kpis.querySelectorAll('.sphone-kpi').length,5);
+ assert.match(kpis.textContent,/lig → agenda|taxa atendimento|Agendado → Feito/);
+ assert.equal(conversion.querySelectorAll('.sphone-conversion-grid article').length,0);
  assert.ok(conversion.compareDocumentPosition(d.querySelector('.sphone-grid'))&dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
- assert.equal(conversion.querySelectorAll('.sphone-conversion-grid article').length,4);
 });
 
 
@@ -557,7 +562,7 @@ test('resilience: scope self from session keeps dialer on first API failure with
   dom.window.fetchWithAuth = async () => ({ ok: false, status: 500, json: async () => ({ error: 'space_phone_unavailable' }) });
   await dom.window.SpacePhoneModule.open(); await tick(20);
   assert.ok(dom.window.document.querySelector('[data-sp-call]'));
-  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Calls\s*—/);
+  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Ligações\s*—/);
   assert.match(dom.window.document.body.textContent, /Não foi possível carregar o histórico\./);
   assert.equal(dom.window.document.querySelectorAll('[data-sp-global-status]').length, 1);
   assert.equal(dom.window.document.querySelector('[data-sp-talk-time]').textContent, '—');
@@ -577,15 +582,15 @@ test('resilience: last-known-good KPIs, history, conversion and callbacks surviv
   };
   await dom.window.SpacePhoneModule.open(); await tick(30);
   assert.match(dom.window.document.body.textContent, /call-lkg|\+14075550123/);
-  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Calls\s*2/);
-  assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent, /50,0%/);
+  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Ligações\s*2/);
+  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /50,0%/);
   assert.match(dom.window.document.querySelector('[data-callback-queue]').textContent, /Lead callback/);
   fail = true;
   dom.window.document.querySelector('[data-sp-refresh]').click(); await tick(30);
   assert.ok(dom.window.document.querySelector('[data-sp-call]'));
-  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Calls\s*2/);
+  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Ligações\s*2/);
   assert.match(dom.window.document.querySelector('.sphone-history').textContent, /\+14075550123/);
-  assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent, /50,0%/);
+  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /50,0%/);
   assert.match(dom.window.document.querySelector('[data-callback-queue]').textContent, /Lead callback/);
   fail = false;
   dom.window.document.querySelector('[data-sp-refresh]').click(); await tick(30);
@@ -612,4 +617,53 @@ test('SDR module shows only the 3 most recent redial numbers', async (t) => {
   await dom.window.SpacePhoneModule.open();
   const recentButtons = [...dom.window.document.querySelectorAll('[data-sp-fill]')].map(button => button.dataset.spFill);
   assert.deepEqual(recentButtons, ['+10000000001', '+10000000002', '+10000000003']);
+});
+
+test('Admin custom period propagates to consolidated Space Phone reads', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  dom.window.document.body.dataset.appRole = 'admin';
+  dom.window.__SPACE_SESSION__ = { role: 'admin', sub: 'admin-1' };
+  const urls = [];
+  dom.window.fetchWithAuth = async url => {
+    urls.push(String(url));
+    return jsonResponse({ ok: true, scope: 'admin', sdrs: [{ uid: 'sdr-1', displayName: 'Luana Mendonça' }], selectedSdr: 'all', analytics: { totalCalls: 1 }, conversion: {}, calls: [], callbacks: [], teamPace: { rows: [] }, evolution: [] });
+  };
+  await dom.window.SpacePhoneModule.open(); await tick(30);
+  dom.window.document.querySelector('[data-sp-filter-toggle]').click(); await tick(10);
+  const select = dom.window.document.querySelector('[data-sp-period]');
+  select.value = 'custom'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true })); await tick(10);
+  dom.window.document.querySelector('[data-sp-custom-from]').value = '2026-09-01';
+  dom.window.document.querySelector('[data-sp-custom-to]').value = '2026-09-14';
+  dom.window.document.querySelector('[data-sp-custom-apply]').click(); await tick(40);
+  const last = urls.map(url => new URL(url, 'https://space.test')).filter(url => url.searchParams.get('period') === 'custom').at(-1);
+  assert.ok(last, `expected custom period request, saw: ${urls.join(' | ')}`);
+  assert.equal(last.searchParams.get('period'), 'custom');
+  assert.equal(last.searchParams.get('customFrom'), '2026-09-01');
+  assert.equal(last.searchParams.get('customTo'), '2026-09-14');
+});
+
+test('Growth agendado exposes WhatsApp booking modal and saves external booking through canonical endpoint', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  const writes = [];
+  dom.window.fetchWithAuth = async (url, opts = {}) => {
+    if (String(url).includes('/api/commercial-bookings')) { writes.push(JSON.parse(opts.body)); return jsonResponse({ ok: true, booking: { id: 'booking-ext' } }); }
+    if (opts.method === 'PATCH') return jsonResponse({ ok: true, call: { id: 'call-book', outcome: 'agendado', number: '+14075550123', qualification: {} } });
+    if (String(url).includes('id=call-book')) return jsonResponse({ ok: true, call: { id: 'call-book', outcome: 'agendado', number: '+14075550123', qualification: {} } });
+    return jsonResponse({ ok: true, scope: 'self', analytics: {}, calls: [], callbacks: [] });
+  };
+  await dom.window.SpacePhoneModule.open();
+  dom.window.__spacePhoneTest.emit({ status: 'ended', callRecord: { id: 'call-book', to_number: '+14075550123' } });
+  await tick(20);
+  dom.window.document.querySelector('[data-sp-outcome="agendado"]').click(); await tick(40);
+  assert.match(dom.window.document.body.textContent, /Agendou pelo WhatsApp/);
+  dom.window.document.querySelector('[data-sp-external-booking]').click(); await tick(10);
+  const dateInput = dom.window.document.querySelector('[data-sp-booking-date]'); dateInput.value = '2026-09-28'; dateInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  const timeInput = dom.window.document.querySelector('[data-sp-booking-time]'); timeInput.value = '15:30'; timeInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  const consultantInput = dom.window.document.querySelector('[data-sp-booking-consultant]'); consultantInput.value = 'Closer QA'; consultantInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  const notesInput = dom.window.document.querySelector('[data-sp-booking-notes]'); notesInput.value = 'Confirmado pelo WhatsApp'; notesInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  dom.window.document.querySelector('[data-sp-booking-save]').click(); await tick(40);
+  assert.equal(writes[0].action, 'manual');
+  assert.equal(writes[0].sourceType, 'external_booking');
+  assert.equal(writes[0].callId, 'call-book');
+  assert.match(writes[0].sourceId, /^whatsapp_call-book_2026-09-28_15:30$/);
 });
