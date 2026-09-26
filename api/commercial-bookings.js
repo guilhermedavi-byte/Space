@@ -26,6 +26,7 @@ const createHandler=({authResolver=resolveAdminRequestAuth,permissionResolver=re
     if(body.action==='reschedule')return sendJson(res,200,{booking:await booking.reschedule({request,user,isAdmin,body})});
     if(body.action==='cancel')return sendJson(res,200,{booking:await booking.cancel({request,user,isAdmin,body})});
     if(body.action==='premeeting_notifications')return sendJson(res,200,{notifications:await booking.premeetingNotifications({request,user,isAdmin})});
+    if(body.action==='save_notes')return sendJson(res,200,{booking:await booking.saveNotes({request,user,isAdmin,body})});
     throw booking.fail('invalid_action');
   }catch(e){console.warn('[commercial-bookings]',JSON.stringify({code:e.status?e.message:'internal_error',status:e.status||500}));return sendJson(res,e.status||500,{error:e.status&&e.status<500?e.message:'booking_temporarily_unavailable'});}
 };

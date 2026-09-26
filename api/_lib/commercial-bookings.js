@@ -9,8 +9,27 @@ const fail = (code, status = 400) => Object.assign(new Error(code), { status });
 const uuid = x => /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(clean(x));
 const bookingUid = x => /^[A-Za-z0-9_-]{6,100}$/.test(clean(x));
 const iso = x => Number.isFinite(Date.parse(x)) ? new Date(x).toISOString() : null;
+function meetUrl(value) {
+  const raw = clean(value);
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' || url.hostname !== 'meet.google.com') return null;
+    const code = url.pathname.split('/').filter(Boolean)[0] || '';
+    if (!/^[a-z]{3}-[a-z]{4}-[a-z]{3}$/i.test(code)) return null;
+    return `https://meet.google.com/${code.toLowerCase()}`;
+  } catch { return null; }
+}
+const meetCode = value => { const url=meetUrl(value); return url ? new URL(url).pathname.split('/').filter(Boolean)[0] : null; };
+function extractMeetUrl(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return meetUrl(value) || (value.match(/https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/i)?.[0] ? meetUrl(value.match(/https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/i)[0]) : null);
+  if (Array.isArray(value)) { for (const item of value) { const found=extractMeetUrl(item); if(found)return found; } return null; }
+  if (typeof value === 'object') { for (const key of ['meetingUrl','meeting_url','meetLink','meet_link','url','location','conferenceUrl']) { const found=extractMeetUrl(value[key]); if(found)return found; } for (const v of Object.values(value)) { const found=extractMeetUrl(v); if(found)return found; } }
+  return null;
+}
 const fields = '*';
-const model = b => ({ id:b.id, bookingExternalId:b.calcom_booking_id, bookingConfirmed:b.status === 'confirmed', status:b.status, bookingStartAt:b.start_at, bookingEndAt:b.end_at, timezone:b.timezone, attendeeName:b.attendee_name, attendeeEmail:b.attendee_email, attendeePhone:b.attendee_phone, hostName:b.host_name, hostEmail:b.host_email, sdrUid:b.sdr_uid, voiceCallId:b.voice_call_id, leadId:b.lead_id, opportunityId:b.opportunity_id,meetingId:b.meeting_id,meetingStatus:b.meeting_status,meetingCompletedAt:b.meeting_completed_at,matchMethod:b.match_method,sourceType:b.source_type || 'internal_booking',sourceId:b.source_id || b.calcom_booking_id,contextPayload:b.context_payload || null, confirmedAt:b.confirmed_at||null, confirmedBy:b.confirmed_by||null, cancelledAt:b.cancelled_at||null, cancelledBy:b.cancelled_by||null, cancellationReason:b.cancellation_reason||null, rescheduledAt:b.rescheduled_at||null, rescheduledBy:b.rescheduled_by||null, previousStartAt:b.previous_start_at||null, previousEndAt:b.previous_end_at||null, calendarSyncStatus:b.calendar_sync_status||'not_applicable', calendarSyncError:b.calendar_sync_error||null, notification5MinSentAt:b.notification_5min_sent_at||null });
+const model = b => ({ id:b.id, bookingExternalId:b.calcom_booking_id, bookingConfirmed:b.status === 'confirmed', status:b.status, bookingStartAt:b.start_at, bookingEndAt:b.end_at, timezone:b.timezone, attendeeName:b.attendee_name, attendeeEmail:b.attendee_email, attendeePhone:b.attendee_phone, hostName:b.host_name, hostEmail:b.host_email, sdrUid:b.sdr_uid, voiceCallId:b.voice_call_id, leadId:b.lead_id, opportunityId:b.opportunity_id,meetingId:b.meeting_id,meetingStatus:b.meeting_status,meetingCompletedAt:b.meeting_completed_at,matchMethod:b.match_method,sourceType:b.source_type || 'internal_booking',sourceId:b.source_id || b.calcom_booking_id,contextPayload:b.context_payload || null, confirmedAt:b.confirmed_at||null, confirmedBy:b.confirmed_by||null, cancelledAt:b.cancelled_at||null, cancelledBy:b.cancelled_by||null, cancellationReason:b.cancellation_reason||null, rescheduledAt:b.rescheduled_at||null, rescheduledBy:b.rescheduled_by||null, previousStartAt:b.previous_start_at||null, previousEndAt:b.previous_end_at||null, calendarSyncStatus:b.calendar_sync_status||'not_applicable', calendarSyncError:b.calendar_sync_error||null, notification5MinSentAt:b.notification_5min_sent_at||null, meetingProvider:b.meeting_provider||null, meetingUrl:b.meeting_url||b.meet_link||null, meetingCode:b.meeting_code||meetCode(b.meeting_url||b.meet_link), meetingNotes:b.meeting_notes||'', meetingNotesUpdatedAt:b.meeting_notes_updated_at||null, meetingNotesUpdatedBy:b.meeting_notes_updated_by||null });
 async function callInScope(request, id, user, isAdmin) {
   if (!uuid(id)) throw fail('invalid_call');
   const c = rows(await request(`/voice_calls?id=eq.${encodeURIComponent(id)}&select=id,space_user_uid,lead_id,opportunity_id,lead_name,to_number&limit=1`))[0];
@@ -135,6 +154,34 @@ async function premeetingNotifications({request=supabaseFetch,user,isAdmin,now=n
   return sent;
 }
 
+
+async function saveNotes({request=supabaseFetch,user,isAdmin,body={}}) {
+  const b = await bookingInScope(request, clean(body.bookingId), user, isAdmin);
+  const now = new Date().toISOString();
+  const text = clean(body.notes).slice(0,10000);
+  const out = rows(await request(`/commercial_bookings?id=eq.${encodeURIComponent(b.id)}`, { method:'PATCH', headers:{Prefer:'return=representation'}, body:{meeting_notes:text,meeting_notes_updated_at:now,meeting_notes_updated_by:user.sub,updated_at:now} }))[0];
+  await audit(request, out || b, 'notes', user, {meeting_notes:b.meeting_notes||''}, {meeting_notes:text});
+  return model(out || {...b,meeting_notes:text,meeting_notes_updated_at:now,meeting_notes_updated_by:user.sub});
+}
+async function meetContext({request=supabaseFetch,user,isAdmin,body={}}) {
+  const locators = [];
+  const info = body.meetingInfo && typeof body.meetingInfo === 'object' ? body.meetingInfo : {};
+  const suppliedUrl = extractMeetUrl(body.meetingUrl || body.url || info.meetingUrl || info.meetingUri || info.conferenceUrl || info.url);
+  const suppliedCode = meetCode(suppliedUrl) || clean(body.meetingCode || info.meetingCode || info.meetingId).toLowerCase();
+  if (suppliedUrl) locators.push(`meeting_url=eq.${encodeURIComponent(suppliedUrl)}`);
+  if (/^[a-z]{3}-[a-z]{4}-[a-z]{3}$/i.test(suppliedCode)) locators.push(`meeting_code=eq.${encodeURIComponent(suppliedCode)}`);
+  if (!locators.length) throw fail('meeting_context_missing',400);
+  const scope = isAdmin ? '' : `&sdr_uid=eq.${encodeURIComponent(user.sub)}`;
+  let found=[];
+  for (const locator of locators) {
+    found = rows(await request(`/commercial_bookings?select=${fields}&${locator}${scope}&order=start_at.desc&limit=2`));
+    if (found.length) break;
+  }
+  if (found.length !== 1) throw fail(found.length ? 'meeting_context_ambiguous' : 'meeting_not_found', found.length ? 409 : 404);
+  const b = model(found[0]);
+  return { booking:b, context:{ leadName:b.attendeeName||'Lead', phone:b.attendeePhone||'', startAt:b.bookingStartAt, status:b.status, source:b.sourceType, notes:b.meetingNotes||'', leadId:b.leadId||null, opportunityId:b.opportunityId||null, canOpenLead:Boolean(b.leadId||b.opportunityId), presentationUrl:'/sales-presentation' } };
+}
+
 async function calGet(path,{fetcher=fetch,env=process.env,version='2026-02-25'}={}) {
   const key=clean(env.CALCOM_API_KEY);
   if (!key) throw fail('calcom_not_configured',503);
@@ -191,12 +238,13 @@ async function reconcile({uid,request=supabaseFetch,fetcher=fetch,env=process.en
       if(ids.length===1)googleEventId=ids[0];
     }
   } catch { console.info('[calcom-meeting]',{code:'calendar_reference_unavailable',bookingId:persisted.id}); }
-  let meetingUrl=null;
-  try { const url=new URL(b.meetingUrl || b.location); if(url.protocol==='https:' && url.hostname==='meet.google.com')meetingUrl=url.href; } catch {}
+  let meetingUrl=extractMeetUrl(b);
+  const meetingPatch = meetingUrl ? { meeting_provider:'google_meet', meeting_url:meetingUrl, meeting_code:meetCode(meetingUrl) } : {};
+  const persistedWithMeet = Object.keys(meetingPatch).length ? (rows(await request(`/commercial_bookings?id=eq.${encodeURIComponent(persisted.id)}`, { method:'PATCH', headers:{Prefer:'return=representation'}, body:{...meetingPatch,updated_at:new Date().toISOString()} }))[0] || {...persisted,...meetingPatch}) : persisted;
   const link=await request('/rpc/space_produce_calcom_meeting',{method:'POST',body:{p_booking_id:persisted.id,p_google_event_id:googleEventId,p_meet_link:meetingUrl}});
   // Reconcile predecessor too; a failure returns non-2xx so provider retries, safely.
   if(depth===0 && bookingUid(b.rescheduledFromUid)) await reconcile({uid:b.rescheduledFromUid,request,fetcher,env,user,isAdmin,depth:depth+1});
   if(bookingUid(b.rescheduledToUid)) return reconcile({uid:b.rescheduledToUid,request,fetcher,env,user,isAdmin,depth:depth+1});
-  return model({...persisted,...link.data});
+  return model({...persistedWithMeet,...link.data});
 }
-module.exports={CAL_LINK,CAL_EVENT_TYPE_ID,list,context,manual,confirm,reschedule,cancel,premeetingNotifications,reconcile,verifySignature,bookingUid,fail};
+module.exports={CAL_LINK,CAL_EVENT_TYPE_ID,list,context,manual,confirm,reschedule,cancel,premeetingNotifications,saveNotes,meetContext,reconcile,verifySignature,bookingUid,meetUrl,meetCode,extractMeetUrl,fail};
