@@ -379,7 +379,7 @@ test('changing period refreshes history and resets pagination', async t => {
   dom.window.document.querySelector('[data-sp-load-more]').click();await tick(30);
   assert.deepEqual(Array.from(dom.window.SpacePhoneModule.state.data.calls,c=>c.id),['yesterday','older']);
   const select=dom.window.document.querySelector('[data-sp-period]');select.value='today';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await tick(30);
-  assert.equal(seen.filter(q=>q.get('view')!=='conversion').at(-1).get('view'),null);assert.equal(dom.window.SpacePhoneModule.state.data.analytics.totalCalls,0);
+  assert.equal(seen.filter(q=>!['conversion','callbacks','callback-notifications'].includes(q.get('view'))).at(-1).get('view'),null);assert.equal(dom.window.SpacePhoneModule.state.data.analytics.totalCalls,0);
   assert.deepEqual(Array.from(dom.window.SpacePhoneModule.state.data.calls,c=>c.id),[]);
   assert.equal(dom.window.document.querySelectorAll('[data-sp-detail]').length,0);
 });
@@ -558,7 +558,9 @@ test('resilience: scope self from session keeps dialer on first API failure with
   await dom.window.SpacePhoneModule.open(); await tick(20);
   assert.ok(dom.window.document.querySelector('[data-sp-call]'));
   assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Calls\s*—/);
-  assert.match(dom.window.document.body.textContent, /Não foi possível carregar o histórico agora/);
+  assert.match(dom.window.document.body.textContent, /Não foi possível carregar o histórico\./);
+  assert.equal(dom.window.document.querySelectorAll('[data-sp-global-status]').length, 1);
+  assert.equal(dom.window.document.querySelector('[data-sp-talk-time]').textContent, '—');
   assert.doesNotMatch(dom.window.document.body.textContent, /space_phone_unavailable/);
 });
 
@@ -599,5 +601,6 @@ test('resilience: conversion endpoint failure does not drop working history', as
   };
   await dom.window.SpacePhoneModule.open(); await tick(30);
   assert.match(dom.window.document.querySelector('.sphone-history').textContent, /history-ok|\+14075550123/);
-  assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent, /Conversão temporariamente indisponível|Indisponível agora/);
+  assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent, /↻ atualização pendente/);
+  assert.doesNotMatch(dom.window.document.querySelector('[data-sp-conversion]').textContent, /Carregando/);
 });
