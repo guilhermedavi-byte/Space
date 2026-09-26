@@ -17,10 +17,10 @@ async function setup(t,scope='growth'){
 test('Admin manager has no dialer/operator UI; ranking is above history, polished and stable during polling',async t=>{
  const {w,reads,intervals}=await setup(t,'admin'),d=w.document;
  assert.equal(d.querySelector('[data-sp-call]'),null);assert.equal(d.querySelector('.sphone-online'),null);assert.equal(d.querySelector('.sphone-grid'),null);
- const ranking=d.querySelector('[data-sp-ranking]'),history=d.querySelector('.sphone-history'),details=d.querySelector('[data-sp-conversion-ranking]');
+ const ranking=d.querySelector('[data-sp-ranking]'),history=d.querySelector('.sphone-history');
  assert.ok(ranking.compareDocumentPosition(history)&w.Node.DOCUMENT_POSITION_FOLLOWING);
- assert.equal(details.open,false);assert.ok(d.querySelector('.sphone-ranking-card'));assert.ok(d.querySelector('.sphone-conversion-table table'));
- details.open=true;details.dispatchEvent(new w.Event('toggle',{bubbles:true}));await intervals.find(x=>x.ms===10000).fn();await flush();assert.equal(d.querySelector('[data-sp-conversion-ranking]').open,true);
+ assert.ok(d.querySelector('.sphone-compact-table table'));assert.ok(d.querySelector('[data-sp-evolution]'));
+ await intervals.find(x=>x.ms===10000).fn();await flush();assert.ok(d.querySelector('.sphone-compact-table table'));
  assert.equal(d.querySelector('#sphone-filter-panel').hidden,true);assert.ok(d.querySelector('.sphone-head-actions [data-sp-filter-toggle]'));assert.equal(d.querySelector('.sphone-history [data-sp-filter-toggle]'),null);d.querySelector('[data-sp-filter-toggle]').click();assert.equal(d.querySelector('#sphone-filter-panel').hidden,false);
  const sdr=d.querySelector('[data-sp-sdr]');sdr.value='luana';sdr.dispatchEvent(new w.Event('change',{bubbles:true}));await flush();
  const period=d.querySelector('[data-sp-period]');period.value='today';period.dispatchEvent(new w.Event('change',{bubbles:true}));await flush();

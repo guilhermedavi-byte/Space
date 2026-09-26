@@ -527,9 +527,9 @@ test('history pages retain period; analytics-only does not reload history', asyn
   };
   const args={request,user:{sub:'owner'},isAdmin:false,resolveNames:async()=>new Map()};
   const first=await __private.listModel({...args,query:{period:'today'}});
-  assert.equal(first.analytics.totalCalls,0);assert.equal(first.calls.length,50);assert.equal(first.history.hasMore,true);
+  assert.equal(first.analytics.totalCalls,0);assert.equal(first.calls.length,20);assert.equal(first.history.hasMore,true);
   const second=await __private.listModel({...args,query:{view:'history',historyOffset:first.history.nextOffset,period:'today'}});
-  assert.equal(second.calls.length,13);assert.equal(second.calls[0].id,'recent-50');assert.equal(second.history.hasMore,false);
+  assert.equal(second.calls.length,20);assert.equal(second.calls[0].id,'recent-20');assert.equal(second.history.hasMore,true);
   seen.length=0;
   const metrics=await __private.listModel({...args,query:{view:'analytics',period:'last30'}});
   assert.equal(seen.filter(q => q.get('limit') !== '200').length,0);assert.equal(metrics.calls,undefined);assert.equal(metrics.analytics.totalCalls,0);

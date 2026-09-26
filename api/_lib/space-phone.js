@@ -739,9 +739,9 @@ const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = re
   const [metricRows, previousRows, recentRows] = await Promise.all([
     historyOnly ? [] : queryMetricCalls({ request, range, userFilter, status: query.status, q: query.q }),
     historyOnly ? [] : queryMetricCalls({ request, range: previous, userFilter, status: query.status, q: query.q }).catch(error => optionalSpacePhoneFallback('comparison', error, [])),
-    analyticsOnly ? [] : queryVoiceCalls({ request, range, userFilter, q: query.q, limit: 51, offset }),
+    analyticsOnly ? [] : queryVoiceCalls({ request, range, userFilter, q: query.q, limit: 21, offset }),
   ]);
-  const rows = filterCallStatus(recentRows.slice(0, 50), query.status);
+  const rows = filterCallStatus(recentRows.slice(0, 20), query.status);
   const analysisMap = await loadAnalysisMap({ request, calls: rows }).catch(error => optionalSpacePhoneFallback('analysis', error, new Map()));
   const qualificationMap = await loadQualificationsMap({ request, callIds: rows.map(row => row.id) }).catch(error => optionalSpacePhoneFallback('qualifications', error, new Map()));
   const names = await resolveNames(rows, user).catch(error => optionalSpacePhoneFallback('sdr_names', error, new Map()));
@@ -753,7 +753,7 @@ const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = re
   const conversion = historyOnly ? null : await require('./space-phone-conversion').conversion({ request, calls: metricRows, user, isAdmin, sdr: selectedSdr, range, resolveNames, sdrs }).catch(error => optionalSpacePhoneFallback('conversion', error, null));
   return { ok: true, range, previousRange: previous, scope: isAdmin ? 'admin' : 'self', ...(isAdmin ? { sdrs, selectedSdr } : {}),
     ...(!historyOnly ? { analytics, comparison: analyticsComparison(analytics, previousAnalytics), conversion, evolution: buildEvolution({ rows: metricRows, range }), ...(isAdmin ? { teamPace: buildTeamPace({ rows: metricRows, sdrs, selectedSdr, range }) } : {}) } : {}),
-    ...(!analyticsOnly ? { calls, callbacks, history: { hasMore: recentRows.length > 50, nextOffset: offset + 50 } } : {}),
+    ...(!analyticsOnly ? { calls, callbacks, history: { hasMore: recentRows.length > 20, nextOffset: offset + 20 } } : {}),
   };
 };
 

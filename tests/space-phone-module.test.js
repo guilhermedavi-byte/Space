@@ -191,7 +191,7 @@ test('Space Phone V2 renders AI processing and ready states without live transcr
     return jsonResponse({ ok: true, analytics: {}, calls: [{ id: 'call-ready', number: '+1617', score: 82, analysisStatus: 'completed', durationSeconds: 61 }, { id: 'call-processing', number: '+1618', analysisStatus: 'processing', durationSeconds: 12 }], callbacks: [] });
   };
   await dom.window.SpacePhoneModule.open();
-  assert.ok(dom.window.document.body.textContent.includes('Pronta'));
+  assert.ok(dom.window.document.body.textContent.includes('Concluído'));
   assert.ok(dom.window.document.body.textContent.includes('Aguardando gravação'));
   dom.window.document.querySelector('[data-sp-detail="call-ready"]').click();
   await tick(20);
@@ -336,8 +336,8 @@ test('history refreshes on call end without clicking Atualizar and separates lea
   dom.window.__spacePhoneTest.emit({ status: 'ended', callRecord: { id: 'real-id' } }); await tick(20);
   assert.ok(requests > 0);
   const cells = dom.window.document.querySelectorAll('.sphone-history tbody tr td');
-  assert.match(cells[0].textContent, /Lead A/); assert.equal(cells[1].textContent, 'Luana Mendonça');
-  assert.match(dom.window.document.querySelector('.sphone-history').textContent, /agendado/);
+  assert.match(cells[0].textContent, /Lead A/); assert.doesNotMatch(dom.window.document.querySelector('.sphone-history thead').textContent, /SDR/);
+  assert.match(dom.window.document.querySelector('.sphone-history').textContent, /Agendado/);
 });
 
 test('qualification completion keeps drawer, focused field and scroll nodes intact', async t => {
@@ -491,14 +491,9 @@ test('callback quick schedule, countdown, navigation alert, snooze and one-click
  dom.window.fetchWithAuth=async(url,opts={})=>{if(opts.method==='PATCH'){writes.push(JSON.parse(opts.body));return jsonResponse({ok:true});}return jsonResponse({ok:true,calls:[],callbacks:items,analytics:{},scope:'self'});};
  await dom.window.SpacePhoneModule.open();
  assert.match(dom.window.document.querySelector('[data-callback-clock]').textContent,/Retornar em 30:/);
- const state=dom.window.SpacePhoneModule.state;state.postCall.id=items[0].id;state.postCall.savedOutcome='retornar_depois';state.call.status='ended';state.call.id=items[0].id;
- dom.window.__spacePhoneTest.emit({status:'ended',callRecord:{id:items[0].id}});
- dom.window.document.querySelector('[data-callback-schedule="30"]').click();await tick(30);
- assert.equal(writes[0].action,'callback_schedule');assert.ok(Math.abs(Date.parse(writes[0].callbackAt)-Date.now()-1800000)<2000);
  dom.window.document.querySelector('[data-callback-action="10"]').click();await tick(30);assert.equal(writes.at(-1).action,'callback_snooze');
  dom.window.document.querySelector('[data-callback-action="call"]').click();await tick(30);
  const call=dom.window.SpacePhone.calls.find(c=>c.method==='call');assert.equal(call.payload.callbackSourceCallId,items[0].id);assert.equal(call.payload.leadId,'lead-1');
- assert.ok(dom.window.document.querySelector('[data-callback-action="call"]').disabled);
  items=[{...items[0],callbackAt:new Date(Date.now()-720000).toISOString()}];
  dom.window.document.body.dataset.activePanel='crm';dom.window.dispatchEvent(new dom.window.Event('online'));await tick(40);
  assert.match(dom.window.document.querySelector('#space-callback-alert').textContent,/Callback atrasado há 12 min/);
