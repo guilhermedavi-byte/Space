@@ -22,7 +22,7 @@ test('Growth all four rates use own canonical disposition, never a spoofed SDR',
 });
 test('Admin team, ranking real names and single SDR scope',async()=>{
  const d=db(),calls=[call('own','agendado'),call('other','ocupado')];
- const all=await conversion({...args(d),isAdmin:true,sdr:'all',sdrs:[{uid:'own',displayName:'Luana Mendonça'},{uid:'other',displayName:'Ayres André'}],calls});assert.equal(all.calls,2);assert.equal(all.bookings,2);assert.equal(all.ranking.length,2);assert.equal(all.ranking[0].displayName,'Luana Mendonça');
+ const all=await conversion({...args(d),isAdmin:true,sdr:'all',sdrs:[{uid:'own',displayName:'Luana Mendonça'},{uid:'other',displayName:'Ayres André'},{uid:'empty',displayName:'Usuário sem operação'}],calls});assert.equal(all.calls,2);assert.equal(all.bookings,2);assert.equal(all.ranking.length,2);assert.equal(all.ranking[0].displayName,'Luana Mendonça');assert.equal(all.ranking.some(row=>row.uid==='empty'),false);
  const one=await conversion({...args(d),isAdmin:true,sdr:'own',sdrs:[{uid:'own',displayName:'Luana Mendonça'},{uid:'other',displayName:'Ayres André'}],calls});assert.equal(one.calls,1);assert.equal(one.ranking.length,1);
 });
 for(const period of ['today','last7','last30'])test(`period ${period}: calls and bookings use explicit own-period cohorts`,async()=>{

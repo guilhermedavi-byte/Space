@@ -77,6 +77,24 @@ test("voice call select only references canonical production columns plus new di
   assert.equal(selected.includes("recording_id"), false);
 });
 
+
+
+test('operational SDR eligibility excludes admin-marked users even with SDR role', async () => {
+  const { isOperationalSdrUser, resolveOperationalSdrs } = require('../api/_lib/space-phone-sdr-eligibility');
+  const luana = { uid: 'luana', role: 'growth', tipo: 'growth', active: true, commercialRoles: ['sdr'], name: 'Luana Mendonça' };
+  const guilherme = { uid: 'guilherme', role: 'growth', tipo: 'growth', active: true, commercialRoles: ['sdr'], isSuperAdmin: true, name: 'Guilherme Davi' };
+  const matheus = { uid: 'matheus', role: 'growth', tipo: 'growth', active: true, commercialRoles: ['sdr'], adminPermissions: ['comercial.spacePhone.view'], name: 'Matheus Afonso' };
+  const legacyAdmin = { uid: 'legacy-admin', role: 'growth', perfil: 'admin', active: true, commercialRoles: ['sdr'], name: 'Legacy Admin' };
+
+  assert.equal(isOperationalSdrUser(luana), true);
+  assert.equal(isOperationalSdrUser(guilherme), false);
+  assert.equal(isOperationalSdrUser(matheus), false);
+  assert.equal(isOperationalSdrUser(legacyAdmin), false);
+
+  const sdrs = await resolveOperationalSdrs({ listUsers: async () => [guilherme, luana, matheus, legacyAdmin] });
+  assert.deepEqual(sdrs.map(sdr => sdr.uid), ['luana']);
+});
+
 test("growth SDR list is server-side scoped to own voice calls", async () => {
   const seen = [];
   const handler = createHandler({

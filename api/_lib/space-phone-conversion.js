@@ -34,6 +34,6 @@ async function conversion({request,calls,user,isAdmin,sdr,range,resolveNames,sdr
  }));
  const totals=empty();for(const g of groups.values())for(const key of Object.keys(totals))totals[key]+=g[key];
  const names=isAdmin?await resolveNames([...groups.keys()].map(space_user_uid=>({space_user_uid})),user):new Map();
- return { ...metrics(totals),updatedAt:new Date().toISOString(),temporalRule:'calls_started_at__bookings_start_at',...(isAdmin?{ranking:[...groups].map(([uid,g])=>({uid,displayName:names.get(uid)||'SDR sem nome cadastrado',...metrics(g)})).sort((a,b)=>b.scheduled-a.scheduled||b.calls-a.calls)}:{}) };
+ return { ...metrics(totals),updatedAt:new Date().toISOString(),temporalRule:'calls_started_at__bookings_start_at',...(isAdmin?{ranking:[...groups].filter(([,g])=>g.calls||g.answered||g.scheduled||g.bookings||g.done||g.unlinked).map(([uid,g])=>({uid,displayName:names.get(uid)||'SDR sem nome cadastrado',...metrics(g)})).sort((a,b)=>b.scheduled-a.scheduled||b.calls-a.calls)}:{}) };
 }
 module.exports={conversion,ratio};

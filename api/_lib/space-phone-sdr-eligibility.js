@@ -7,10 +7,21 @@ const clean = value => String(value == null ? '' : value).trim();
 
 const userUid = row => clean(row?.uid || row?.space_user_uid || row?.id || row?.firestoreDocId || row?.sub);
 
+const roleFields = row => [row?.role, row?.tipo, row?.type, row?.perfil, row?.profile, row?.cargo, row?.platformRole, row?.appRole, row?.accessRole];
+
+const hasAdminMarker = row => {
+  if (!row || typeof row !== 'object') return false;
+  if (roleFields(row).some(value => normalizePlatformRole(value) === 'admin')) return true;
+  if (row.isSuperAdmin === true || row.isAdmin === true || row.admin === true) return true;
+  if (Array.isArray(row.adminPermissions) && row.adminPermissions.length > 0) return true;
+  if (Number(row.adminPermissionsVersion || 0) > 0) return true;
+  return false;
+};
+
 const isOperationalSdrUser = row => {
   if (!row || typeof row !== 'object') return false;
+  if (hasAdminMarker(row)) return false;
   const role = normalizePlatformRole(row.role || row.tipo || row.type);
-  if (role === 'admin') return false;
   if (role !== 'growth') return false;
   if (!isUserActive(row)) return false;
   return normalizeCommercialRoles(row.commercialRoles).includes('sdr');
@@ -26,4 +37,4 @@ const resolveOperationalSdrs = async ({ listUsers = listCollectionAsAdmin } = {}
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'));
 };
 
-module.exports = { isOperationalSdrUser, resolveOperationalSdrs, userUid };
+module.exports = { hasAdminMarker, isOperationalSdrUser, resolveOperationalSdrs, userUid };
