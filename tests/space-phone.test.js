@@ -605,3 +605,34 @@ test('Admin users are excluded from operational SDR filter, team KPIs, history a
   assert.deepEqual(model.callbacks.map(callback => callback.sdrUid), ['luana']);
   assert.ok(paths.some(path => path.includes('space_user_uid=in.(luana)')));
 });
+
+test('optional analysis, qualification and callback failures do not drop voice call history', async () => {
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args);
+  try {
+    const model = await __private.listModel({
+      user: { sub: 'sdr-1', role: 'growth' },
+      isAdmin: false,
+      query: { period: 'today' },
+      resolveNames: async () => { throw new Error('names_down'); },
+      request: async path => {
+        if (path.startsWith('/voice_call_qualifications')) throw new Error('qualification_down');
+        if (path.startsWith('/sdr_call_scores')) throw new Error('analysis_down');
+        if (path.startsWith('/voice_calls')) {
+          const params = new URL(path, 'https://space.test').searchParams;
+          if (params.has('callback_status')) throw new Error('callbacks_down');
+          return { data: [{ id: 'history-safe', space_user_uid: 'sdr-1', to_number: '+14075550123', status: 'connected', started_at: new Date().toISOString(), duration_seconds: 33 }] };
+        }
+        return { data: [] };
+      },
+    });
+    assert.equal(model.calls.length, 1);
+    assert.equal(model.calls[0].id, 'history-safe');
+    assert.equal(model.calls[0].analysisStatus, 'waiting_recording');
+    assert.deepEqual(model.callbacks, []);
+    assert.ok(warnings.some(entry => String(entry[0]).includes('optional_component_failed')));
+  } finally {
+    console.warn = originalWarn;
+  }
+});

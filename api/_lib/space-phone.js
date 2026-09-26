@@ -566,6 +566,11 @@ const loadAnalysisMap = async ({ request, calls }) => {
 
 const findAnalysis = (row, analysisMap) => analysisMap.get(clean(row.id)) || null;
 
+const optionalSpacePhoneFallback = (component, error, fallback) => {
+  console.warn('[space-phone] optional_component_failed', { component, error: clean(error?.message || error?.code) || 'unknown' });
+  return fallback;
+};
+
 const summarize = calls => {
   const totalCalls = calls.length;
   const connected = calls.filter(call => call.status === 'connected').length;
@@ -633,11 +638,11 @@ const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = re
     analyticsOnly ? [] : queryVoiceCalls({ request, range, userFilter, q: query.q, limit: 51, offset }),
   ]);
   const rows = filterCallStatus(recentRows.slice(0, 50), query.status);
-  const analysisMap = await loadAnalysisMap({ request, calls: rows });
-  const qualificationMap = await loadQualificationsMap({ request, callIds: rows.map(row => row.id) });
-  const names = await resolveNames(rows, user);
+  const analysisMap = await loadAnalysisMap({ request, calls: rows }).catch(error => optionalSpacePhoneFallback('analysis', error, new Map()));
+  const qualificationMap = await loadQualificationsMap({ request, callIds: rows.map(row => row.id) }).catch(error => optionalSpacePhoneFallback('qualifications', error, new Map()));
+  const names = await resolveNames(rows, user).catch(error => optionalSpacePhoneFallback('sdr_names', error, new Map()));
   const calls = rows.map(row => normalizeCall(row, findAnalysis(row, analysisMap), null, qualificationMap.get(clean(row.id)), names.get(clean(row.space_user_uid))));
-  const callbacks = analyticsOnly ? [] : await callbacksQueue.list({ request, user, isAdmin, sdr: selectedSdr, eligibleSdrUids });
+  const callbacks = analyticsOnly ? [] : await callbacksQueue.list({ request, user, isAdmin, sdr: selectedSdr, eligibleSdrUids }).catch(error => optionalSpacePhoneFallback('callbacks', error, []));
   return { ok: true, range, scope: isAdmin ? 'admin' : 'self', ...(isAdmin ? { sdrs, selectedSdr } : {}),
     ...(!historyOnly ? { analytics: summarize(metricRows.map(row => normalizeCall(row))) } : {}),
     ...(!analyticsOnly ? { calls, callbacks, history: { hasMore: recentRows.length > 50, nextOffset: offset + 50 } } : {}),

@@ -4,7 +4,7 @@ const flush=()=>new Promise(r=>setTimeout(r,20));
 async function setup(t,scope='growth'){
  const dom=new JSDOM('<body data-active-panel="space-phone"><section data-panel="space-phone"><div data-space-phone></div></section></body>',{url:`https://space.test/app/${scope}/comercial/pre-vendas/ligacoes`,runScripts:'outside-only',pretendToBeVisual:true});
  t.after(()=>dom.window.close());const w=dom.window,reads=[],intervals=[],timeouts=[],writes=[];
- w.__SPACE_SESSION__={role:scope};w.setInterval=(fn,ms)=>{intervals.push({fn,ms});return 1;};w.setTimeout=(fn,ms)=>{timeouts.push({fn,ms});return 1;};
+ w.__SPACE_SESSION__={role:scope,commercialRoles:scope==='growth'?['sdr']:[]};w.setInterval=(fn,ms)=>{intervals.push({fn,ms});return 1;};w.setTimeout=(fn,ms)=>{timeouts.push({fn,ms});return 1;};
  const own={id:'own-call',sdrUid:'self',name:'Own lead',number:'+14075550100',callbackAt:new Date(Date.now()-600000).toISOString()};
  w.fetchWithAuth=async(url,options={})=>{
   const q=new URL(url,'https://space.test').searchParams;reads.push(q);if(options.method)writes.push(options);
@@ -42,7 +42,7 @@ test('Admin management callbacks do not become operational alerts',async t=>{
 
 test('Teclado route renders compact utility dialer and preserves DTMF controls',async t=>{
  const dom=new JSDOM('<body data-active-panel="space-phone" data-app-role="growth"><section data-panel="space-phone"><div data-space-phone></div></section></body>',{url:'https://space.test/app/growth/comercial/pre-vendas/ligacoes/teclado',runScripts:'outside-only',pretendToBeVisual:true});
- t.after(()=>dom.window.close());const w=dom.window;w.__SPACE_SESSION__={role:'growth'};w.setInterval=()=>1;w.setTimeout=(fn)=>{fn();return 1;};
+ t.after(()=>dom.window.close());const w=dom.window;w.__SPACE_SESSION__={role:'growth',commercialRoles:['sdr']};w.setInterval=()=>1;w.setTimeout=(fn)=>{fn();return 1;};
  const calls=[];w.SpacePhone={getState:()=>({status:'idle',clientReady:true,elapsedSeconds:0}),subscribe(fn){fn(this.getState());return()=>{};},normalizePhone:raw=>String(raw||'').startsWith('+')?String(raw):'+16175550100',call:async payload=>{calls.push(payload);return{id:'c1'};},dtmf:async digit=>calls.push({dtmf:digit}),refreshDevices:async()=>({inputs:[],outputs:[]})};
  w.fetchWithAuth=async()=>({ok:true,json:async()=>({scope:'self',analytics:{},calls:[],callbacks:[]})});
  w.eval(fs.readFileSync('space-phone.js','utf8'));await w.SpacePhoneModule.open();await flush();

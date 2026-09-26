@@ -64,6 +64,16 @@
     noteTimers: new Map(),
     lastTimerText: "",
   };
+  const loadStatus = { analytics: { loaded: false, error: "" }, history: { loaded: false, error: "" }, conversion: { loaded: false, error: "" }, callbacks: { loaded: false, error: "" } };
+  const friendlyError = (value, fallback = "Não foi possível atualizar agora. Tentaremos novamente.") => {
+    const code = String(value || "").trim();
+    if (!code) return fallback;
+    if (["space_phone_unavailable", "space_phone_failed", "supabase_request_failed", "supabase_transport_failed", "fetch_failed"].includes(code)) return fallback;
+    if (/timeout|network|failed to fetch|reset|522/i.test(code)) return fallback;
+    return fallback;
+  };
+  const hasAnalytics = () => loadStatus.analytics.loaded && !!state.data?.analytics;
+  const hasHistory = () => loadStatus.history.loaded && Array.isArray(state.data?.calls);
 
   const delay = (fn, ms) => {
     const id = setTimeout(fn, ms);
@@ -85,7 +95,7 @@
   };
   const fmtDate = (value) => value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "-";
   const callSeconds = () => adapter()?.getState?.()?.elapsedSeconds || 0;
-  const liveTalkTimeSeconds = () => Number(state.data?.analytics?.talkTimeSeconds || 0) + (ACTIVE.has(state.call.status) ? callSeconds() : 0);
+  const liveTalkTimeSeconds = () => (hasAnalytics() ? Number(state.data?.analytics?.talkTimeSeconds || 0) : 0) + (ACTIVE.has(state.call.status) ? callSeconds() : 0);
   const localNormalize = (value) => {
     const raw = String(value || "").trim();
     if (!raw) return "";
@@ -169,19 +179,21 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
 
   const kpi = (label, value) => `<article class="sphone-kpi"><span>${esc(label)}</span><strong>${esc(value)}</strong></article>`;
   const renderKpis = () => {
-    const a = state.data?.analytics || {};
-    return `<section class="sphone-kpis">
-      ${kpi("Calls", a.totalCalls || 0)}${kpi("Atendidas", a.connectedCalls || 0)}${kpi("Connect rate", `${Math.round((a.connectRate || 0) * 100)}%`)}<article class="sphone-kpi"><span>Talk time</span><strong data-sp-talk-time>${esc(fmtSec(liveTalkTimeSeconds()))}</strong></article>${kpi("Agendamentos", a.scheduledCalls == null ? "-" : a.scheduledCalls)}
-    </section>`;
+    const ready = hasAnalytics();
+    const a = ready ? (state.data?.analytics || {}) : {};
+    const empty = "—";
+    return `<section class="sphone-kpis" data-sp-kpis>
+      ${kpi("Calls", ready ? (a.totalCalls || 0) : empty)}${kpi("Atendidas", ready ? (a.connectedCalls || 0) : empty)}${kpi("Connect rate", ready ? `${Math.round((a.connectRate || 0) * 100)}%` : empty)}<article class="sphone-kpi"><span>Talk time</span><strong data-sp-talk-time>${ready || ACTIVE.has(state.call.status) ? esc(fmtSec(liveTalkTimeSeconds())) : empty}</strong></article>${kpi("Agendamentos", ready ? (a.scheduledCalls == null ? "-" : a.scheduledCalls) : empty)}
+    </section>${loadStatus.analytics.error ? `<div class="sphone-status" role="status">${esc(loadStatus.analytics.error)}</div>` : ""}`;
   };
 
-  let conversionData=null, conversionError='', conversionFlight=false, conversionQueued=false, conversionRankingOpen=false;
+  let conversionData=null, conversionError='', conversionFlight=false, conversionQueued=false, conversionRankingOpen=false, conversionKey='';
   document.addEventListener('toggle', e => { if(e.target.matches?.('[data-sp-conversion-ranking]'))conversionRankingOpen=e.target.open; }, true);
   const pct = rate => rate?.percent == null ? '—' : `${Number(rate.percent).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`;
   const renderConversion = () => {
     const c=conversionData;
     const labels=[['attendance','Taxa de atendimento'],['callToBooking','Ligação → Agendamento'],['answeredToBooking','Atendida → Agendamento'],['bookingToDone','Agendado → Feito']];
-    return `<section class="sphone-conversion" data-sp-conversion><h2>Conversão <span tabindex="0" role="img" aria-label="Critério das taxas" title="Agendadas = resultado comercial da chamada. Chamadas pelo início da ligação; bookings pela data da reunião.">ⓘ</span></h2>${conversionError ? `<p role="status">${esc(conversionError)}</p>` : ''}<div class="sphone-conversion-grid">${labels.map(([key,label])=>`<article class="sphone-kpi"><span>${label}</span><strong>${c?pct(c[key]):'—'}</strong><small>${c?`${c[key].numerator} / ${c[key].denominator}`:'Carregando…'}</small></article>`).join('')}</div>${c?.unlinked?`<span class="sphone-pending" tabindex="0" title="Bookings aguardando vínculo único com a reunião; não contam como feitos.">⚠ ${c.unlinked} pendências</span>`:''}</section>`;
+    return `<section class="sphone-conversion" data-sp-conversion><h2>Conversão <span tabindex="0" role="img" aria-label="Critério das taxas" title="Agendadas = resultado comercial da chamada. Chamadas pelo início da ligação; bookings pela data da reunião.">ⓘ</span></h2>${conversionError ? `<p role="status">${esc(conversionError)}</p>` : ''}<div class="sphone-conversion-grid">${labels.map(([key,label])=>`<article class="sphone-kpi"><span>${label}</span><strong>${c?pct(c[key]):'—'}</strong><small>${c?`${c[key].numerator} / ${c[key].denominator}`:(conversionError?'Indisponível agora':'Carregando…')}</small></article>`).join('')}</div>${c?.unlinked?`<span class="sphone-pending" tabindex="0" title="Bookings aguardando vínculo único com a reunião; não contam como feitos.">⚠ ${c.unlinked} pendências</span>`:''}</section>`;
   };
   const renderRanking = () => { const c=conversionData; return `<section class="sphone-ranking" data-sp-ranking>${managerMode() ? `${c?.ranking?`<details class="sphone-ranking-card" data-sp-conversion-ranking ${conversionRankingOpen?'open':''}><summary><span>Ranking de Conversão por SDR</span></summary><div class="sphone-conversion-table"><table><thead><tr>${['SDR','Ligações','Atendidas','Agendadas','Feitas','Taxa atendimento','Call → Agendamento','Atendida → Agendamento','Agendado → Feito'].map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${c.ranking.map(r=>`<tr><td><strong>${esc(r.displayName)}</strong></td>${[r.calls,r.answered,r.scheduled,r.done,pct(r.attendance),pct(r.callToBooking),pct(r.answeredToBooking),pct(r.bookingToDone)].map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')||'<tr><td colspan="9">Sem dados no período.</td></tr>'}</tbody></table></div></details>`:''}` : ''}</section>`; };
   const refreshConversion = async () => {
@@ -192,8 +204,8 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
     try{
       const result=await api({view:'conversion',period,sdr});
       if(period!==state.period||sdr!==state.sdr){conversionQueued=true;return;}
-      conversionData=result.conversion||null;conversionError='';
-    }catch{conversionError='Conversão temporariamente indisponível. Tentaremos novamente.';conversionData=null;}
+      conversionData=result.conversion||null;conversionError='';conversionKey=`${period}:${sdr}`;loadStatus.conversion.loaded=!!conversionData;loadStatus.conversion.error='';
+    }catch(error){conversionError=friendlyError(error?.message,'Conversão temporariamente indisponível. Tentaremos novamente.');loadStatus.conversion.error=conversionError;}
     finally{
       conversionFlight=false;
       if(!domAlive())return;
@@ -206,8 +218,16 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
   ['space-phone:call-updated','space-bookings:updated','online'].forEach(name=>window.addEventListener(name,refreshConversion));
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshConversion();});
 
-  const managerMode = () => state.data?.scope === 'admin';
-  const operatorMode = () => state.data?.scope === 'self';
+  const sessionUser = () => (window.__SPACE_SESSION__ && typeof window.__SPACE_SESSION__ === "object" ? window.__SPACE_SESSION__ : {});
+  const sessionRole = () => String(sessionUser().role || document.body?.dataset?.appRole || "").toLowerCase();
+  const sessionCommercialRoles = () => {
+    const raw = sessionUser().commercialRoles;
+    if (Array.isArray(raw)) return raw.map(role => String(role || "").trim().toLowerCase()).filter(Boolean);
+    if (typeof raw === "string") return raw.split(/[\s,]+/).map(role => role.trim().toLowerCase()).filter(Boolean);
+    return [];
+  };
+  const managerMode = () => sessionRole() === 'admin';
+  const operatorMode = () => sessionRole() === 'growth' && sessionCommercialRoles().includes('sdr');
   let filtersOpen = false;
   const renderKeypad = (mode) => `<div class="sphone-keypad">${["1","2","3","4","5","6","7","8","9","*","0","#"].map((key) => `<button class="sphone-key" data-${mode}="${esc(key)}">${esc(key)}</button>`).join("")}</div>`;
   const renderDialer = () => `
@@ -245,7 +265,7 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
   };
   const callbackMenu = c => `<details class="sphone-callback-menu"><summary aria-label="Ações do retorno" title="Ações do retorno">⋯</summary><div><button class="sphone-btn" data-callback-action="10" data-callback-id="${esc(c.id)}">Adiar 10 min</button><button class="sphone-btn" data-callback-action="30" data-callback-id="${esc(c.id)}">Adiar 30 min</button><label>Novo horário<input class="sphone-input" type="datetime-local" aria-label="Novo horário do callback" data-callback-date="${esc(c.id)}"></label><button class="sphone-btn" data-callback-action="custom" data-callback-id="${esc(c.id)}">Salvar horário</button><button class="sphone-btn" data-callback-action="complete" data-callback-id="${esc(c.id)}">Concluir</button><button class="sphone-btn ghost" data-callback-action="cancel" data-callback-id="${esc(c.id)}">Cancelar retorno</button></div></details>`;
   const callbackRow = c => `<article class="sphone-callback-row" data-callback-row="${esc(c.id)}"><span class="sphone-badge" data-callback-clock="${esc(c.id)}">${esc(callbackLabel(c))}</span><div><strong>${esc(c.name || c.number)}</strong><small>${esc(c.number)} · ${esc(fmtDate(c.callbackAt))}</small></div><div class="sphone-call-actions"><button class="sphone-btn primary" data-callback-action="call" data-callback-id="${esc(c.id)}" ${ACTIVE.has(adapter()?.getState?.()?.status) || callbackBusy.has(c.id) ? 'disabled' : ''}>Ligar agora</button>${callbackMenu(c)}</div></article>`;
-  const renderCallbacks = () => `<section class="sphone-card sphone-callbacks" data-callback-queue><h2>Callbacks</h2>${callbackError ? `<p role="status">${esc(callbackError)}</p>` : ''}${callbackItems.map(callbackRow).join('') || '<p class="sphone-muted">Nenhum callback pendente.</p>'}</section>`;
+  const renderCallbacks = () => `<section class="sphone-card sphone-callbacks" data-callback-queue><h2>Callbacks</h2>${callbackError ? `<p role="status">${esc(callbackError)}</p>` : ''}${callbackItems.map(callbackRow).join('') || `<p class="sphone-muted">${callbackError ? 'Retornos indisponíveis no momento.' : 'Nenhum callback pendente.'}</p>`}</section>`;
   const patchCallbacks = () => {
     if (!domAlive()) return;
     const queue = document.querySelector('[data-callback-queue]');
@@ -262,7 +282,7 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
       notificationItems = notifications.callbacks || [];
       if(selectedSdr!==state.sdr)return;
       callbackItems = result.callbacks || []; callbackError = ''; patchCallbacks();
-    } catch { callbackError = 'Não foi possível atualizar os retornos. Tentaremos novamente.'; }
+    } catch (error) { callbackError = friendlyError(error?.message, 'Não foi possível atualizar os retornos. Tentaremos novamente.'); loadStatus.callbacks.error = callbackError; patchCallbacks(); }
     finally { callbackPolling = false; }
   };
   const tickCallbacks = () => {
@@ -318,11 +338,15 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
   };
 
   const aiBadge = c => `<span class="sphone-badge ${c.analysisStatus === 'completed' ? 'ok' : 'warn'}">${esc(({completed:'Pronta',analyzing:'Gerando IA',transcribing:'Transcrevendo',waiting_recording:'Aguardando gravação',failed:'Falhou'})[c.analysisStatus] || 'Aguardando gravação')}</span>`;
-  const renderFilters = () => { const active = [state.period!=='last7',managerMode()&&state.sdr!=='all',!!state.status,!!state.q].filter(Boolean).length; return `<div class="sphone-filter-wrap"><button class="sphone-filter-trigger" data-sp-filter-toggle aria-label="Filtrar ligações" title="Filtrar ligações" aria-expanded="${filtersOpen}" aria-controls="sphone-filter-panel"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>${active ? `<span class="sphone-filter-badge">${active}</span>` : ''}</button><div id="sphone-filter-panel" class="sphone-filter-panel" ${filtersOpen?'':'hidden'}><label>Período<select class="sphone-select" data-sp-period aria-label="Período das ligações"><option value="today">Hoje</option><option value="last7">7 dias</option><option value="last30">30 dias</option></select></label>${state.data?.scope === "admin" ? `<label>SDR<select class="sphone-select" data-sp-sdr aria-label="SDR"><option value="all">Todos os SDRs</option>${(state.data.sdrs || []).map(sdr => `<option value="${esc(sdr.uid)}">${esc(sdr.displayName)}</option>`).join("")}</select></label>` : ""}<label>Status<select class="sphone-select" data-sp-status aria-label="Status"><option value="">Todos</option><option value="answered">Atendida</option><option value="unanswered">Não atendida</option><option value="scheduled">Agendada</option><option value="failed">Falhou</option></select></label><label>Buscar número<input class="sphone-input" type="search" data-sp-search placeholder="Buscar número" value="${esc(state.q)}" /></label><button class="sphone-btn" data-sp-clear-filters>Limpar filtros</button></div></div>`; };
+  const renderFilters = () => { const active = [state.period!=='last7',managerMode()&&state.sdr!=='all',!!state.status,!!state.q].filter(Boolean).length; return `<div class="sphone-filter-wrap"><button class="sphone-filter-trigger" data-sp-filter-toggle aria-label="Filtrar ligações" title="Filtrar ligações" aria-expanded="${filtersOpen}" aria-controls="sphone-filter-panel"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>${active ? `<span class="sphone-filter-badge">${active}</span>` : ''}</button><div id="sphone-filter-panel" class="sphone-filter-panel" ${filtersOpen?'':'hidden'}><label>Período<select class="sphone-select" data-sp-period aria-label="Período das ligações"><option value="today">Hoje</option><option value="last7">7 dias</option><option value="last30">30 dias</option></select></label>${managerMode() ? `<label>SDR<select class="sphone-select" data-sp-sdr aria-label="SDR"><option value="all">Todos os SDRs</option>${(state.data?.sdrs || []).map(sdr => `<option value="${esc(sdr.uid)}">${esc(sdr.displayName)}</option>`).join("")}</select></label>` : ""}<label>Status<select class="sphone-select" data-sp-status aria-label="Status"><option value="">Todos</option><option value="answered">Atendida</option><option value="unanswered">Não atendida</option><option value="scheduled">Agendada</option><option value="failed">Falhou</option></select></label><label>Buscar número<input class="sphone-input" type="search" data-sp-search placeholder="Buscar número" value="${esc(state.q)}" /></label><button class="sphone-btn" data-sp-clear-filters>Limpar filtros</button></div></div>`; };
 
   const renderHistory = () => {
     const calls = state.data?.calls || [];
-    return `<section class="sphone-history"><div class="sphone-history-head"><div><h2>Histórico</h2></div><div class="sphone-history-actions"><button class="sphone-btn" data-sp-refresh aria-label="Atualizar histórico" title="Atualizar histórico">↻</button></div></div><div class="sphone-table-wrap"><table class="sphone-table"><thead><tr><th>Lead / número</th><th>SDR</th><th>Horário</th><th>Status</th><th>Duração</th><th>Resultado</th><th>IA</th><th></th></tr></thead><tbody>${calls.map((c) => `<tr><td><strong>${esc(c.leadName || c.number || "Lead")}</strong><br><span class="sphone-muted">${esc(c.number || "-")}</span></td><td>${esc(c.sdrName || "SDR")}</td><td>${esc(fmtDate(c.startedAt))}</td><td><span class="sphone-badge ${c.status === "connected" ? "ok" : c.status === "failed" ? "bad" : ""}">${esc(c.status)}</span></td><td>${fmtSec(c.durationSeconds)}</td><td>${esc(c.outcome || "-")}</td><td>${aiBadge(c)}</td><td><button class="sphone-btn sphone-detail-btn" data-sp-detail="${esc(c.id)}">Detalhes</button></td></tr>`).join("") || `<tr><td colspan="8"><div class="sphone-empty">Nenhuma ligação encontrada no histórico.${state.status || state.q ? ' Há filtros ativos de status ou busca.' : ''}<br><button class="sphone-btn" data-sp-clear-filters>Limpar filtros</button></div></td></tr>`}</tbody></table></div>${state.data?.history?.hasMore ? `<div class="sphone-call-actions"><button class="sphone-btn" data-sp-load-more ${state.loading ? "disabled" : ""}>${state.loading ? "Carregando..." : "Carregar mais"}</button></div>` : ""}</section>`;
+    const statusLine = loadStatus.history.error ? `<p class="sphone-muted" role="status">${esc(loadStatus.history.error)}</p>` : '';
+    const empty = loadStatus.history.error && !hasHistory()
+      ? `<div class="sphone-empty">Não foi possível carregar o histórico agora.<br><button class="sphone-btn" data-sp-refresh>Tentar novamente</button></div>`
+      : `<div class="sphone-empty">Nenhuma ligação encontrada no histórico.${state.status || state.q ? ' Há filtros ativos de status ou busca.' : ''}<br><button class="sphone-btn" data-sp-clear-filters>Limpar filtros</button></div>`;
+    return `<section class="sphone-history"><div class="sphone-history-head"><div><h2>Histórico</h2>${statusLine}</div><div class="sphone-history-actions"><button class="sphone-btn" data-sp-refresh aria-label="Atualizar histórico" title="Atualizar histórico">↻</button></div></div><div class="sphone-table-wrap"><table class="sphone-table"><thead><tr><th>Lead / número</th><th>SDR</th><th>Horário</th><th>Status</th><th>Duração</th><th>Resultado</th><th>IA</th><th></th></tr></thead><tbody>${calls.map((c) => `<tr><td><strong>${esc(c.leadName || c.number || "Lead")}</strong><br><span class="sphone-muted">${esc(c.number || "-")}</span></td><td>${esc(c.sdrName || "SDR")}</td><td>${esc(fmtDate(c.startedAt))}</td><td><span class="sphone-badge ${c.status === "connected" ? "ok" : c.status === "failed" ? "bad" : ""}">${esc(c.status)}</span></td><td>${fmtSec(c.durationSeconds)}</td><td>${esc(c.outcome || "-")}</td><td>${aiBadge(c)}</td><td><button class="sphone-btn sphone-detail-btn" data-sp-detail="${esc(c.id)}">Detalhes</button></td></tr>`).join("") || `<tr><td colspan="8">${empty}</td></tr>`}</tbody></table></div>${state.data?.history?.hasMore ? `<div class="sphone-call-actions"><button class="sphone-btn" data-sp-load-more ${state.loading ? "disabled" : ""}>${state.loading ? "Carregando..." : "Carregar mais"}</button></div>` : ""}</section>`;
   };
 
   const renderDetailTab = (c) => {
@@ -357,7 +381,7 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
     if (isKeypadRoute()) {
       el.innerHTML = renderKeypadPage();
     } else {
-      el.innerHTML = `<div class="sphone"><div class="sphone-shell"><header class="sphone-head"><div class="sphone-title"><h1>Ligações</h1></div><div class="sphone-head-actions">${renderFilters()}${operatorMode()?`<div class="sphone-online"><span class="sphone-dot" data-tone="${ps.tone}"></span>${esc(ps.label)}</div>`:""}</div></header>${renderKpis()}${renderConversion()}${renderRanking()}${state.error ? `<div class="sphone-empty">${esc(state.error)}</div>` : ""}${operatorMode()?`<main class="sphone-grid">${renderDialer()}${renderCenter()}${renderRight()}</main>${renderCallbacks()}`:""}${renderHistory()}</div></div>`;
+      el.innerHTML = `<div class="sphone"><div class="sphone-shell"><header class="sphone-head"><div class="sphone-title"><h1>Ligações</h1></div><div class="sphone-head-actions">${renderFilters()}${operatorMode()?`<div class="sphone-online"><span class="sphone-dot" data-tone="${ps.tone}"></span>${esc(ps.label)}</div>`:""}</div></header>${renderKpis()}${renderConversion()}${renderRanking()}${state.error && !hasHistory() && !operatorMode() ? `<div class="sphone-empty">${esc(state.error)}</div>` : ""}${operatorMode()?`<main class="sphone-grid">${renderDialer()}${renderCenter()}${renderRight()}</main>${renderCallbacks()}`:""}${renderHistory()}</div></div>`;
     }
     let portal = document.getElementById('sphone-detail-portal');
     if (!portal) { portal = document.createElement('div'); portal.id = 'sphone-detail-portal'; document.body.appendChild(portal); }
@@ -402,12 +426,29 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
     try {
       const data = await api({ period: state.period, status: state.status, q: state.q, sdr: state.sdr, view: analyticsOnly ? "analytics" : appendHistory ? "history" : undefined, historyOffset: appendHistory ? state.data?.history?.nextOffset : 0 });
       if (version !== loadVersion) return;
-      const selectionReset = data.scope === 'admin' && data.selectedSdr !== state.sdr;
-      state.sdr = data.scope === 'admin' ? (data.selectedSdr || 'all') : 'all';
-      if (data.scope === 'admin') { try { localStorage.setItem('spacePhoneSdr', state.sdr); } catch {} }
+      const isAdminView = data.scope === 'admin' || managerMode();
+      const selectionReset = isAdminView && data.selectedSdr && data.selectedSdr !== state.sdr;
+      state.sdr = isAdminView ? (data.selectedSdr || state.sdr || 'all') : 'all';
+      if (isAdminView) { try { localStorage.setItem('spacePhoneSdr', state.sdr); } catch {} }
       if (selectionReset && (analyticsOnly || appendHistory)) return load({ silent });
-      state.data = analyticsOnly ? { ...state.data, ...data, calls: state.data?.calls || [], history: state.data?.history } : appendHistory ? { ...state.data, ...data, callbacks: state.data?.callbacks || [], calls: [...new Map([...(state.data?.calls || []), ...(data.calls || [])].map(call => [call.id, call])).values()] } : data; void refreshConversion(); if (data.callbacks) { callbackItems = data.callbacks; tickCallbacks(); } state.error = '';
-    } catch (error) { if (version === loadVersion) state.error = error.message || 'Não foi possível carregar ligações.'; }
+      state.data = analyticsOnly
+        ? { ...state.data, ...data, calls: state.data?.calls || [], history: state.data?.history }
+        : appendHistory
+          ? { ...state.data, ...data, callbacks: data.callbacks || state.data?.callbacks || [], calls: [...new Map([...(state.data?.calls || []), ...(data.calls || [])].map(call => [call.id, call])).values()] }
+          : data;
+      if (!appendHistory) loadStatus.analytics.loaded = Boolean(data.analytics || state.data?.analytics);
+      if (!analyticsOnly) loadStatus.history.loaded = Array.isArray(state.data?.calls);
+      loadStatus.analytics.error = ''; loadStatus.history.error = ''; state.error = '';
+      void refreshConversion();
+      if (data.callbacks) { callbackItems = data.callbacks; callbackError = ''; loadStatus.callbacks.loaded = true; loadStatus.callbacks.error = ''; tickCallbacks(); }
+    } catch (error) {
+      if (version === loadVersion) {
+        const message = friendlyError(error?.message, 'Não foi possível carregar ligações agora. Tentaremos novamente.');
+        state.error = message;
+        if (analyticsOnly) loadStatus.analytics.error = message;
+        else { loadStatus.analytics.error = hasAnalytics() ? 'Indicadores mantidos com a última atualização disponível.' : message; loadStatus.history.error = hasHistory() ? 'Histórico mantido com a última atualização disponível.' : message; }
+      }
+    }
     finally { if (version === loadVersion) { state.loading = false; if (patchOnly) patchHistory(); else render(); } }
   };
   const loadDevices = async () => {
@@ -737,6 +778,6 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
       else { lastCoreKey = nextKey; render(); void refreshConversion(); }
     });
   };
-  window.SpacePhoneModule = { open: async () => { window.SpaceAgenda?.refresh(currentCallId()).catch(()=>{}); state.period = readPeriod(); render(); await load({ silent: true }); if(operatorMode()){ subscribeCore(); await loadDevices(); syncFromCore(adapter()?.getState?.()); render(); } }, state };
+  window.SpacePhoneModule = { open: async () => { window.SpaceAgenda?.refresh(currentCallId()).catch(()=>{}); state.period = readPeriod(); render(); if(operatorMode()){ subscribeCore(); await loadDevices(); syncFromCore(adapter()?.getState?.()); render(); } await load({ silent: true }); }, state };
   if (document.body?.dataset.initialPanel === "space-phone") window.SpacePhoneModule.open();
 }());

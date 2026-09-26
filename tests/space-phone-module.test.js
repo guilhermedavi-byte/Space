@@ -9,7 +9,7 @@ function jsonResponse(body, ok = true, status = 200) {
 }
 
 function createModuleDom({ period } = {}) {
-  const dom = new JSDOM('<body data-active-panel="space-phone"><section data-panel="space-phone"><div data-space-phone></div></section></body>', {
+  const dom = new JSDOM('<body data-active-panel="space-phone" data-app-role="growth"><section data-panel="space-phone"><div data-space-phone></div></section></body>', {
     url: 'https://space.test/app/admin/comercial/pre-vendas/ligacoes',
     runScripts: 'outside-only',
     pretendToBeVisual: true,
@@ -51,6 +51,7 @@ function createModuleDom({ period } = {}) {
     if (String(url).includes('normalize=')) return jsonResponse({ ok: true, raw: '+16177942141', normalized: '+16177942141' });
     return jsonResponse({ ok: true, scope:'self', analytics: { talkTimeSeconds: 60 }, calls: [], callbacks: [] });
   };
+  dom.window.__SPACE_SESSION__ = { role: 'growth', commercialRoles: ['sdr'], sub: 'sdr-1' };
   dom.window.__spacePhoneTest = { calls, fetches, emit };
   if (period !== undefined) dom.window.localStorage.setItem('spacePhonePeriod', period);
   dom.window.eval(fs.readFileSync(path.join(__dirname, '..', 'space-phone.js'), 'utf8'));
@@ -436,6 +437,8 @@ test('qualification shows waiting, delayed transcript retry, generating and avai
 
 test('SDR selector is Admin-only, persists selection and reloads both history and KPIs', async () => {
   const dom = createModuleDom();
+  dom.window.__SPACE_SESSION__ = { role: 'admin', commercialRoles: [], sub: 'admin-1' };
+  dom.window.document.body.dataset.appRole = 'admin';
   const urls = [];
   let scope = 'admin';
   dom.window.fetchWithAuth = async url => {
@@ -449,7 +452,7 @@ test('SDR selector is Admin-only, persists selection and reloads both history an
   select.value = 'luana'; select.dispatchEvent(new dom.window.Event('change',{bubbles:true})); await tick(20);
   assert.equal(dom.window.localStorage.getItem('spacePhoneSdr'),'luana');
   assert.ok(urls.at(-1).includes('sdr=luana')); assert.ok(!urls.at(-1).includes('view=analytics'));
-  scope = 'self'; await dom.window.SpacePhoneModule.open();
+  scope = 'self'; dom.window.__SPACE_SESSION__ = { role: 'growth', commercialRoles: ['sdr'], sub: 'sdr-1' }; dom.window.document.body.dataset.appRole = 'growth'; await dom.window.SpacePhoneModule.open();
   assert.equal(dom.window.document.querySelector('[data-sp-sdr]'),null);
   dom.window.close();
 });
@@ -546,4 +549,55 @@ test('conversion is directly after KPIs and before the operational grid/history'
  assert.equal(kpis.nextElementSibling,conversion);
  assert.ok(conversion.compareDocumentPosition(d.querySelector('.sphone-grid'))&dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
  assert.equal(conversion.querySelectorAll('.sphone-conversion-grid article').length,4);
+});
+
+
+test('resilience: scope self from session keeps dialer on first API failure without false-zero KPIs', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  dom.window.fetchWithAuth = async () => ({ ok: false, status: 500, json: async () => ({ error: 'space_phone_unavailable' }) });
+  await dom.window.SpacePhoneModule.open(); await tick(20);
+  assert.ok(dom.window.document.querySelector('[data-sp-call]'));
+  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Calls\s*—/);
+  assert.match(dom.window.document.body.textContent, /Não foi possível carregar o histórico agora/);
+  assert.doesNotMatch(dom.window.document.body.textContent, /space_phone_unavailable/);
+});
+
+test('resilience: last-known-good KPIs, history, conversion and callbacks survive refresh failure and recover', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  let fail = false;
+  const rate = { percent: 50, numerator: 1, denominator: 2 };
+  dom.window.fetchWithAuth = async url => {
+    const q = new URL(url, 'https://space.test').searchParams;
+    if (fail) return { ok: false, status: 500, json: async () => ({ error: 'space_phone_unavailable' }) };
+    if (q.get('view') === 'conversion') return jsonResponse({ conversion: { attendance: rate, callToBooking: rate, answeredToBooking: rate, bookingToDone: rate } });
+    if (q.get('view') === 'callbacks' || q.get('view') === 'callback-notifications') return jsonResponse({ callbacks: [{ id: 'cb-1', name: 'Lead callback', number: '+14075550123', callbackAt: new Date(Date.now()+600000).toISOString() }] });
+    return jsonResponse({ scope: 'self', analytics: { totalCalls: 2, connectedCalls: 1, connectRate: .5, talkTimeSeconds: 90, scheduledCalls: 1 }, calls: [{ id: 'call-lkg', number: '+14075550123', sdrName: 'Luana', startedAt: new Date().toISOString(), status: 'connected', durationSeconds: 90, outcome: 'agendado' }], callbacks: [{ id: 'cb-1', name: 'Lead callback', number: '+14075550123', callbackAt: new Date(Date.now()+600000).toISOString() }] });
+  };
+  await dom.window.SpacePhoneModule.open(); await tick(30);
+  assert.match(dom.window.document.body.textContent, /call-lkg|\+14075550123/);
+  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Calls\s*2/);
+  assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent, /50,0%/);
+  assert.match(dom.window.document.querySelector('[data-callback-queue]').textContent, /Lead callback/);
+  fail = true;
+  dom.window.document.querySelector('[data-sp-refresh]').click(); await tick(30);
+  assert.ok(dom.window.document.querySelector('[data-sp-call]'));
+  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Calls\s*2/);
+  assert.match(dom.window.document.querySelector('.sphone-history').textContent, /\+14075550123/);
+  assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent, /50,0%/);
+  assert.match(dom.window.document.querySelector('[data-callback-queue]').textContent, /Lead callback/);
+  fail = false;
+  dom.window.document.querySelector('[data-sp-refresh]').click(); await tick(30);
+  assert.doesNotMatch(dom.window.document.body.textContent, /Não foi possível carregar ligações agora/);
+});
+
+test('resilience: conversion endpoint failure does not drop working history', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  dom.window.fetchWithAuth = async url => {
+    const q = new URL(url, 'https://space.test').searchParams;
+    if (q.get('view') === 'conversion') return { ok: false, status: 500, json: async () => ({ error: 'space_phone_unavailable' }) };
+    return jsonResponse({ scope: 'self', analytics: { totalCalls: 1 }, calls: [{ id: 'history-ok', number: '+14075550123', startedAt: new Date().toISOString(), status: 'connected', durationSeconds: 30 }], callbacks: [] });
+  };
+  await dom.window.SpacePhoneModule.open(); await tick(30);
+  assert.match(dom.window.document.querySelector('.sphone-history').textContent, /history-ok|\+14075550123/);
+  assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent, /Conversão temporariamente indisponível|Indisponível agora/);
 });
