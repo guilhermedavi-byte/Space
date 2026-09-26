@@ -9,7 +9,7 @@ async function setup(t,scope='growth'){
  w.fetchWithAuth=async(url,options={})=>{
   const q=new URL(url,'https://space.test').searchParams;reads.push(q);if(options.method)writes.push(options);
   const rate={percent:0,numerator:0,denominator:0};
-  const data=q.get('view')==='conversion'?{conversion:{attendance:rate,callToBooking:rate,answeredToBooking:rate,bookingToDone:rate,ranking:scope==='admin'?[]:undefined}}:q.get('view')==='callback-notifications'?{callbacks:scope==='admin'?[]:[own]}:q.get('view')==='callbacks'?{callbacks:[own,{...own,id:'other-call',name:'Other SDR lead'}]}:{scope,selectedSdr:q.get('sdr')||'all',sdrs:[{uid:'luana',displayName:'Luana Mendonça'}],analytics:{},calls:[],callbacks:[own]};
+  const data=q.get('view')==='conversion'?{conversion:{attendance:rate,callToBooking:rate,answeredToBooking:rate,bookingToDone:rate,ranking:scope==='admin'?[]:undefined}}:q.get('view')==='callback-notifications'?{callbacks:scope==='admin'?[]:[own]}:q.get('view')==='callbacks'?{callbacks:[own,{...own,id:'other-call',name:'Other SDR lead'}]}:{scope: scope === 'growth' ? 'self' : scope, selectedSdr:q.get('sdr')||'all',sdrs:[{uid:'luana',displayName:'Luana Mendonça'}],analytics:{},calls:[],callbacks:[own]};
   return {ok:true,json:async()=>data};
  };
  w.eval(fs.readFileSync('space-phone.js','utf8'));await w.SpacePhoneModule.open();await flush();return {w,reads,intervals,timeouts,writes,own};

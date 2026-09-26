@@ -5,7 +5,7 @@ const path = require('node:path');
 const { JSDOM } = require('jsdom');
 
 function jsonResponse(body, ok = true, status = 200) {
-  return { ok, status, json: async () => ({scope:"growth",...body}) };
+  return { ok, status, json: async () => ({scope:"self",...body}) };
 }
 
 function createModuleDom({ period } = {}) {
@@ -49,7 +49,7 @@ function createModuleDom({ period } = {}) {
   dom.window.fetchWithAuth = async url => {
     fetches.push(String(url));
     if (String(url).includes('normalize=')) return jsonResponse({ ok: true, raw: '+16177942141', normalized: '+16177942141' });
-    return jsonResponse({ ok: true, scope:'growth', analytics: { talkTimeSeconds: 60 }, calls: [], callbacks: [] });
+    return jsonResponse({ ok: true, scope:'self', analytics: { talkTimeSeconds: 60 }, calls: [], callbacks: [] });
   };
   dom.window.__spacePhoneTest = { calls, fetches, emit };
   if (period !== undefined) dom.window.localStorage.setItem('spacePhonePeriod', period);
@@ -471,7 +471,7 @@ test('callback quick schedule, countdown, navigation alert, snooze and one-click
  const dom=createModuleDom();t.after(()=>dom.window.close());
  let items=[{id:'00000000-0000-4000-8000-000000000001',name:'Lead teste',number:'+14075550123',leadId:'lead-1',callbackAt:new Date(Date.now()+1800000).toISOString()}];
  const writes=[];
- dom.window.fetchWithAuth=async(url,opts={})=>{if(opts.method==='PATCH'){writes.push(JSON.parse(opts.body));return jsonResponse({ok:true});}return jsonResponse({ok:true,calls:[],callbacks:items,analytics:{},scope:'growth'});};
+ dom.window.fetchWithAuth=async(url,opts={})=>{if(opts.method==='PATCH'){writes.push(JSON.parse(opts.body));return jsonResponse({ok:true});}return jsonResponse({ok:true,calls:[],callbacks:items,analytics:{},scope:'self'});};
  await dom.window.SpacePhoneModule.open();
  assert.match(dom.window.document.querySelector('[data-callback-clock]').textContent,/Retornar em 30:/);
  const state=dom.window.SpacePhoneModule.state;state.postCall.id=items[0].id;state.postCall.savedOutcome='retornar_depois';state.call.status='ended';state.call.id=items[0].id;
@@ -493,7 +493,7 @@ test('conversion updates partially on outcome and booking events without stealin
  const rate=(n,d)=>({numerator:n,denominator:d,percent:d?n/d*100:null});
  dom.window.fetchWithAuth=async url=>{
   if(new URL(url,'https://space.test').searchParams.get('view')==='conversion'){reads++;return jsonResponse({conversion:{attendance:rate(2,4),callToBooking:rate(scheduled,4),answeredToBooking:rate(scheduled,2),bookingToDone:rate(0,0)}});}
-  return jsonResponse({calls:[],callbacks:[],analytics:{},scope:'growth'});
+  return jsonResponse({calls:[],callbacks:[],analytics:{},scope:'self'});
  };
  await dom.window.SpacePhoneModule.open();await tick(20);
  const input=dom.window.document.querySelector('[data-sp-dial]');input.focus();

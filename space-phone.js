@@ -201,7 +201,7 @@ body.sphone-detail-open{overflow:hidden}body[data-active-panel="space-phone"] .s
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshConversion();});
 
   const managerMode = () => state.data?.scope === 'admin';
-  const operatorMode = () => state.data?.scope === 'growth';
+  const operatorMode = () => state.data?.scope === 'self';
   let filtersOpen = false;
   const renderKeypad = (mode) => `<div class="sphone-keypad">${["1","2","3","4","5","6","7","8","9","*","0","#"].map((key) => `<button class="sphone-key" data-${mode}="${esc(key)}">${esc(key)}</button>`).join("")}</div>`;
   const renderDialer = () => `
