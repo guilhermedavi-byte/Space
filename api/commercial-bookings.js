@@ -21,6 +21,7 @@ const createHandler=({authResolver=resolveAdminRequestAuth,permissionResolver=re
     const body=await readJsonBody(req);
     if(body.action==='context')return sendJson(res,200,await booking.context({request,user,isAdmin,callId:body.callId}));
     if(body.action==='sync')return sendJson(res,200,{booking:await booking.reconcile({uid:body.uid,request,fetcher,env,user,isAdmin})});
+    if(body.action==='manual')return sendJson(res,200,{booking:await booking.manual({request,user,isAdmin,body})});
     throw booking.fail('invalid_action');
   }catch(e){console.warn('[commercial-bookings]',JSON.stringify({code:e.status?e.message:'internal_error',status:e.status||500}));return sendJson(res,e.status||500,{error:e.status&&e.status<500?e.message:'booking_temporarily_unavailable'});}
 };

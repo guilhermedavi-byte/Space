@@ -604,3 +604,12 @@ test('resilience: conversion endpoint failure does not drop working history', as
   assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent, /↻ atualização pendente/);
   assert.doesNotMatch(dom.window.document.querySelector('[data-sp-conversion]').textContent, /Carregando/);
 });
+
+test('SDR module shows only the 3 most recent redial numbers', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  dom.window.SpacePhoneModule.state.recents = ['+10000000001','+10000000002','+10000000003','+10000000004'];
+  await dom.window.SpacePhoneModule.open();
+  const recentButtons = [...dom.window.document.querySelectorAll('[data-sp-fill]')].map(button => button.dataset.spFill);
+  assert.deepEqual(recentButtons, ['+10000000001', '+10000000002', '+10000000003']);
+});

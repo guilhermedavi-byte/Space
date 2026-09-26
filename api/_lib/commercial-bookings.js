@@ -1,5 +1,5 @@
 const { supabaseFetch } = require('./supabase-rest');
-const { createHmac, timingSafeEqual } = require('node:crypto');
+const { createHmac, timingSafeEqual, randomUUID } = require('node:crypto');
 const CAL_LINK = 'team/closers-space-idiomas/reuniao-com-mentor-do-space';
 // Verified from the real booking created through this exact published team event (2026-09-25).
 const CAL_EVENT_TYPE_ID = 4640970;
@@ -9,8 +9,8 @@ const fail = (code, status = 400) => Object.assign(new Error(code), { status });
 const uuid = x => /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(clean(x));
 const bookingUid = x => /^[A-Za-z0-9_-]{6,100}$/.test(clean(x));
 const iso = x => Number.isFinite(Date.parse(x)) ? new Date(x).toISOString() : null;
-const fields = 'id,calcom_booking_id,status,start_at,end_at,timezone,attendee_name,attendee_email,attendee_phone,host_name,sdr_uid,voice_call_id,lead_id,opportunity_id,updated_at,rescheduled_from,rescheduled_to,meeting_id,meeting_status,meeting_completed_at,match_method';
-const model = b => ({ id:b.id, bookingExternalId:b.calcom_booking_id, bookingConfirmed:b.status === 'confirmed', status:b.status, bookingStartAt:b.start_at, bookingEndAt:b.end_at, timezone:b.timezone, attendeeName:b.attendee_name, attendeeEmail:b.attendee_email, attendeePhone:b.attendee_phone, hostName:b.host_name, sdrUid:b.sdr_uid, voiceCallId:b.voice_call_id, leadId:b.lead_id, opportunityId:b.opportunity_id,meetingId:b.meeting_id,meetingStatus:b.meeting_status,meetingCompletedAt:b.meeting_completed_at,matchMethod:b.match_method });
+const fields = 'id,calcom_booking_id,status,start_at,end_at,timezone,attendee_name,attendee_email,attendee_phone,host_name,sdr_uid,voice_call_id,lead_id,opportunity_id,updated_at,rescheduled_from,rescheduled_to,meeting_id,meeting_status,meeting_completed_at,match_method,source_type,source_id,context_payload';
+const model = b => ({ id:b.id, bookingExternalId:b.calcom_booking_id, bookingConfirmed:b.status === 'confirmed', status:b.status, bookingStartAt:b.start_at, bookingEndAt:b.end_at, timezone:b.timezone, attendeeName:b.attendee_name, attendeeEmail:b.attendee_email, attendeePhone:b.attendee_phone, hostName:b.host_name, sdrUid:b.sdr_uid, voiceCallId:b.voice_call_id, leadId:b.lead_id, opportunityId:b.opportunity_id,meetingId:b.meeting_id,meetingStatus:b.meeting_status,meetingCompletedAt:b.meeting_completed_at,matchMethod:b.match_method,sourceType:b.source_type || 'internal_booking',sourceId:b.source_id || b.calcom_booking_id,contextPayload:b.context_payload || null });
 async function callInScope(request, id, user, isAdmin) {
   if (!uuid(id)) throw fail('invalid_call');
   const c = rows(await request(`/voice_calls?id=eq.${encodeURIComponent(id)}&select=id,space_user_uid,lead_id,opportunity_id,lead_name,to_number&limit=1`))[0];
@@ -30,6 +30,44 @@ async function context({request=supabaseFetch,user,isAdmin,callId}) {
   if (!row?.id) throw fail('booking_context_failed',503);
   return {contextId:row.id,calLink:CAL_LINK,prefill:{name:c?.lead_name || '',attendeePhoneNumber:c?.to_number || ''},voiceCallId:c?.id || null};
 }
+
+async function manual({request=supabaseFetch,user,isAdmin,body={}}) {
+  const sourceType = ['manual_booking','external_booking','call_only'].includes(clean(body.sourceType)) ? clean(body.sourceType) : 'manual_booking';
+  const call = body.callId ? await callInScope(request, body.callId, user, isAdmin) : null;
+  const start = iso(body.scheduledAt || body.startAt);
+  if (!start) throw fail('booking_time_required',400);
+  const end = iso(body.endAt) || new Date(Date.parse(start) + Math.max(15, Math.min(240, Number(body.durationMinutes) || 30)) * 60000).toISOString();
+  const owner = call?.space_user_uid || clean(body.sdrUid) || user.sub;
+  if (!isAdmin && owner !== user.sub) throw fail('forbidden',403);
+  const sourceId = clean(body.sourceId) || randomUUID();
+  const payload = {
+    source_type: sourceType,
+    source_id: sourceId,
+    calcom_booking_id: `${sourceType}_${sourceId}`,
+    calcom_event_type_id: CAL_EVENT_TYPE_ID,
+    status: 'confirmed',
+    start_at: start,
+    end_at: end,
+    timezone: clean(body.timezone) || null,
+    attendee_name: clean(body.leadName || body.attendeeName || call?.lead_name),
+    attendee_email: clean(body.leadEmail || body.attendeeEmail) || null,
+    attendee_phone: clean(body.phone || body.attendeePhone || call?.to_number),
+    host_name: clean(body.consultant || body.hostName) || null,
+    host_email: clean(body.consultantEmail || body.hostEmail) || null,
+    sdr_uid: owner,
+    voice_call_id: call?.id || null,
+    lead_id: clean(body.leadId || call?.lead_id) || null,
+    opportunity_id: clean(body.opportunityId || call?.opportunity_id) || null,
+    provider_updated_at: new Date().toISOString(),
+    context_payload: { origin: sourceType, notes: clean(body.notes).slice(0,2000), createdBy: clean(user.sub), voiceCallId: call?.id || null },
+  };
+  const saved = await request('/rpc/space_upsert_commercial_booking',{method:'POST',body:{p_booking:payload}});
+  const persisted = Array.isArray(saved.data) ? saved.data[0] : saved.data;
+  if (!persisted?.id) throw fail('manual_booking_persist_failed',503);
+  const linked = await request('/rpc/space_produce_calcom_meeting',{method:'POST',body:{p_booking_id:persisted.id,p_google_event_id:null,p_meet_link:null}});
+  return model({...persisted,...(linked?.data || {})});
+}
+
 async function calGet(path,{fetcher=fetch,env=process.env,version='2026-02-25'}={}) {
   const key=clean(env.CALCOM_API_KEY);
   if (!key) throw fail('calcom_not_configured',503);
@@ -94,4 +132,4 @@ async function reconcile({uid,request=supabaseFetch,fetcher=fetch,env=process.en
   if(bookingUid(b.rescheduledToUid)) return reconcile({uid:b.rescheduledToUid,request,fetcher,env,user,isAdmin,depth:depth+1});
   return model({...persisted,...link.data});
 }
-module.exports={CAL_LINK,CAL_EVENT_TYPE_ID,list,context,reconcile,verifySignature,bookingUid,fail};
+module.exports={CAL_LINK,CAL_EVENT_TYPE_ID,list,context,manual,reconcile,verifySignature,bookingUid,fail};

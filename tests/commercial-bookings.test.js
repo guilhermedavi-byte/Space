@@ -59,6 +59,24 @@ test('webhook rejects invalid signature and never accepts supplied status/PII',a
 test('cross-origin write blocked before context creation',async()=>{
   const h=harness();const r=res(),input=req('POST',{action:'context',callId});input.headers.origin='https://evil.test';await handler({...h,authResolver})(input,r);assert.equal(r.statusCode,403);assert.equal(h.requests.length,0);
 });
+
+test('manual external booking preserves call context without Cal.com provider call', async()=>{
+  const h=harness();
+  const saved=await lib.manual({...h,user:{sub:'sdr-1'},isAdmin:false,body:{action:'manual',callId,sourceType:'external_booking',sourceId:'qa-1',scheduledAt:'2026-10-02T13:00:00Z',leadName:'Matheus Afonso',phone:'+5534999569129',consultant:'Closer QA',notes:'Agendamento feito fora da Space'}});
+  assert.equal(saved.sourceType,'external_booking');
+  assert.equal(saved.sourceId,'qa-1');
+  assert.equal(saved.voiceCallId,callId);
+  const upsert=h.requests.find(r=>r.path==='/rpc/space_upsert_commercial_booking');
+  assert.equal(upsert.body.p_booking.calcom_booking_id,'external_booking_qa-1');
+  assert.equal(upsert.body.p_booking.context_payload.origin,'external_booking');
+  assert.equal(JSON.stringify(saved).includes('CALCOM_API_KEY'),false);
+});
+
+test('Growth cannot create manual booking for another SDR', async()=>{
+  const h=harness();
+  await assert.rejects(()=>lib.manual({...h,user:{sub:'other'},isAdmin:false,body:{callId,scheduledAt:'2026-10-02T13:00:00Z'}}),/call_not_found/);
+});
+
 test('producer receives only a unique provider Google event reference and canonical Meet URL',async()=>{
   const h=harness();const base=h.fetcher;
   h.fetcher=async url=>url.includes('/references?')?{ok:true,json:async()=>({status:'success',data:[{type:'google_calendar',eventUid:'google-event'}]})}:base(url);
