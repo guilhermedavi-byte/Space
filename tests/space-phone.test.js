@@ -102,9 +102,9 @@ test("admin can list all calls or select an SDR", async () => {
     permissionResolver: async () => ({ ok: true }),
     request: async (path) => {
       seen.push(path);
-      if (path.startsWith("/voice_phone_identities")) return { data: [{ space_user_uid: "sdr-2" }] };
       return { data: path.startsWith("/voice_calls") ? [{ id: "c2", space_user_uid: "sdr-2", space_user_email: "sdr2@space.test", to_number: "+16175550000", status: "completed", started_at: "2026-09-24T12:00:00Z" }] : [] };
     },
+    resolveOperationalSdrs: async () => [{ uid: "sdr-2", displayName: "SDR 2" }],
   });
   const res = await invoke(handler, { url: "/api/space-phone?period=last7&sdr=sdr-2" });
   assert.equal(res.status, 200);
@@ -443,10 +443,13 @@ test('period filters yesterday from both history and KPIs, preserving Growth and
       request: async path => {
         if (!path.startsWith('/voice_calls')) return { data: [] };
         const url = new URL(path, 'https://test'); const scope = url.searchParams.get('space_user_uid');
-        if (role === 'growth') assert.equal(scope, 'eq.sdr-history'); else assert.equal(scope, null);
+        if (role === 'growth') assert.equal(scope, 'eq.sdr-history');
+        const allowed = !scope ? [] : scope.startsWith('eq.') ? [scope.slice(3)] : scope.slice(4, -1).split(',');
+        if (role === 'admin') assert.deepEqual(new Set(allowed), new Set(['sdr-history', 'sdr-other']));
         const start = url.searchParams.getAll('or').find(x => x.includes('started_at.gte.'))?.match(/started_at.gte.([^,]+)/)[1] || '';
-        return { data: data.filter(row => (!scope || row.space_user_uid === scope.slice(3)) && row.started_at >= start) };
+        return { data: data.filter(row => allowed.includes(row.space_user_uid) && row.started_at >= start) };
       },
+      resolveOperationalSdrs: async () => [{ uid: 'sdr-history', displayName: 'Luana Mendonça' }, { uid: 'sdr-other', displayName: 'Ayres André' }],
     });
     for (const period of ['today', 'last7', 'last30']) {
       const response = await invoke(handler, { url: `/api/space-phone?period=${period}` });
@@ -523,14 +526,17 @@ test('Admin SDR and Growth spoof isolation apply to metrics, recent history and 
     { id: 'other', space_user_uid: 'other', started_at: now },
   ];
   const request = async path => {
-    if (path.startsWith('/voice_phone_identities')) return { data: [{ space_user_uid: 'luana' }, { space_user_uid: 'other' }] };
     if (!path.startsWith('/voice_calls')) return { data: [] };
     const p = new URL(path, 'https://test').searchParams;
-    let rows = source.filter(r => !p.has('space_user_uid') || p.get('space_user_uid') === `eq.${r.space_user_uid}`);
+    const scope = p.get('space_user_uid');
+    let allowed = null;
+    if (scope?.startsWith('eq.')) allowed = [scope.slice(3)];
+    if (scope?.startsWith('in.(')) allowed = scope.slice(4, -1).split(',');
+    let rows = source.filter(r => !allowed || allowed.includes(r.space_user_uid));
     if (p.getAll('or').some(v => v.includes('started_at.gte'))) rows = rows.filter(r => r.started_at === now);
     return { data: rows };
   };
-  const args = { request, user: { sub: 'luana' }, resolveNames: async () => new Map([['luana', 'Luana Mendonça'], ['other', 'Guilherme Davi']]) };
+  const args = { request, user: { sub: 'luana' }, resolveNames: async () => new Map([['luana', 'Luana Mendonça'], ['other', 'Guilherme Davi']]), resolveOperationalSdrs: async () => [{ uid: 'luana', displayName: 'Luana Mendonça' }, { uid: 'other', displayName: 'Ayres André' }] };
   for (const [isAdmin, sdr, count, history] of [[true,'all',2,2],[true,'luana',1,1],[false,'other',1,1],[false,'all',1,1],[true,'inactive',2,2]]) {
     const model = await __private.listModel({ ...args, isAdmin, query: { period: 'today', sdr } });
     assert.equal(model.analytics.totalCalls,count); assert.equal(model.calls.length,history);
@@ -548,4 +554,36 @@ test('KPI pagination counts more than 200 calls without truncating totals', asyn
     return {data:Array.from({length:offset===0?200:5},(_,i)=>({id:`c-${offset+i}`,space_user_uid:'owner'}))};
   }});
   assert.equal(model.analytics.totalCalls,205);
+});
+
+test('Admin users are excluded from operational SDR filter, team KPIs, history and callbacks', async () => {
+  const now = new Date().toISOString();
+  const source = [
+    { id: 'admin-test', space_user_uid: 'admin-gui', started_at: now, status: 'connected', outcome: 'agendado', callback_at: '2099-01-01T00:00:00Z' },
+    { id: 'growth-real', space_user_uid: 'luana', started_at: now, status: 'connected', outcome: 'agendado', callback_at: '2099-01-01T00:00:00Z' },
+  ];
+  const paths = [];
+  const request = async path => {
+    paths.push(path);
+    if (!path.startsWith('/voice_calls')) return { data: [] };
+    const p = new URL(path, 'https://test').searchParams;
+    const scope = p.get('space_user_uid');
+    assert.notEqual(scope, 'eq.admin-gui');
+    const allowed = scope?.startsWith('in.(') ? scope.slice(4, -1).split(',') : scope?.startsWith('eq.') ? [scope.slice(3)] : source.map(row => row.space_user_uid);
+    return { data: source.filter(row => allowed.includes(row.space_user_uid)) };
+  };
+  const model = await __private.listModel({
+    request,
+    user: { sub: 'admin-gui', role: 'admin' },
+    isAdmin: true,
+    query: { period: 'today', sdr: 'admin-gui' },
+    resolveNames: async () => new Map([['luana', 'Luana Mendonça'], ['admin-gui', 'Guilherme Davi']]),
+    resolveOperationalSdrs: async () => [{ uid: 'luana', displayName: 'Luana Mendonça' }],
+  });
+  assert.deepEqual(model.sdrs.map(sdr => sdr.uid), ['luana']);
+  assert.equal(model.selectedSdr, 'all');
+  assert.equal(model.analytics.totalCalls, 1);
+  assert.deepEqual(model.calls.map(call => call.sdrUid), ['luana']);
+  assert.deepEqual(model.callbacks.map(callback => callback.sdrUid), ['luana']);
+  assert.ok(paths.some(path => path.includes('space_user_uid=in.(luana)')));
 });

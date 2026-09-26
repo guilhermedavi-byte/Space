@@ -10,6 +10,7 @@ const createHandler = ({
   permissionResolver = requireResolvedAdminPermission,
   request = supabaseFetch,
   bridgeCommit,
+  resolveOperationalSdrs,
 } = {}) => async (req, res) => {
   if (!["GET", "POST", "PATCH", "HEAD"].includes(req.method)) {
     res.setHeader("Allow", "GET, POST, PATCH, HEAD");
@@ -37,7 +38,7 @@ const createHandler = ({
     const url = new URL(req.url || "/api/space-phone", "https://space.local");
     if (req.method === "GET") {
       if (url.searchParams.get("view") === "callback-notifications") return sendJson(res,200,{ok:true,callbacks:await require("./_lib/space-phone-callbacks").notifications({request,user})});
-      if (url.searchParams.get("view") === "callbacks") return sendJson(res,200,{ok:true,callbacks:await require("./_lib/space-phone-callbacks").list({request,user,isAdmin,sdr:url.searchParams.get("sdr")})});
+      if (url.searchParams.get("view") === "callbacks") return sendJson(res,200,{ok:true,callbacks:await phone.callbacksModel({request,user,isAdmin,sdr:url.searchParams.get("sdr"),resolveOperationalSdrs})});
       const id = url.searchParams.get("id");
       if (id) return sendJson(res, 200, await phone.detailModel({ request, id, user, isAdmin }));
       if (url.searchParams.get("normalize")) {
@@ -48,6 +49,7 @@ const createHandler = ({
         user,
         isAdmin,
         query: Object.fromEntries(url.searchParams.entries()),
+        resolveOperationalSdrs,
       }));
     }
 
