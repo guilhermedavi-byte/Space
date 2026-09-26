@@ -33,7 +33,7 @@ const commercialLabels = Array.from(document.querySelectorAll("[data-sidebar-acc
   .map((item) => item.textContent.replace(/\s+/g, " ").trim())
   .filter(Boolean);
 assert.ok(commercialLabels.includes("CRM"), "Comercial contains CRM");
-assert.ok(commercialLabels.includes("Painel SDR") || commercialLabels.includes("↳ Painel SDR"), "Comercial contains Painel SDR");
+assert.ok(!commercialLabels.some(label => label.includes("Painel SDR")), "Comercial no longer exposes Painel SDR");
 assert.ok(!commercialLabels.includes("Growth"), "Comercial admin does not contain Growth");
 
 const expectedSettingsOrder = [

@@ -15,7 +15,7 @@ body[data-page="app"] {
   --dashboard-yellow: #dfbd73;
   --dashboard-neutral: #8e9fb6;
 }
-body[data-page="app"] :is(.space-dashboard, .admin-dashboard-v2-surface, .commercial-overview-shell, .sdr-panel, .asdr-shell, .pedov2, .pedretain-main, .ri-shell, .fv1, .sphone-shell) {
+body[data-page="app"] :is(.space-dashboard, .admin-dashboard-v2-surface, .commercial-overview-shell, .sdr-panel, .pedov2, .pedretain-main, .ri-shell, .fv1, .sphone-shell) {
   background: var(--dashboard-bg);
   color: var(--dashboard-text);
   box-shadow: none;
@@ -27,7 +27,7 @@ body[data-page="app"] :is(.space-dashboard, .admin-dashboard-v2-surface, .commer
   --sdr-muted: var(--dashboard-muted);
   --sdr-line: var(--dashboard-border);
 }
-body[data-page="app"] :is(.space-dashboard-card, .admin-dashboard-v2-card, .commercial-overview-card, .commercial-overview-kpi, .commercial-sdr-kpi-card, .sdr-card, .asdr-card, .asdr-section, .sdr-kpi-card, .pedov2-card, .ri-section, .ri-metric, .fv1-card, .fv1-cockpit-panel, .fv1-kpi, .finance-dashboard-panel, .native-crm-analytics-kpi, .sphone-kpi) {
+body[data-page="app"] :is(.space-dashboard-card, .admin-dashboard-v2-card, .commercial-overview-card, .commercial-overview-kpi, .commercial-sdr-kpi-card, .sdr-card, .pedov2-card, .ri-section, .ri-metric, .fv1-card, .fv1-cockpit-panel, .fv1-kpi, .finance-dashboard-panel, .native-crm-analytics-kpi, .sphone-kpi) {
   box-sizing: border-box;
   min-width: 0;
   background: var(--dashboard-surface);
@@ -36,15 +36,15 @@ body[data-page="app"] :is(.space-dashboard-card, .admin-dashboard-v2-card, .comm
   box-shadow: none;
   color: var(--dashboard-text);
 }
-body[data-page="app"] :is(.space-dashboard-card, .commercial-overview-card, .pedov2-card, .ri-section, .sdr-card, .asdr-section) { padding: 24px; }
-body[data-page="app"] :is(.space-dashboard-grid, .commercial-overview-kpi-grid, .commercial-sdr-admin-kpi-strip, .sdr-kpi-grid, .asdr-kpis, .pedov2-kpi-row, .ri-kpis, .fv1-kpis, .sphone-kpis, .native-crm-analytics-kpis) {
+body[data-page="app"] :is(.space-dashboard-card, .commercial-overview-card, .pedov2-card, .ri-section, .sdr-card) { padding: 24px; }
+body[data-page="app"] :is(.space-dashboard-grid, .commercial-overview-kpi-grid, .commercial-sdr-admin-kpi-strip, .pedov2-kpi-row, .ri-kpis, .fv1-kpis, .sphone-kpis, .native-crm-analytics-kpis) {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
   gap: var(--dashboard-gap);
   align-items: stretch;
 }
-body[data-page="app"] :is(.commercial-overview-mini-grid, .commercial-overview-pulse-grid, .asdr-grid, .sdr-grid, .sdr-grid-3, .ri-two, .fv1-overview-grid, .finance-dashboard-grid, .admin-dashboard-v2-grid) { gap: var(--dashboard-gap); }
-body[data-page="app"] :is(.space-dashboard-kpi, .commercial-overview-kpi, .commercial-sdr-kpi-card, .sdr-kpi-card, .asdr-kpi, .pedov2-kpi-card, .ri-metric, .fv1-kpi, .native-crm-analytics-kpi, .sphone-kpi) {
+body[data-page="app"] :is(.commercial-overview-mini-grid, .commercial-overview-pulse-grid, .ri-two, .fv1-overview-grid, .finance-dashboard-grid, .admin-dashboard-v2-grid) { gap: var(--dashboard-gap); }
+body[data-page="app"] :is(.space-dashboard-kpi, .commercial-overview-kpi, .commercial-sdr-kpi-card, .pedov2-kpi-card, .ri-metric, .fv1-kpi, .native-crm-analytics-kpi, .sphone-kpi) {
   --dashboard-signal: var(--dashboard-neutral);
   position: relative;
   padding: 20px 22px 23px;
@@ -56,7 +56,7 @@ body[data-page="app"] :is(.is-green, .is-success, .fv1-kpi--received, .admin-das
 body[data-page="app"] :is(.is-coral, .is-danger, .is-negative, .fv1-kpi--overdue, [data-tone="danger"], [data-tone="negative"]) { --dashboard-signal: var(--dashboard-red); }
 body[data-page="app"] :is(.is-amber, .is-warning, [data-tone="warning"]) { --dashboard-signal: var(--dashboard-yellow); }
 body[data-page="app"] :is(.is-blue, .is-info, [data-tone="info"]) { --dashboard-signal: var(--dashboard-blue); }
-body[data-page="app"] :is(.space-dashboard-label, .commercial-overview-kpi-label, .commercial-sdr-kpi-label, .sdr-kpi-label, .asdr-kpi > span, .pedov2-kpi-label, .admin-dashboard-v2-card-label, .fv1-kpi h2, .ri-metric > span, .sphone-kpi > span) {
+body[data-page="app"] :is(.space-dashboard-label, .commercial-overview-kpi-label, .commercial-sdr-kpi-label, .pedov2-kpi-label, .admin-dashboard-v2-card-label, .fv1-kpi h2, .ri-metric > span, .sphone-kpi > span) {
   font-size: 10px;
   font-weight: 650;
   line-height: 1.5;
@@ -64,7 +64,7 @@ body[data-page="app"] :is(.space-dashboard-label, .commercial-overview-kpi-label
   text-transform: uppercase;
   color: var(--dashboard-muted);
 }
-body[data-page="app"] :is(.space-dashboard-value, .commercial-overview-kpi-row > strong, .commercial-sdr-kpi-value, .sdr-kpi-value > strong, .asdr-kpi > strong, .pedov2-kpi-value, .admin-dashboard-v2-card-value, .fv1-kpi > strong, .ri-metric > strong, .sphone-kpi > strong) {
+body[data-page="app"] :is(.space-dashboard-value, .commercial-overview-kpi-row > strong, .commercial-sdr-kpi-value, .pedov2-kpi-value, .admin-dashboard-v2-card-value, .fv1-kpi > strong, .ri-metric > strong, .sphone-kpi > strong) {
   font-size: clamp(26px, 2.3vw, 36px);
   font-weight: 650;
   line-height: 1.15;
@@ -73,25 +73,25 @@ body[data-page="app"] :is(.space-dashboard-value, .commercial-overview-kpi-row >
   color: var(--dashboard-text);
   overflow-wrap: anywhere;
 }
-body[data-page="app"] :is(.commercial-overview-card-head, .pedov2-card-head, .fv1-card > header, .ri-section > header, .sdr-card-title) { margin-bottom: 20px; }
-body[data-page="app"] :is(.commercial-overview-chart-wrap, .pedov2-chart-box, .sdr-chart-wrap, .fv1-line-chart, .fv1-exec-chart, .finance-bar-chart) {
+body[data-page="app"] :is(.commercial-overview-card-head, .pedov2-card-head, .fv1-card > header, .ri-section > header) { margin-bottom: 20px; }
+body[data-page="app"] :is(.commercial-overview-chart-wrap, .pedov2-chart-box, .fv1-line-chart, .fv1-exec-chart, .finance-bar-chart) {
   min-width: 0;
   background: transparent;
   border-radius: 12px;
   box-shadow: none;
 }
-body[data-page="app"] :is(.commercial-overview-chart-wrap, .pedov2-chart-box, .sdr-chart-wrap, .fv1-line-chart) svg { max-width: 100%; }
-body[data-page="app"] :is(.space-dashboard, .commercial-overview-shell, .sdr-panel, .asdr-shell, .pedov2, .ri-shell, .fv1) :is(button, a, select, input):focus-visible { outline: 2px solid var(--dashboard-blue); outline-offset: 3px; }
+body[data-page="app"] :is(.commercial-overview-chart-wrap, .pedov2-chart-box, .fv1-line-chart) svg { max-width: 100%; }
+body[data-page="app"] :is(.space-dashboard, .commercial-overview-shell, .sdr-panel, .pedov2, .ri-shell, .fv1) :is(button, a, select, input):focus-visible { outline: 2px solid var(--dashboard-blue); outline-offset: 3px; }
 @media (max-width: 900px) {
   body[data-page="app"] { --dashboard-gap: 16px; }
-  body[data-page="app"] :is(.space-dashboard-grid, .commercial-overview-kpi-grid, .commercial-sdr-admin-kpi-strip, .sdr-kpi-grid, .asdr-kpis, .pedov2-kpi-row, .ri-kpis, .fv1-kpis, .sphone-kpis, .native-crm-analytics-kpis) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body[data-page="app"] :is(.space-dashboard-grid, .commercial-overview-kpi-grid, .commercial-sdr-admin-kpi-strip, .pedov2-kpi-row, .ri-kpis, .fv1-kpis, .sphone-kpis, .native-crm-analytics-kpis) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
   body[data-page="app"] { --dashboard-gap: 12px; --dashboard-radius: 18px; }
-  body[data-page="app"] :is(.space-dashboard-card, .commercial-overview-card, .pedov2-card, .ri-section, .sdr-card, .asdr-section) { padding: 18px; }
-  body[data-page="app"] :is(.commercial-overview-kpi, .commercial-sdr-kpi-card, .sdr-kpi-card, .asdr-kpi, .pedov2-kpi-card, .ri-metric, .fv1-kpi, .native-crm-analytics-kpi, .sphone-kpi) { padding: 16px; min-height: 106px; }
-  body[data-page="app"] :is(.ri-two, .commercial-overview-mini-grid, .sdr-grid-3, .finance-dashboard-grid) { grid-template-columns: minmax(0, 1fr); }
+  body[data-page="app"] :is(.space-dashboard-card, .commercial-overview-card, .pedov2-card, .ri-section, .sdr-card) { padding: 18px; }
+  body[data-page="app"] :is(.commercial-overview-kpi, .commercial-sdr-kpi-card, .pedov2-kpi-card, .ri-metric, .fv1-kpi, .native-crm-analytics-kpi, .sphone-kpi) { padding: 16px; min-height: 106px; }
+  body[data-page="app"] :is(.ri-two, .commercial-overview-mini-grid, .finance-dashboard-grid) { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 360px) {
-  body[data-page="app"] :is(.space-dashboard-grid, .commercial-overview-kpi-grid, .commercial-sdr-admin-kpi-strip, .sdr-kpi-grid, .asdr-kpis, .pedov2-kpi-row, .ri-kpis, .fv1-kpis, .sphone-kpis) { grid-template-columns: minmax(0, 1fr); }
+  body[data-page="app"] :is(.space-dashboard-grid, .commercial-overview-kpi-grid, .commercial-sdr-admin-kpi-strip, .pedov2-kpi-row, .ri-kpis, .fv1-kpis, .sphone-kpis) { grid-template-columns: minmax(0, 1fr); }
 }

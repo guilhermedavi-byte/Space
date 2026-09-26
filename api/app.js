@@ -68,7 +68,6 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
   if (slug === "admin" && (sub === "notificacoes" || sub === "notifications")) return { panel: "notifications" };
   if (slug === "professor" && (sub === "notificacoes" || sub === "notifications")) return { panel: "notifications" };
   if (slug === "professor" && sub === "atividades") return { panel: "activities" };
-  if (slug === "admin" && sub === "sdr") return { panel: "admin-sdr" };
   if (slug === "financeiro" && (sub === "notificacoes" || sub === "notifications")) return { panel: "notifications" };
   if (slug === "financeiro") return { panel: "financeiro" };
   if (slug === "admin" && sub === "space-office") return { panel: "space-office" };
@@ -82,7 +81,6 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
     if (segments[2] === "crm") return { panel: "native-crm" };
     if (segments[2] === "pre-vendas" && segments[3] === "agenda") return { panel: "space-agenda" };
     if (segments[2] === "pre-vendas" && segments[3] === "ligacoes") return { panel: "space-phone" };
-    if (segments[2] === "pre-vendas" && segments[3] === "painel-sdr") return { panel: "admin-sdr" };
     if (segments[2] === "pre-vendas" || segments[2] === "atividade-sdr") return { panel: "admin-comercial-atividade-sdr" };
     if (segments[2] === "metas") return { panel: "admin-comercial-metas" };
     if (segments[2] === "usuarios") return { panel: "admin-comercial-usuarios" };
@@ -93,14 +91,13 @@ const routeStateFromPath = (pathParam, searchParams = new URLSearchParams()) => 
       if (segments[2] === "crm") return { panel: "native-crm" };
       if (segments[2] === "pre-vendas" && segments[3] === "agenda") return { panel: "space-agenda" };
     if (segments[2] === "pre-vendas" && segments[3] === "ligacoes") return { panel: "space-phone" };
-      if (segments[2] === "pre-vendas" && segments[3] === "painel-sdr") return { panel: "admin-sdr" };
-      if (["painel-sdr", "scripts-vendas", "objecoes", "training"].includes(segments[2])) return { panel: segments[2] === "painel-sdr" ? "admin-sdr" : "growth" };
+      if (["scripts-vendas", "objecoes", "training"].includes(segments[2])) return { panel: "growth" };
       return { panel: "growth-dashboard" };
     }
     if (sub === "crm") return { panel: "native-crm" };
     if (sub === "activities" || sub === "atividades") return { panel: "activities" };
     if (sub === "notificacoes" || sub === "notifications") return { panel: "notifications" };
-    if (sub === "sdr" || sub === "scripts-vendas" || sub === "objecoes" || sub === "training") return { panel: "growth" };
+    if (sub === "scripts-vendas" || sub === "objecoes" || sub === "training") return { panel: "growth" };
     return { panel: "growth-dashboard" };
   }
   if (slug === "admin" && sub === "growth") return { panel: "admin-comercial-visao-geral" };
@@ -211,7 +208,6 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="/assets/space-phone.bundle.js?v=5"></script>
     <script src="space-agenda.js?v=5"></script>
     <script src="space-phone.js?v=22"></script>
-    <script src="admin-sdr.js?v=7"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>
     <script src="attendance-connections.js"></script>
@@ -282,6 +278,13 @@ module.exports = async (req, res) => {
   const host = String(req.headers.host || "localhost");
   const url = new URL(req.url || "/api/app", `https://${host}`);
   const pathParam = String(url.searchParams.get("path") || "").replace(/^\/+/, "").replace(/\/+$/, "");
+  // Retired UI: preserve bookmarks without rendering the former panel.
+  if (/^(admin|growth)\/(?:sdr|comercial\/(?:pre-vendas\/)?painel-sdr)$/.test(pathParam)) {
+    const role = pathParam.split("/")[0];
+    sendRedirect(res, `/app/${role}/comercial`);
+    return;
+  }
+
   if (/^admin\/guia(?:\/|$)/i.test(pathParam)) {
     res.statusCode = 404;
     res.setHeader("Content-Type", "text/plain; charset=utf-8");

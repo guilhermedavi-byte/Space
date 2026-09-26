@@ -305,7 +305,7 @@ test('SPA panel changes/remount preserve client, call, clock, mute and hold', as
   phone.mount();await phone.call({phoneNumber:'+16175551212'});
   FakeTelnyxRTC.instances[0].emit('telnyx.notification',{type:'callUpdate',call:{state:'active',call_leg_id:'leg-one'}});
   await phone.mute();await phone.hold();const before=phone.getState();
-  for(const panel of ['space-agenda','admin-sdr','native-crm','space-phone']){
+  for(const panel of ['space-agenda','native-crm','space-phone']){
     dom.window.history.pushState({},'',`/app/admin/${panel}`);dom.window.document.body.dataset.activePanel=panel;
     dom.window.document.querySelector('#panel').innerHTML=panel;phone.mount();
   }

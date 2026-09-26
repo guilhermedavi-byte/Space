@@ -1,4 +1,41 @@
 {
+  "redirects": [
+    {
+      "source": "/app/admin/sdr",
+      "destination": "/app/admin/comercial",
+      "permanent": false
+    },
+    {
+      "source": "/app/admin/comercial/painel-sdr",
+      "destination": "/app/admin/comercial",
+      "permanent": false
+    },
+    {
+      "source": "/app/admin/comercial/pre-vendas/painel-sdr",
+      "destination": "/app/admin/comercial",
+      "permanent": false
+    },
+    {
+      "source": "/app/growth/sdr",
+      "destination": "/app/growth/comercial",
+      "permanent": false
+    },
+    {
+      "source": "/app/growth/comercial/painel-sdr",
+      "destination": "/app/growth/comercial",
+      "permanent": false
+    },
+    {
+      "source": "/app/growth/comercial/pre-vendas/painel-sdr",
+      "destination": "/app/growth/comercial",
+      "permanent": false
+    },
+    {
+      "source": "/admin/sdr",
+      "destination": "/app/admin/comercial",
+      "permanent": false
+    }
+  ],
   "functions": {
     "api/webhooks/calcom.js": {"maxDuration": 120},
     "api/commercial-bookings.js": {"maxDuration": 120},
@@ -201,7 +238,7 @@
     },
     {
       "source": "/admin/sdr",
-      "destination": "/api/app?path=admin/comercial/pre-vendas/painel-sdr"
+      "destination": "/api/app?path=admin/comercial"
     },
     {
       "source": "/app",

@@ -67,8 +67,6 @@ const sidebarDom = () => new JSDOM(`
   <button data-panel-target="attendance-connections" hidden>Conexões</button>
   <button data-panel-target="native-crm" hidden>CRM</button>
   <button data-panel-target="space-phone" hidden>Ligações</button>
-  <button data-admin-only data-panel-target="admin-sdr">Admin SDR</button>
-  <button data-growth-only data-panel-target="admin-sdr" hidden>Growth SDR</button>
   <button data-growth-dashboard-link data-panel-target="growth"><span class="sidebar-text"></span></button>
 `);
 
@@ -83,24 +81,20 @@ test('sanitizeSessionUser preserves normalized commercial roles', () => {
   assert.deepEqual(user.commercialRoles, ['closer', 'sdr']);
 });
 
-test('Growth with closer plus SDR shows phone and Growth SDR panel only', () => {
+test('Growth with closer plus SDR retains phone access', () => {
   const dom = sidebarDom();
   createSyncRoleUI({ document: dom.window.document, currentRole: 'growth', sessionUser: { role: 'growth', name: 'Matheus', commercialRoles: ['closer', 'sdr'] } })();
   assert.equal(dom.window.document.querySelector('[data-panel-target="space-phone"]').hidden, false);
-  assert.equal(dom.window.document.querySelector('[data-growth-only][data-panel-target="admin-sdr"]').hidden, false);
-  assert.equal(dom.window.document.querySelector('[data-admin-only][data-panel-target="admin-sdr"]').hidden, true);
 });
 
-test('Growth closer-only keeps phone and Growth SDR panel hidden', () => {
+test('Growth closer-only keeps phone hidden', () => {
   const dom = sidebarDom();
   createSyncRoleUI({ document: dom.window.document, currentRole: 'growth', sessionUser: { role: 'growth', name: 'Closer', commercialRoles: ['closer'] } })();
   assert.equal(dom.window.document.querySelector('[data-panel-target="space-phone"]').hidden, true);
-  assert.equal(dom.window.document.querySelector('[data-growth-only][data-panel-target="admin-sdr"]').hidden, true);
 });
 
-test('Admin still shows admin SDR panel and hides Growth-only duplicate', () => {
+test('Admin retains phone access', () => {
   const dom = sidebarDom();
   createSyncRoleUI({ document: dom.window.document, currentRole: 'admin', sessionUser: { role: 'admin', name: 'Admin', commercialRoles: [] } })();
-  assert.equal(dom.window.document.querySelector('[data-admin-only][data-panel-target="admin-sdr"]').hidden, false);
-  assert.equal(dom.window.document.querySelector('[data-growth-only][data-panel-target="admin-sdr"]').hidden, true);
+  assert.equal(dom.window.document.querySelector('[data-panel-target="space-phone"]').hidden, false);
 });

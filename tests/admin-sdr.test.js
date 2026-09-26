@@ -58,7 +58,7 @@ test('range resolver covers requested date filters', () => {
   assert.deepEqual(__private.resolveRange({ period: 'last7', now }), { period: 'last7', fromKey: '2026-09-12', toKey: '2026-09-18' });
 });
 
-test('admin SDR route boots the dedicated panel and script', async () => {
+test('retired admin SDR route redirects to Comercial', async () => {
   const appPath = require.resolve('../api/app');
   const firestoreAdminPath = require.resolve('../api/_lib/firestore-admin');
   const previousApp = require.cache[appPath];
@@ -74,13 +74,12 @@ test('admin SDR route boots the dedicated panel and script', async () => {
   delete require.cache[appPath];
   const appHandler = require('../api/app');
   const req = Readable.from([]); req.method = 'GET'; req.url = '/api/app?path=admin/comercial/pre-vendas/painel-sdr'; req.headers = { host: 'localhost', cookie: 'space_session=' + createSessionForUser({ id: 'admin', role: 'admin', name: 'Admin', email: 'admin@example.com' }).token };
-  let body = ''; const res = { statusCode: 200, setHeader(){}, end(v=''){ body += v; } };
+  let body = ''; const headers = {}; const res = { statusCode: 200, setHeader(k,v){ headers[k.toLowerCase()] = v; }, end(v=''){ body += v; } };
   try {
     await appHandler(req, res);
-    assert.equal(res.statusCode, 200);
-    assert.match(body, /data-initial-panel="admin-sdr"/);
-    assert.match(body, /data-admin-sdr/);
-    assert.match(body, /src="admin-sdr\.js\?v=7"/);
+    assert.equal(res.statusCode, 302);
+    assert.equal(headers.location, '/app/admin/comercial');
+    assert.equal(body, '');
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];

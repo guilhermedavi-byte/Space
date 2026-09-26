@@ -495,12 +495,6 @@
                 <span class="sidebar-text">Ligações</span>
               </button>
               <button class="sidebar-link sidebar-link-sub" type="button" data-panel-target="space-agenda" title="Agenda"><span class="sidebar-text">Agenda</span></button>
-              <button data-admin-only class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-sdr" title="Painel SDR">
-                <span class="sidebar-text">↳ Painel SDR</span>
-              </button>
-              <button data-growth-only class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-sdr" title="Painel SDR">
-                <span class="sidebar-text">Painel SDR</span>
-              </button>
               <button data-admin-only class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-metas" title="Metas"><span class="sidebar-text">Metas</span></button>
               <button data-admin-only class="sidebar-link sidebar-link-sub" type="button" data-panel-target="admin-comercial-usuarios" title="Usuários">
                 <span class="sidebar-text">Usuários</span>
@@ -1376,7 +1370,6 @@
         <section class="platform-panel" data-panel="attendance-connections" data-hide-platform-header="true" hidden aria-label="Conexões de Atendimento"><div data-attendance-connections></div></section>
         <section class="platform-panel" data-panel="space-agenda" data-hide-platform-header="true" hidden aria-label="Comercial - Agenda"><div data-space-agenda></div></section>
 <section class="platform-panel" data-panel="space-phone" data-hide-platform-header="true" hidden aria-label="Comercial - Ligações"><div data-space-phone></div></section>
-        <section class="platform-panel" data-panel="admin-sdr" data-hide-platform-header="true" hidden aria-label="Admin - SDR"><div data-admin-sdr></div></section>
         <section class="platform-panel" data-panel="automations" data-hide-platform-header="true" hidden aria-label="Automações">
           <div class="automations-admin" data-automations-admin>
             <div class="automations-loading">Carregando automações…</div>
@@ -2649,15 +2642,9 @@
             <header class="sales-copilot-top">
               <div>
                 <div class="sales-copilot-kicker">Growth / Comercial</div>
-                <h2 class="sales-copilot-title">Space SDR</h2>
+                <h2 class="sales-copilot-title">Comercial</h2>
               </div>
             </header>
-
-            <section class="sales-copilot-view is-active" data-growth-copilot-view="sdr">
-              <div class="sdr-panel" data-sdr-panel>
-                <div class="sdr-loading">Carregando painel SDR…</div>
-              </div>
-            </section>
 
             <section class="sales-copilot-view" data-growth-copilot-view="scripts-vendas" hidden>
               <div class="sales-copilot-crud-head">
@@ -2736,6 +2723,5 @@
     <script src="script.js?v=9"></script>
     <script src="/assets/space-phone.bundle.js?v=2"></script>
     <script src="space-phone.js?v=22"></script>
-    <script src="admin-sdr.js?v=7"></script>
   </body>
 </html>

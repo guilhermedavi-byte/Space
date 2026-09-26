@@ -23,10 +23,11 @@ const invokeAppRoute = async ({ pathParam, sessionUser, firestoreUser }) => {
   req.url = `/api/app?path=${encodeURIComponent(pathParam)}`;
   req.headers = { host: "localhost", cookie: "space_session=" + createSessionForUser(sessionUser).token };
   let body = "";
-  const res = { statusCode: 200, setHeader() {}, end(v = "") { body += v; } };
+  const headers = {};
+  const res = { statusCode: 200, setHeader(k,v) { headers[k.toLowerCase()] = v; }, end(v = "") { body += v; } };
   try {
     await appHandler(req, res);
-    return { statusCode: res.statusCode, body };
+    return { statusCode: res.statusCode, body, headers };
   } finally {
     if (previousApp) require.cache[appPath] = previousApp;
     else delete require.cache[appPath];
@@ -169,7 +170,8 @@ test("space phone route boots the dedicated admin panel and script", async () =>
   req.url = "/api/app?path=admin/comercial/pre-vendas/ligacoes";
   req.headers = { host: "localhost", cookie: "space_session=" + createSessionForUser({ id: "admin", role: "admin", name: "Admin", email: "admin@example.com", adminPermissions: ["comercial.spacePhone.view"] }).token };
   let body = "";
-  const res = { statusCode: 200, setHeader() {}, end(v = "") { body += v; } };
+  const headers = {};
+  const res = { statusCode: 200, setHeader(k,v) { headers[k.toLowerCase()] = v; }, end(v = "") { body += v; } };
   try {
     await appHandler(req, res);
     assert.equal(res.statusCode, 200);
@@ -197,16 +199,14 @@ test("space phone route boots the Growth equivalent panel with Firestore commerc
   assert.deepEqual(extractEmbeddedSession(result.body).commercialRoles, ["sdr"]);
 });
 
-test("Growth SDR panel route boots admin-sdr and preserves closer plus SDR roles", async () => {
+test("retired Growth SDR route redirects to Comercial", async () => {
   const result = await invokeAppRoute({
     pathParam: "growth/comercial/pre-vendas/painel-sdr",
     sessionUser: { id: "matheus", role: "growth", name: "Matheus", email: "matheus@example.com", commercialRoles: [] },
     firestoreUser: { id: "matheus", tipo: "growth", role: "growth", ativo: true, active: true, commercialRoles: ["closer", "sdr"] },
   });
-  assert.equal(result.statusCode, 200);
-  assert.match(result.body, /data-initial-panel="admin-sdr"/);
-  assert.match(result.body, /data-admin-sdr/);
-  assert.deepEqual(extractEmbeddedSession(result.body).commercialRoles, ["closer", "sdr"]);
+  assert.equal(result.statusCode, 302);
+  assert.equal(result.headers.location, '/app/growth/comercial');
 });
 
 test("Growth closer-only session is hydrated from Firestore without SDR role", async () => {
