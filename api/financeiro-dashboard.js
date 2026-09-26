@@ -1,3 +1,4 @@
+const { requirePhone } = require('../src/international-phone/core');
 const {assertLegacyFinancialWrite,UNOWNED_FILTER}=require('./_lib/finance-legacy-ownership');
 const { readJsonBody, sendJson } = require("./_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
@@ -135,7 +136,7 @@ const buildAlunoPayload = (body) =>
     // ESPELHO DESNORMALIZADO — fonte: Firestore users/{id}
     firestore_doc_id: nullableString(body?.firestore_doc_id || body?.firestoreDocId),
     aluno_nome: nullableString(body?.aluno_nome),
-    telefone: nullableString(body?.telefone),
+    telefone: requirePhone(body?.telefone, { defaultCountry: "BR", preferCountry: true }) || null,
     email: nullableString(body?.email),
     asaas_customer_id: nullableString(body?.asaas_customer_id),
     asaas_subscription_id: nullableString(body?.asaas_subscription_id),
@@ -150,7 +151,7 @@ const buildCobrancaPayload = (body) =>
     firestore_doc_id: nullableString(body?.firestore_doc_id || body?.firestoreDocId),
     id_cobranca_externa: nullableString(body?.id_cobranca_externa),
     aluno_nome: nullableString(body?.aluno_nome),
-    telefone: nullableString(body?.telefone),
+    telefone: requirePhone(body?.telefone, { defaultCountry: "BR", preferCountry: true }) || null,
     email: nullableString(body?.email),
     valor: nullableNumber(body?.valor),
     vencimento: nullableDate(body?.vencimento),
@@ -291,6 +292,6 @@ module.exports = async (req, res) => {
   } catch (error) {
     if(error?.code==='finance_asaas_authoritative')return sendJson(res,409,{error:error.code});
     console.error("[api] financeiro-dashboard failed", error);
-    return sendJson(res, 500, { error: error?.code || "finance_dashboard_failed" });
+    return sendJson(res, error?.status === 400 ? 400 : 500, { error: error?.code || "finance_dashboard_failed" });
   }
 };

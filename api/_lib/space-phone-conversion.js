@@ -6,12 +6,14 @@ function metrics(c){return {...c,attendance:ratio(c.answered,c.calls),callToBook
 async function conversion({request,calls,user,isAdmin,sdr,range,resolveNames,sdrs=[]}){
  if(!user?.sub)throw Object.assign(new Error('forbidden'),{status:403});
  const owner=isAdmin?(sdr&&sdr!=='all'?sdr:null):user.sub;
+ const eligible=new Set((sdrs||[]).map(s=>s&&s.uid).filter(Boolean));
+ const allowed=uid=>!isAdmin||eligible.has(uid);
  const groups=new Map();const group=uid=>{if(!groups.has(uid))groups.set(uid,empty());return groups.get(uid);};
  if(isAdmin)for(const s of sdrs)if(!owner||s.uid===owner)group(s.uid);
  // Do not trust callers to pre-scope or pre-filter inputs.
  for(const c of calls){
   const time=Date.parse(c.started_at||c.created_at);
-  if((owner&&c.space_user_uid!==owner)||!(time>=Date.parse(range.from)&&time<=Date.parse(range.to)))continue;
+  if((owner&&c.space_user_uid!==owner)||!allowed(c.space_user_uid)||!(time>=Date.parse(range.from)&&time<=Date.parse(range.to)))continue;
   const g=group(c.space_user_uid);const d=businessDisposition(c);g.calls++;g.answered+=Number(d.humanContact);g.scheduled+=Number(d.scheduled);
  }
  const bookings=[];
@@ -22,7 +24,7 @@ async function conversion({request,calls,user,isAdmin,sdr,range,resolveNames,sdr
  let cursor=0;
  await Promise.all(Array.from({length:Math.min(4,bookings.length)},async()=>{
   while(cursor<bookings.length){
-   const b=bookings[cursor++];if(!b.sdr_uid||(owner&&b.sdr_uid!==owner)||b.status!=='confirmed'||b.rescheduled_to)continue;
+   const b=bookings[cursor++];if(!b.sdr_uid||(owner&&b.sdr_uid!==owner)||!allowed(b.sdr_uid)||b.status!=='confirmed'||b.rescheduled_to)continue;
    const g=group(b.sdr_uid);g.bookings++;
    const response=await request('/rpc/space_resolve_booking_meeting',{method:'POST',body:{p_booking_id:b.id}});
    const link=response.data;
@@ -32,6 +34,6 @@ async function conversion({request,calls,user,isAdmin,sdr,range,resolveNames,sdr
  }));
  const totals=empty();for(const g of groups.values())for(const key of Object.keys(totals))totals[key]+=g[key];
  const names=isAdmin?await resolveNames([...groups.keys()].map(space_user_uid=>({space_user_uid})),user):new Map();
- return { ...metrics(totals),updatedAt:new Date().toISOString(),temporalRule:'calls_started_at__bookings_start_at',...(isAdmin?{ranking:[...groups].map(([uid,g])=>({uid,displayName:names.get(uid)||'SDR sem nome cadastrado',...metrics(g)})).sort((a,b)=>b.scheduled-a.scheduled||b.calls-a.calls)}:{}) };
+ return { ...metrics(totals),updatedAt:new Date().toISOString(),temporalRule:'calls_started_at__bookings_start_at',...(isAdmin?{ranking:[...groups].filter(([,g])=>g.calls||g.answered||g.scheduled||g.bookings||g.done||g.unlinked).map(([uid,g])=>({uid,displayName:names.get(uid)||'SDR sem nome cadastrado',...metrics(g)})).sort((a,b)=>b.scheduled-a.scheduled||b.calls-a.calls)}:{}) };
 }
 module.exports={conversion,ratio};

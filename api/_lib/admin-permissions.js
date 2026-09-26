@@ -245,6 +245,7 @@ const permissionForAdminPanel = (panel, state = {}) => {
   if (safePanel === "status-plataforma") return "settings.status.view";
   if (safePanel === "space-office") return "spaceOffice.overview.view";
   if (safePanel === "attendance-inbox") return "attendance.inbox.view";
+  if (safePanel === "growth-control") return "pedagogico.users.view";
   if (safePanel === "attendance-connections") return "attendance.connections.view";
   if (safePanel === "configuracoes-admin") {
     if (settingsSection === "acessos") return "settings.accesses.view";

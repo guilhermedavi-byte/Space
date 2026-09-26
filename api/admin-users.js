@@ -1,3 +1,4 @@
+const { requirePhone } = require('../src/international-phone/core');
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { getSessionFromRequest } = require("../_lib/session");
 const { verifyFirebaseIdToken } = require("../_lib/firebase-id-token");
@@ -41,6 +42,7 @@ const sanitizePatchValue = (value) => {
 
 const sanitizeUserPatch = (patch = {}) => {
   const cleanPatch = sanitizePatchValue(patch);
+  for (const field of ["telefone", "phone", "telefoneWhatsapp"]) if (Object.hasOwn(cleanPatch, field)) cleanPatch[field] = requirePhone(cleanPatch[field], { defaultCountry: "BR", preferCountry: true });
   ["adminPermissions", "permissions", "adminPermissionsVersion", "permissionsUpdatedAt", "permissionsUpdatedBy", "isSuperAdmin"].forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(cleanPatch, key)) {
       const error = new Error("sensitive_admin_field_forbidden");
@@ -55,7 +57,7 @@ const sanitizeUserPatch = (patch = {}) => {
 };
 
 const normalizeName = (value) => String(value || "").trim().replace(/\s+/g, " ");
-const normalizePhone = (value) => String(value || "").trim().replace(/\s+/g, " ");
+const normalizePhone = (value) => requirePhone(value, { defaultCountry: "BR", preferCountry: true });
 
 const buildUserCommitDocumentName = (uid) => {
   const safeUid = String(uid || "").trim();
@@ -509,6 +511,7 @@ module.exports = async (req, res) => {
   try {
     cleanPatch = sanitizeUserPatch(patch);
   } catch (error) {
+    if (error?.code === "invalid_phone_number") return send(400, { error: error.message });
     if (error?.code === "sensitive_admin_field_forbidden") {
       send(403, { error: "sensitive_admin_field_forbidden" });
       return;

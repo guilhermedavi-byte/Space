@@ -227,7 +227,7 @@ const createHandler = ({ authenticate = requireAttendanceAuth, request = supabas
     if (teamId) uuid(teamId);
     const filters = { filter, limit: limit(url.searchParams.get('limit'), 50) };
     const q = clean(url.searchParams.get('q'), 80);
-    if (q) filters.q = q;
+    if (q) filters.q = require('../src/international-phone/core').normalizePhoneToE164(q, {defaultCountry:'BR',preferCountry:true}) || q;
     if (teamId) filters.team_id = teamId;
     const result = await request('/rpc/attendance_inbox_list', { method: 'POST', body: { p_actor_uid: actor.uid, p_role: actor.role, p_filters: filters }, timeoutMs: 15000 });
     const data = result.data || {};

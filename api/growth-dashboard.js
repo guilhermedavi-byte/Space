@@ -1,3 +1,4 @@
+const internationalPhone = require('../src/international-phone/core');
 const { getSessionFromRequest } = require("../_lib/session");
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { getGoogleAccessToken } = require("../_lib/google-service-account");
@@ -2010,8 +2011,10 @@ const callZapSignCreateDoc = async ({
 
   const url = "https://api.zapsign.com.br/api/v1/models/create-doc/";
   const emailValue = String(email || "").trim();
-  const country = digitsOnly(telefoneCountry) || "55";
-  const telefoneDigits = digitsOnly(telefone);
+  let country = digitsOnly(telefoneCountry) || "55";
+  const parsedPhone = internationalPhone.inspectPhone(telefone, { defaultCountry: ({"55":"BR","1":"US","351":"PT"})[country], preferCountry: true });
+  const telefoneDigits = parsedPhone.e164 ? parsedPhone.e164.slice(1 + parsedPhone.callingCode.length) : digitsOnly(telefone);
+  if (parsedPhone.callingCode) country = parsedPhone.callingCode;
   const telefoneValue = telefoneDigits ? `+${country} ${telefoneDigits}` : "";
   const payload = {
     // ZapSign expects `template_id` (token shown in the template URL /conta/modelos/<TEMPLATE_ID>).
@@ -2267,7 +2270,8 @@ const handleGrowthContractsApi = async (req, res, url) => {
     const nomeCompleto = String(body?.nomeCompleto || "").trim();
     const email = String(body?.email || "").trim().toLowerCase();
     const telefoneCountry = digitsOnly(body?.telefoneCountry || "55").slice(0, 4) || "55";
-    const whatsappDigits = digitsOnly(body?.whatsapp);
+    const whatsappDigits = internationalPhone.normalizePhoneToE164(body?.whatsapp, { defaultCountry: ({'55':'BR','1':'US','351':'PT'})[telefoneCountry], preferCountry: true });
+    if (String(body?.whatsapp || '').trim() && !whatsappDigits) return sendJson(res, 400, { error: 'Número de telefone inválido.' });
     const contrato = String(body?.contrato || "").trim().toLowerCase();
     const cpfDigits = digitsOnly(body?.cpf);
     const endereco = String(body?.endereco || "").trim();
@@ -2417,7 +2421,8 @@ const handleGrowthContractsApi = async (req, res, url) => {
   const nomeCompleto = String(body?.nomeCompleto || "").trim();
   const email = String(body?.email || "").trim().toLowerCase();
   const telefoneCountry = digitsOnly(body?.telefoneCountry || "55").slice(0, 4) || "55";
-  const whatsappDigits = digitsOnly(body?.whatsapp);
+  const whatsappDigits = internationalPhone.normalizePhoneToE164(body?.whatsapp, { defaultCountry: ({'55':'BR','1':'US','351':'PT'})[telefoneCountry], preferCountry: true });
+    if (String(body?.whatsapp || '').trim() && !whatsappDigits) return sendJson(res, 400, { error: 'Número de telefone inválido.' });
   const contrato = String(body?.contrato || "").trim().toLowerCase();
   const cpfDigits = digitsOnly(body?.cpf);
   const endereco = String(body?.endereco || "").trim();
@@ -3096,7 +3101,9 @@ module.exports = async (req, res) => {
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
     <script src="/api/runtime-config.js"></script>
     <link rel="stylesheet" href="/styles.css" />
-  </head>
+  <link rel="stylesheet" href="/assets/international-phone.css">
+    <script src="/assets/international-phone.bundle.js"></script>
+    </head>
   <body data-view="interno" data-page="growth" data-sidebar-expanded="false">
     <div class="page-glow page-glow-left" aria-hidden="true"></div>
     <div class="page-glow page-glow-right" aria-hidden="true"></div>

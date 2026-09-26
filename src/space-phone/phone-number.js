@@ -1,4 +1,4 @@
-const { parsePhoneNumberFromString } = require('libphonenumber-js/min');
+const { normalizePhoneToE164 } = require('../international-phone/core');
 
 const DEFAULT_COUNTRY = 'US';
 
@@ -11,9 +11,7 @@ function normalizePhoneNumber(value, options = {}) {
   const raw = String(value || '').trim();
   if (!raw) return '';
   const defaultCountry = normalizeDefaultCountry(options.defaultCountry || (typeof process !== 'undefined' ? process.env?.SPACE_PHONE_DEFAULT_COUNTRY : '') || DEFAULT_COUNTRY);
-  const phone = parsePhoneNumberFromString(raw, raw.startsWith('+') ? undefined : defaultCountry);
-  if (!phone || !phone.isValid()) return '';
-  return phone.number;
+  return normalizePhoneToE164(raw, { defaultCountry, preferCountry: true });
 }
 
 module.exports = { DEFAULT_COUNTRY, normalizeDefaultCountry, normalizePhoneNumber };

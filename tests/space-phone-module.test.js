@@ -5,11 +5,11 @@ const path = require('node:path');
 const { JSDOM } = require('jsdom');
 
 function jsonResponse(body, ok = true, status = 200) {
-  return { ok, status, json: async () => body };
+  return { ok, status, json: async () => ({scope:"self",...body}) };
 }
 
 function createModuleDom({ period } = {}) {
-  const dom = new JSDOM('<body data-active-panel="space-phone"><section data-panel="space-phone"><div data-space-phone></div></section></body>', {
+  const dom = new JSDOM('<body data-active-panel="space-phone" data-app-role="growth"><section data-panel="space-phone"><div data-space-phone></div></section></body>', {
     url: 'https://space.test/app/admin/comercial/pre-vendas/ligacoes',
     runScripts: 'outside-only',
     pretendToBeVisual: true,
@@ -49,8 +49,9 @@ function createModuleDom({ period } = {}) {
   dom.window.fetchWithAuth = async url => {
     fetches.push(String(url));
     if (String(url).includes('normalize=')) return jsonResponse({ ok: true, raw: '+16177942141', normalized: '+16177942141' });
-    return jsonResponse({ ok: true, analytics: { talkTimeSeconds: 60 }, calls: [], callbacks: [] });
+    return jsonResponse({ ok: true, scope:'self', analytics: { talkTimeSeconds: 60 }, calls: [], callbacks: [] });
   };
+  dom.window.__SPACE_SESSION__ = { role: 'growth', commercialRoles: ['sdr'], sub: 'sdr-1' };
   dom.window.__spacePhoneTest = { calls, fetches, emit };
   if (period !== undefined) dom.window.localStorage.setItem('spacePhonePeriod', period);
   dom.window.eval(fs.readFileSync(path.join(__dirname, '..', 'space-phone.js'), 'utf8'));
@@ -137,9 +138,8 @@ test('SDR module controls call the public SpacePhone adapter methods', async (t)
   await tick(10);
   dom.window.document.querySelector('[data-sp-hold]').click();
   await tick(10);
-  dom.window.document.querySelector('[data-sp-dtmf-toggle]').click();
-  dom.window.document.querySelector('[data-sp-dtmf="5"]').click();
-  await tick(10);
+  assert.equal(dom.window.document.querySelector('[data-sp-dtmf-toggle]'), null);
+  assert.ok(dom.window.document.querySelector('a[title="Teclado"]'));
   dom.window.document.querySelector('[data-sp-hangup]').click();
   await tick(10);
   const methods = dom.window.SpacePhone.calls.map(item => item.method);
@@ -147,10 +147,24 @@ test('SDR module controls call the public SpacePhone adapter methods', async (t)
   assert.ok(methods.includes('unmute'));
   assert.ok(methods.includes('hold'));
   assert.ok(methods.includes('unhold'));
-  assert.ok(dom.window.SpacePhone.calls.some(item => item.method === 'dtmf' && item.digit === '5'));
   assert.ok(methods.includes('hangup'));
 });
 
+
+
+test('Teclado route sends DTMF when a call is active', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  dom.reconfigure({ url: 'https://space.test/app/growth/comercial/pre-vendas/ligacoes/teclado' });
+  await dom.window.SpacePhoneModule.open();
+  dom.window.SpacePhoneModule.state.call = { ...dom.window.SpacePhoneModule.state.call, status: 'active', number: '+16177942141', id: 'call-1' };
+  await dom.window.SpacePhoneModule.open();
+  await tick(20);
+  assert.ok(dom.window.document.querySelector('.sphone-keypad-page'));
+  dom.window.document.querySelector('[data-sp-dtmf="5"]').click();
+  await tick(10);
+  assert.ok(dom.window.SpacePhone.calls.some(item => item.method === 'dtmf' && item.digit === '5'));
+});
 
 test('Space Phone V2 hides outcome during active call and shows it after hangup', async (t) => {
   const dom = createModuleDom();
@@ -186,7 +200,7 @@ test('Space Phone V2 renders AI processing and ready states without live transcr
   assert.ok(dom.window.document.body.textContent.includes('SDR: Olá'));
 });
 
-test('Space Phone V2 anchors audio and keypad popovers and closes them outside/Escape', async (t) => {
+test('Space Phone V2 keeps audio popover anchored and exposes Teclado as a new-tab route', async (t) => {
   const dom = createModuleDom();
   t.after(() => dom.window.close());
   await dom.window.SpacePhoneModule.open();
@@ -194,9 +208,10 @@ test('Space Phone V2 anchors audio and keypad popovers and closes them outside/E
   assert.ok(dom.window.document.querySelector('.sphone-control-wrap .sphone-audio-pop'));
   dom.window.document.body.click();
   assert.equal(dom.window.document.querySelector('.sphone-audio-pop'), null);
-  dom.window.document.querySelector('[data-sp-popover="dialpad"]').click();
-  assert.ok(dom.window.document.querySelector('.sphone-control-wrap .sphone-keypad-pop'));
-  dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  const keypad = dom.window.document.querySelector('a[title="Abrir Teclado em nova guia"]');
+  assert.ok(keypad);
+  assert.equal(keypad.getAttribute('target'), '_blank');
+  assert.match(keypad.getAttribute('href'), /\/pre-vendas\/ligacoes\/teclado$/);
   assert.equal(dom.window.document.querySelector('.sphone-keypad-pop'), null);
 });
 
@@ -364,7 +379,7 @@ test('changing period refreshes history and resets pagination', async t => {
   dom.window.document.querySelector('[data-sp-load-more]').click();await tick(30);
   assert.deepEqual(Array.from(dom.window.SpacePhoneModule.state.data.calls,c=>c.id),['yesterday','older']);
   const select=dom.window.document.querySelector('[data-sp-period]');select.value='today';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await tick(30);
-  assert.equal(seen.filter(q=>q.get('view')!=='conversion').at(-1).get('view'),null);assert.equal(dom.window.SpacePhoneModule.state.data.analytics.totalCalls,0);
+  assert.equal(seen.filter(q=>!['conversion','callbacks','callback-notifications'].includes(q.get('view'))).at(-1).get('view'),null);assert.equal(dom.window.SpacePhoneModule.state.data.analytics.totalCalls,0);
   assert.deepEqual(Array.from(dom.window.SpacePhoneModule.state.data.calls,c=>c.id),[]);
   assert.equal(dom.window.document.querySelectorAll('[data-sp-detail]').length,0);
 });
@@ -422,6 +437,8 @@ test('qualification shows waiting, delayed transcript retry, generating and avai
 
 test('SDR selector is Admin-only, persists selection and reloads both history and KPIs', async () => {
   const dom = createModuleDom();
+  dom.window.__SPACE_SESSION__ = { role: 'admin', commercialRoles: [], sub: 'admin-1' };
+  dom.window.document.body.dataset.appRole = 'admin';
   const urls = [];
   let scope = 'admin';
   dom.window.fetchWithAuth = async url => {
@@ -435,7 +452,7 @@ test('SDR selector is Admin-only, persists selection and reloads both history an
   select.value = 'luana'; select.dispatchEvent(new dom.window.Event('change',{bubbles:true})); await tick(20);
   assert.equal(dom.window.localStorage.getItem('spacePhoneSdr'),'luana');
   assert.ok(urls.at(-1).includes('sdr=luana')); assert.ok(!urls.at(-1).includes('view=analytics'));
-  scope = 'self'; await dom.window.SpacePhoneModule.open();
+  scope = 'self'; dom.window.__SPACE_SESSION__ = { role: 'growth', commercialRoles: ['sdr'], sub: 'sdr-1' }; dom.window.document.body.dataset.appRole = 'growth'; await dom.window.SpacePhoneModule.open();
   assert.equal(dom.window.document.querySelector('[data-sp-sdr]'),null);
   dom.window.close();
 });
@@ -484,10 +501,32 @@ test('callback quick schedule, countdown, navigation alert, snooze and one-click
  assert.ok(dom.window.document.querySelector('[data-callback-action="call"]').disabled);
  items=[{...items[0],callbackAt:new Date(Date.now()-720000).toISOString()}];
  dom.window.document.body.dataset.activePanel='crm';dom.window.dispatchEvent(new dom.window.Event('online'));await tick(40);
- assert.match(dom.window.document.querySelector('#space-callback-alert').textContent,/Aguardando retorno.*12 min/);
+ assert.match(dom.window.document.querySelector('#space-callback-alert').textContent,/Callback atrasado há 12 min/);
  dom.window.dispatchEvent(new dom.window.Event('online'));await tick(30);assert.equal(dom.window.document.querySelectorAll('#space-callback-alert').length,1);
 });
 
+
+
+test('post-call callback schedule uses ended call id even when stale detail is open', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  const writes = [];
+  dom.window.fetchWithAuth = async (url, opts = {}) => {
+    if (opts.method === 'PATCH') { writes.push(JSON.parse(opts.body)); return jsonResponse({ ok: true }); }
+    return jsonResponse({ ok: true, scope: 'self', analytics: {}, calls: [], callbacks: [] });
+  };
+  await dom.window.SpacePhoneModule.open();
+  const state = dom.window.SpacePhoneModule.state;
+  state.detail = { call: { id: 'stale-detail-call', outcome: 'retornar_depois' } };
+  state.call = { ...state.call, id: 'fresh-ended-call', status: 'ended' };
+  state.postCall = { ...state.postCall, id: 'fresh-ended-call', savedOutcome: 'retornar_depois', call: { id: 'fresh-ended-call' } };
+  dom.window.__spacePhoneTest.emit({ status: 'ended', callRecord: { id: 'fresh-ended-call' } });
+  await tick(20);
+  dom.window.document.querySelector('.sphone-pane [data-callback-schedule="15"]').click();
+  await tick(30);
+  assert.equal(writes[0].id, 'fresh-ended-call');
+  assert.equal(writes[0].action, 'callback_schedule');
+  assert.notEqual(writes[0].id, 'stale-detail-call');
+});
 test('conversion updates partially on outcome and booking events without stealing focus',async t=>{
  const dom=createModuleDom();t.after(()=>dom.window.close());let scheduled=0,reads=0;
  const rate=(n,d)=>({numerator:n,denominator:d,percent:d?n/d*100:null});
@@ -502,4 +541,66 @@ test('conversion updates partially on outcome and booking events without stealin
  assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent,/25,0%/);assert.equal(dom.window.document.activeElement,input);
  const before=reads;dom.window.dispatchEvent(new dom.window.CustomEvent('space-bookings:updated'));await tick(20);assert.ok(reads>before);
  assert.equal(dom.window.document.querySelector('[data-sp-dial]'),input);
+});
+
+test('conversion is directly after KPIs and before the operational grid/history',async t=>{
+ const dom=createModuleDom();t.after(()=>dom.window.close());await dom.window.SpacePhoneModule.open();
+ const d=dom.window.document,kpis=d.querySelector('.sphone-kpis'),conversion=d.querySelector('[data-sp-conversion]');
+ assert.equal(kpis.nextElementSibling,conversion);
+ assert.ok(conversion.compareDocumentPosition(d.querySelector('.sphone-grid'))&dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+ assert.equal(conversion.querySelectorAll('.sphone-conversion-grid article').length,4);
+});
+
+
+test('resilience: scope self from session keeps dialer on first API failure without false-zero KPIs', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  dom.window.fetchWithAuth = async () => ({ ok: false, status: 500, json: async () => ({ error: 'space_phone_unavailable' }) });
+  await dom.window.SpacePhoneModule.open(); await tick(20);
+  assert.ok(dom.window.document.querySelector('[data-sp-call]'));
+  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Calls\s*—/);
+  assert.match(dom.window.document.body.textContent, /Não foi possível carregar o histórico\./);
+  assert.equal(dom.window.document.querySelectorAll('[data-sp-global-status]').length, 1);
+  assert.equal(dom.window.document.querySelector('[data-sp-talk-time]').textContent, '—');
+  assert.doesNotMatch(dom.window.document.body.textContent, /space_phone_unavailable/);
+});
+
+test('resilience: last-known-good KPIs, history, conversion and callbacks survive refresh failure and recover', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  let fail = false;
+  const rate = { percent: 50, numerator: 1, denominator: 2 };
+  dom.window.fetchWithAuth = async url => {
+    const q = new URL(url, 'https://space.test').searchParams;
+    if (fail) return { ok: false, status: 500, json: async () => ({ error: 'space_phone_unavailable' }) };
+    if (q.get('view') === 'conversion') return jsonResponse({ conversion: { attendance: rate, callToBooking: rate, answeredToBooking: rate, bookingToDone: rate } });
+    if (q.get('view') === 'callbacks' || q.get('view') === 'callback-notifications') return jsonResponse({ callbacks: [{ id: 'cb-1', name: 'Lead callback', number: '+14075550123', callbackAt: new Date(Date.now()+600000).toISOString() }] });
+    return jsonResponse({ scope: 'self', analytics: { totalCalls: 2, connectedCalls: 1, connectRate: .5, talkTimeSeconds: 90, scheduledCalls: 1 }, calls: [{ id: 'call-lkg', number: '+14075550123', sdrName: 'Luana', startedAt: new Date().toISOString(), status: 'connected', durationSeconds: 90, outcome: 'agendado' }], callbacks: [{ id: 'cb-1', name: 'Lead callback', number: '+14075550123', callbackAt: new Date(Date.now()+600000).toISOString() }] });
+  };
+  await dom.window.SpacePhoneModule.open(); await tick(30);
+  assert.match(dom.window.document.body.textContent, /call-lkg|\+14075550123/);
+  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Calls\s*2/);
+  assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent, /50,0%/);
+  assert.match(dom.window.document.querySelector('[data-callback-queue]').textContent, /Lead callback/);
+  fail = true;
+  dom.window.document.querySelector('[data-sp-refresh]').click(); await tick(30);
+  assert.ok(dom.window.document.querySelector('[data-sp-call]'));
+  assert.match(dom.window.document.querySelector('[data-sp-kpis]').textContent, /Calls\s*2/);
+  assert.match(dom.window.document.querySelector('.sphone-history').textContent, /\+14075550123/);
+  assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent, /50,0%/);
+  assert.match(dom.window.document.querySelector('[data-callback-queue]').textContent, /Lead callback/);
+  fail = false;
+  dom.window.document.querySelector('[data-sp-refresh]').click(); await tick(30);
+  assert.doesNotMatch(dom.window.document.body.textContent, /Não foi possível carregar ligações agora/);
+});
+
+test('resilience: conversion endpoint failure does not drop working history', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  dom.window.fetchWithAuth = async url => {
+    const q = new URL(url, 'https://space.test').searchParams;
+    if (q.get('view') === 'conversion') return { ok: false, status: 500, json: async () => ({ error: 'space_phone_unavailable' }) };
+    return jsonResponse({ scope: 'self', analytics: { totalCalls: 1 }, calls: [{ id: 'history-ok', number: '+14075550123', startedAt: new Date().toISOString(), status: 'connected', durationSeconds: 30 }], callbacks: [] });
+  };
+  await dom.window.SpacePhoneModule.open(); await tick(30);
+  assert.match(dom.window.document.querySelector('.sphone-history').textContent, /history-ok|\+14075550123/);
+  assert.match(dom.window.document.querySelector('[data-sp-conversion]').textContent, /↻ atualização pendente/);
+  assert.doesNotMatch(dom.window.document.querySelector('[data-sp-conversion]').textContent, /Carregando/);
 });

@@ -22,8 +22,8 @@ test('Growth all four rates use own canonical disposition, never a spoofed SDR',
 });
 test('Admin team, ranking real names and single SDR scope',async()=>{
  const d=db(),calls=[call('own','agendado'),call('other','ocupado')];
- const all=await conversion({...args(d),isAdmin:true,sdr:'all',calls});assert.equal(all.calls,2);assert.equal(all.bookings,2);assert.equal(all.ranking.length,2);assert.equal(all.ranking[0].displayName,'Luana Mendonça');
- const one=await conversion({...args(d),isAdmin:true,sdr:'own',calls});assert.equal(one.calls,1);assert.equal(one.ranking.length,1);
+ const all=await conversion({...args(d),isAdmin:true,sdr:'all',sdrs:[{uid:'own',displayName:'Luana Mendonça'},{uid:'other',displayName:'Ayres André'},{uid:'empty',displayName:'Usuário sem operação'}],calls});assert.equal(all.calls,2);assert.equal(all.bookings,2);assert.equal(all.ranking.length,2);assert.equal(all.ranking[0].displayName,'Luana Mendonça');assert.equal(all.ranking.some(row=>row.uid==='empty'),false);
+ const one=await conversion({...args(d),isAdmin:true,sdr:'own',sdrs:[{uid:'own',displayName:'Luana Mendonça'},{uid:'other',displayName:'Ayres André'}],calls});assert.equal(one.calls,1);assert.equal(one.ranking.length,1);
 });
 for(const period of ['today','last7','last30'])test(`period ${period}: calls and bookings use explicit own-period cohorts`,async()=>{
  const d=db();d.bookings.push({...d.bookings[0],id:'old',start_at:'2020-01-01T00:00:00Z'});
@@ -44,4 +44,12 @@ test('unknown or ambiguous meeting never counted as done, cancelled bookings exc
 test('all no-contact outcomes override connected; all commercial human outcomes count',async()=>{
  const d=db();const result=await conversion({...args(d),calls:['nao_atendeu','ocupado','caixa_postal','numero_invalido','sem_interesse','retornar_depois','interessado','agendado'].map(o=>call('own',o))});
  assert.equal(result.answered,4);assert.equal(result.calls,8);assert.equal(result.attendance.percent,50);
+});
+
+test('Admin calls and bookings outside operational SDR set do not pollute team conversion',async()=>{
+ const d=db();
+ d.bookings.push({id:'admin-booking',sdr_uid:'admin-gui',lead_id:'lead-admin',status:'confirmed',start_at:now});
+ d.meetings['lead-admin']=[{id:'m-admin',status:'completed'}];
+ const result=await conversion({...args(d),isAdmin:true,sdr:'all',sdrs:[{uid:'own',displayName:'Luana Mendonça'}],calls:[call('own','agendado'),call('admin-gui','agendado')]});
+ assert.equal(result.calls,1);assert.equal(result.scheduled,1);assert.equal(result.bookings,1);assert.equal(result.ranking.length,1);assert.equal(result.ranking[0].uid,'own');
 });

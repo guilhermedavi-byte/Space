@@ -1,3 +1,4 @@
+const { requirePhone } = require('../src/international-phone/core');
 const crypto = require("crypto");
 
 const { getSessionFromRequest } = require("../_lib/session");
@@ -217,7 +218,7 @@ const normalizeContact = (row) => ({
   id: clean(row.id || row.firestoreDocId),
   scopeId: clean(row.scopeId) || CRM_SCOPE_ID,
   name: clean(row.name),
-  phone: clean(row.phone),
+  phone: require('./_lib/crm-identity').normalizeCrmContactIdentity(row).phone || clean(row.phone),
   email: clean(row.email),
   countryCode: normalizeCountryCode(row.countryCode || row.country || row.country_code || row.location?.country),
   searchName: normalizeSearchText(row.searchName || row.name),
@@ -1416,7 +1417,7 @@ const handleUpdateOpportunity = async ({ auth, body }) => {
     ? {
         ...contact,
         name: clean(body.name || body.contactName) || contact.name,
-        phone: clean(body.phone),
+        phone: body.phone === contact.phone ? contact.phone : requirePhone(body.phone, { defaultCountry: normalizeCountryCode(body.countryCode || body.country) || "BR", preferCountry: true }),
         email: clean(body.email),
         countryCode: normalizeCountryCode(body.countryCode || body.country),
         updatedAt: stamp,

@@ -3,6 +3,7 @@ const { analysisIntegrity, logIntegrity } = require('./space-phone-analysis-inte
 const { businessDisposition } = require('./business-disposition');
 const crypto = require('node:crypto');
 const { resolveSdrNames } = require('./space-phone-sdr-names');
+const { resolveOperationalSdrs } = require('./space-phone-sdr-eligibility');
 const { resolveAdminRequestAuth } = require('./admin-request-auth');
 const { requireResolvedAdminPermission } = require('./admin-permissions');
 const { supabaseFetch } = require('./supabase-rest');
@@ -488,10 +489,13 @@ const normalizeCall = (row = {}, analysis = null, crm = null, qualification = nu
   };
 };
 
-const filterForUser = ({ user, isAdmin, sdr }) => {
+const filterForUser = ({ user, isAdmin, sdr, eligibleSdrUids }) => {
   const requested = clean(sdr);
   if (isAdmin && requested && requested !== 'all') return { userUid: requested };
-  if (isAdmin) return {};
+  if (isAdmin) {
+    if (Array.isArray(eligibleSdrUids)) return { userUids: eligibleSdrUids.map(clean).filter(Boolean) };
+    return {};
+  }
   if (!clean(user?.sub)) throw Object.assign(new Error('forbidden'), { status: 403 });
   return { userUid: clean(user.sub) };
 };
@@ -518,6 +522,10 @@ const queryVoiceCalls = async ({ request, range, userFilter, status = '', q = ''
     `limit=${clamp(limit, 1, 200)}`,
   ];
   if (userFilter.userUid) params.push(`space_user_uid=eq.${encodeURIComponent(userFilter.userUid)}`);
+  else if (Array.isArray(userFilter.userUids)) {
+    const uids = userFilter.userUids.map(clean).filter(Boolean);
+    params.push(uids.length ? `space_user_uid=in.(${uids.map(encodeURIComponent).join(',')})` : 'space_user_uid=eq.__no_operational_sdr__');
+  }
   if (q) {
     const normalized = normalizePhoneInput(q).normalized || clean(q);
     params.push(`or=(to_number.ilike.*${escapeFilter(normalized)}*,from_number.ilike.*${escapeFilter(normalized)}*)`);
@@ -558,6 +566,11 @@ const loadAnalysisMap = async ({ request, calls }) => {
 
 const findAnalysis = (row, analysisMap) => analysisMap.get(clean(row.id)) || null;
 
+const optionalSpacePhoneFallback = (component, error, fallback) => {
+  console.warn('[space-phone] optional_component_failed', { component, error: clean(error?.message || error?.code) || 'unknown' });
+  return fallback;
+};
+
 const summarize = calls => {
   const totalCalls = calls.length;
   const connected = calls.filter(call => call.status === 'connected').length;
@@ -597,17 +610,21 @@ const loadCrmContext = async ({ request, phone }) => {
   return { found: false };
 };
 
-const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = resolveSdrNames }) => {
+const loadOperationalSdrs = async resolver => {
+  const rows = await resolver();
+  const seen = new Set();
+  return (Array.isArray(rows) ? rows : [])
+    .map(row => ({ uid: clean(row.uid || row.space_user_uid), displayName: clean(row.displayName || row.name) || 'SDR sem nome cadastrado' }))
+    .filter(row => row.uid && !seen.has(row.uid) && seen.add(row.uid))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'));
+};
+
+const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = resolveSdrNames, resolveOperationalSdrs: operationalResolver = resolveOperationalSdrs }) => {
   const range = rangeForPeriod(query.period);
-  let sdrs = [];
-  if (isAdmin) {
-    const identities = asRows(await request('/voice_phone_identities?select=space_user_uid&enabled=eq.true&order=space_user_uid.asc', { timeoutMs: 15000 }));
-    const names = await resolveNames(identities, user);
-    sdrs = identities.map(row => ({ uid: clean(row.space_user_uid), displayName: clean(names.get(clean(row.space_user_uid))) || 'SDR sem nome cadastrado' }))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'));
-  }
+  const sdrs = isAdmin ? await loadOperationalSdrs(operationalResolver) : [];
+  const eligibleSdrUids = sdrs.map(sdr => sdr.uid);
   const selectedSdr = isAdmin && sdrs.some(sdr => sdr.uid === clean(query.sdr)) ? clean(query.sdr) : 'all';
-  const userFilter = filterForUser({ user, isAdmin, sdr: selectedSdr });
+  const userFilter = filterForUser({ user, isAdmin, sdr: selectedSdr, eligibleSdrUids });
   const historyOnly = query.view === 'history';
   const conversionOnly = query.view === 'conversion';
   if(conversionOnly){
@@ -621,15 +638,21 @@ const listModel = async ({ request, user, isAdmin, query = {}, resolveNames = re
     analyticsOnly ? [] : queryVoiceCalls({ request, range, userFilter, q: query.q, limit: 51, offset }),
   ]);
   const rows = filterCallStatus(recentRows.slice(0, 50), query.status);
-  const analysisMap = await loadAnalysisMap({ request, calls: rows });
-  const qualificationMap = await loadQualificationsMap({ request, callIds: rows.map(row => row.id) });
-  const names = await resolveNames(rows, user);
+  const analysisMap = await loadAnalysisMap({ request, calls: rows }).catch(error => optionalSpacePhoneFallback('analysis', error, new Map()));
+  const qualificationMap = await loadQualificationsMap({ request, callIds: rows.map(row => row.id) }).catch(error => optionalSpacePhoneFallback('qualifications', error, new Map()));
+  const names = await resolveNames(rows, user).catch(error => optionalSpacePhoneFallback('sdr_names', error, new Map()));
   const calls = rows.map(row => normalizeCall(row, findAnalysis(row, analysisMap), null, qualificationMap.get(clean(row.id)), names.get(clean(row.space_user_uid))));
-  const callbacks = analyticsOnly ? [] : await callbacksQueue.list({ request, user, isAdmin, sdr: selectedSdr });
+  const callbacks = analyticsOnly ? [] : await callbacksQueue.list({ request, user, isAdmin, sdr: selectedSdr, eligibleSdrUids }).catch(error => optionalSpacePhoneFallback('callbacks', error, []));
   return { ok: true, range, scope: isAdmin ? 'admin' : 'self', ...(isAdmin ? { sdrs, selectedSdr } : {}),
     ...(!historyOnly ? { analytics: summarize(metricRows.map(row => normalizeCall(row))) } : {}),
     ...(!analyticsOnly ? { calls, callbacks, history: { hasMore: recentRows.length > 50, nextOffset: offset + 50 } } : {}),
   };
+};
+
+const callbacksModel = async ({ request, user, isAdmin, sdr, resolveOperationalSdrs: operationalResolver = resolveOperationalSdrs }) => {
+  const sdrs = isAdmin ? await loadOperationalSdrs(operationalResolver) : [];
+  const selectedSdr = isAdmin && sdrs.some(item => item.uid === clean(sdr)) ? clean(sdr) : 'all';
+  return callbacksQueue.list({ request, user, isAdmin, sdr: selectedSdr, eligibleSdrUids: sdrs.map(item => item.uid) });
 };
 
 const detailModel = async ({ request, id, user, isAdmin }) => {
@@ -792,6 +815,7 @@ module.exports = {
   assertVoiceAccess,
   createTelnyxCredentialToken,
   createVoiceCall,
+  callbacksModel,
   detailModel,
   isSpacePhoneEnabled,
   listModel,

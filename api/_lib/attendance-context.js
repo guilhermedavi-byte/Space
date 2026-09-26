@@ -37,24 +37,12 @@ const loadCrmSnapshot = async ({ read = listCollectionAsAdmin, user = {} } = {})
   return { contacts, opportunities, pipelines, stages };
 };
 
-const phoneVariants = (value) => {
-  const id = normalizeCrmContactIdentity({ phone: value }).phone;
-  const digits = clean(value).replace(/\D/g, '');
-  const variants = new Set([id, digits && `+${digits}`, digits].filter(Boolean));
-  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) variants.add(`+${digits}`);
-  if (digits.startsWith('55') && digits.length === 12) variants.add(`+55${digits.slice(2, 4)}9${digits.slice(4)}`);
-  if (digits.startsWith('55') && digits.length === 13 && digits[4] === '9') variants.add(`+55${digits.slice(2, 4)}${digits.slice(5)}`);
-  return Array.from(variants).filter(Boolean);
+const phoneVariants = value => {
+  const canonical = normalizeCrmContactIdentity({ phone: value }).phone;
+  return canonical ? [canonical] : [];
 };
-
-const matchesPhone = (row, variants) => {
-  const values = [row.phone, row.telefone, row.whatsapp, row.celular, row.mobile, row.searchPhone];
-  return values.some((value) => {
-    const normalized = normalizeCrmContactIdentity({ phone: value }).phone;
-    const digits = clean(value).replace(/\D/g, '');
-    return variants.includes(normalized) || variants.includes(digits) || variants.includes(`+${digits}`);
-  });
-};
+const matchesPhone = (row, variants) => [row.phone, row.telefone, row.whatsapp, row.celular, row.mobile, row.searchPhone]
+  .some(value => { const canonical = normalizeCrmContactIdentity({ phone: value }).phone; return !!canonical && variants.includes(canonical); });
 
 const publicPerson = (row = {}, source = 'firestore') => {
   const id = clean(row.firestoreDocId || row.id || row.uid);

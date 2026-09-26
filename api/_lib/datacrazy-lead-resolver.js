@@ -1,13 +1,8 @@
 const clean = value => String(value ?? '').trim();
 const digits = value => clean(value).replace(/\D/g, '');
-const variants = phone => [...new Set([digits(phone), `+${digits(phone)}`, digits(phone).slice(-10), digits(phone).slice(-8)])].filter(value => digits(value).length >= 8);
-const phoneMatches = (stored, wanted) => {
-  const a = digits(stored), b = digits(wanted);
-  if (a.length < 8 || b.length < 8) return false;
-  if (a === b) return true;
-  // Accept a stored national/truncated number, never a conflicting country prefix.
-  return (a.length === 10 && b.length === 11 && b.startsWith('1') && b.endsWith(a)) || (a.length === 8 && b.endsWith(a));
-};
+const variants = phone => [...new Set([digits(phone), `+${digits(phone)}`, digits(phone).slice(-10)])].filter(value => digits(value).length >= 8);
+const phoneMatches = (stored, wanted) => require('../../src/international-phone/core').phonesMatch(stored, wanted, { defaultCountry: 'US', preferCountry: true });
+
 const phones = lead => [lead?.phone, lead?.rawPhone, ...(lead?.contacts || []).filter(c => /whatsapp/i.test(c.platform || '')).map(c => c.contactId || c.phone)];
 const leadMatch = (source, lead, wanted, dealId = '') => lead?.id && phones(lead).some(phone => phoneMatches(phone, wanted)) ? [{ source, datacrazyContactId: clean(lead.id), datacrazyDealId: clean(dealId), phone: clean(lead.phone), name: clean(lead.name) }] : [];
 const sources = [

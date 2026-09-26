@@ -345,7 +345,7 @@ const canAccessLesson = (session, lesson) => {
   if (isStudentRole(role)) {
     return (
       personMatches(session, lesson.aluno_id, lesson.aluno_nome, lesson.aluno_email) ||
-      idsMatch(String(session?.phone || "").replace(/\D+/g, ""), String(lesson.aluno_telefone || "").replace(/\D+/g, ""))
+      require('../../src/international-phone/core').phonesMatch(session?.phone, lesson.aluno_telefone, {defaultCountry:'BR',preferCountry:true})
     );
   }
   return false;

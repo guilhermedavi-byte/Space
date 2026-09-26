@@ -1,3 +1,4 @@
+const { normalizePhoneToE164 } = require('../src/international-phone/core');
 const { readJsonBody, sendJson } = require("../_lib/http");
 const { createDocumentAsAdmin } = require("./_lib/firestore-admin");
 
@@ -25,7 +26,7 @@ module.exports = async (req, res) => {
   const body = await readJsonBody(req).catch(() => null);
   const nome = String(body?.nome || "").trim().slice(0, 120);
   const email = String(body?.email || "").trim().toLowerCase().slice(0, 160);
-  const whatsapp = String(body?.whatsapp || "").replace(/[^\d+]/g, "").slice(0, 20);
+  const whatsapp = normalizePhoneToE164(body?.whatsapp, { defaultCountry: "BR", preferCountry: true });
   if (!nome || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^\+?\d{10,15}$/.test(whatsapp)) {
     return sendJson(res, 400, { error: "invalid_lead" });
   }

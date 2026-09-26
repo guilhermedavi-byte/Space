@@ -20,12 +20,12 @@ test("admin user status accepts legacy active fields and inactive aliases", () =
 test("admin profile update only writes safe editable fields", () => {
   const change = buildAdminProfileUpdatePatch({
     target: { nome: "Ana", telefone: "1199", email: "ana@space.test", adminPermissions: ["settings.profile.view"] },
-    body: { nome: "Ana Maria", telefone: "1188", email: "other@space.test", adminPermissions: [] },
+    body: { nome: "Ana Maria", telefone: "+5534984158455", email: "other@space.test", adminPermissions: [] },
     actorId: "super",
   });
   assert.equal(change.event, "admin_user_updated");
   assert.deepEqual(change.before, { nome: "Ana", telefone: "1199" });
-  assert.deepEqual(change.after, { nome: "Ana Maria", telefone: "1188" });
+  assert.deepEqual(change.after, { nome: "Ana Maria", telefone: "+5534984158455" });
   assert.equal(change.patch.email, undefined);
   assert.equal(change.patch.adminPermissions, undefined);
 });

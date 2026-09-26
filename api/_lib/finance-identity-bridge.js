@@ -1,7 +1,7 @@
 const {isStudent}=require('./finance-space');
 const clean=v=>typeof v==='string'?v.trim():'';
 const email=v=>{const s=clean(v).toLowerCase();return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)?s:null;};
-const phone=v=>{let s=clean(v).replace(/[\s()+.-]/g,'');if(s.startsWith('00'))s=s.slice(2);return /^\d{10,15}$/.test(s)&&! /^(\d)\1+$/.test(s)?s:null;};
+const phone=v=>require('../../src/international-phone/core').normalizePhoneToE164(v,{defaultCountry:'BR',preferCountry:true}) || null;
 function document(v){const s=clean(v).replace(/[.\s/-]/g,'');if(!/^\d{11}$|^\d{14}$/.test(s)||/^(\d)\1+$/.test(s))return null;const n=[...s].map(Number);const check=(len,weights)=>{const sum=n.slice(0,len).reduce((a,x,i)=>a+x*weights[i],0),r=sum%11;return n[len]===(r<2?0:11-r);};return s.length===11?(check(9,[10,9,8,7,6,5,4,3,2])&&check(10,[11,10,9,8,7,6,5,4,3,2])?s:null):(check(12,[5,4,3,2,9,8,7,6,5,4,3,2])&&check(13,[6,5,4,3,2,9,8,7,6,5,4,3,2])?s:null);}
 const values=(r,keys,normalize)=>[...new Set(keys.map(k=>normalize(r[k])).filter(Boolean))];
 const identifiers=(r,student)=>({document:values(r,student?['cpf','cnpj','cpfCnpj','cpf_cnpj']:['cpfCnpj'],document),phone:values(r,student?['telefone','phone','telefoneWhatsapp','whatsapp']:['phone','mobilePhone'],phone),email:values(r,['email'],email)});

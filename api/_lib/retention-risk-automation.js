@@ -4,7 +4,7 @@ const {supabaseFetch}=require('./supabase-rest');
 const {sendInboxText}=require('./attendance-send-text');
 const {dateKey,addDays}=require('./retention-health-engine');
 const key=(id,kind)=>'risk_'+createHash('sha256').update(id+':'+kind).digest('hex').slice(0,40);
-const phone=value=>{const n=String(value||'').replace(/\D/g,'');return n.length===10||n.length===11?'55'+n:n;};
+const phone=value=>require('../../src/international-phone/core').normalizePhoneToE164(value,{defaultCountry:'BR',preferCountry:true});
 // Use the Activity module's same CAS/event writer, with deterministic IDs. No student/lifecycle mutation.
 async function activityWrite({riskCase,student,kind,complete=false}) {
  const api=require('../activities');
@@ -38,7 +38,7 @@ function createAutomation({request=supabaseFetch,send=sendInboxText,writeActivit
  async function sendFor(student,c,users,template) {
   const user=users.find(u=>(u.firestoreDocId||u.id)===student.student_id);
   const canonicalPhone=phone(user?.telefone||user?.phone||user?.whatsapp||user?.celular);
-  if(!/^\d{10,15}$/.test(canonicalPhone))throw Error('canonical_phone_missing');
+  if(!/^\+[1-9]\d{7,14}$/.test(canonicalPhone))throw Error('canonical_phone_missing');
   const links=(await request('/conversation_participants?select=conversation_id&resolution_state=eq.linked&internal_person_type=eq.student&internal_person_id=eq.'+encodeURIComponent(student.student_id))).data||[];
   const ids=[...new Set(links.map(l=>l.conversation_id))];
   if(!ids.length)throw Error('inbox_conversation_not_linked');
