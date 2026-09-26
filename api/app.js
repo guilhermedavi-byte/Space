@@ -209,7 +209,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="finance-v1.js?v=31"></script>
     <script src="script.js?v=9"></script>
     <script src="/assets/space-phone.bundle.js?v=5"></script>
-    <script src="space-agenda.js?v=4"></script>
+    <script src="space-agenda.js?v=5"></script>
     <script src="space-phone.js?v=22"></script>
     <script src="admin-sdr.js?v=7"></script>
     <script src="pedagogico-n8n-ui.js"></script>

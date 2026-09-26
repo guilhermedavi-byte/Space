@@ -14,7 +14,7 @@ const createHandler=({authResolver=resolveAdminRequestAuth,permissionResolver=re
   if(isAdmin){const p=await permissionResolver(auth,'comercial.spacePhone.view');if(!p.ok)return sendJson(res,p.status,p.body);}
   try {
     const url=new URL(req.url,'https://space.local');
-    if(req.method==='GET')return sendJson(res,200,{bookings:await booking.list({request,user,isAdmin,callId:url.searchParams.get('callId')}),syncAvailable:Boolean(String(env.CALCOM_API_KEY||'').trim())});
+    if(req.method==='GET')return sendJson(res,200,{scope:isAdmin?'admin':'self',bookings:await booking.list({request,user,isAdmin,callId:url.searchParams.get('callId'),sdr:url.searchParams.get('sdr'),status:url.searchParams.get('status'),from:url.searchParams.get('from'),to:url.searchParams.get('to')}),syncAvailable:Boolean(String(env.CALCOM_API_KEY||'').trim())});
     // Cookie-based writes require same-origin. Bearer-only server clients may omit Origin.
     const origin=req.headers?.origin;
     if(origin && origin!==`https://${req.headers.host}` && origin!==`http://${req.headers.host}`)throw booking.fail('invalid_origin',403);
@@ -22,6 +22,10 @@ const createHandler=({authResolver=resolveAdminRequestAuth,permissionResolver=re
     if(body.action==='context')return sendJson(res,200,await booking.context({request,user,isAdmin,callId:body.callId}));
     if(body.action==='sync')return sendJson(res,200,{booking:await booking.reconcile({uid:body.uid,request,fetcher,env,user,isAdmin})});
     if(body.action==='manual')return sendJson(res,200,{booking:await booking.manual({request,user,isAdmin,body})});
+    if(body.action==='confirm')return sendJson(res,200,{booking:await booking.confirm({request,user,isAdmin,body})});
+    if(body.action==='reschedule')return sendJson(res,200,{booking:await booking.reschedule({request,user,isAdmin,body})});
+    if(body.action==='cancel')return sendJson(res,200,{booking:await booking.cancel({request,user,isAdmin,body})});
+    if(body.action==='premeeting_notifications')return sendJson(res,200,{notifications:await booking.premeetingNotifications({request,user,isAdmin})});
     throw booking.fail('invalid_action');
   }catch(e){console.warn('[commercial-bookings]',JSON.stringify({code:e.status?e.message:'internal_error',status:e.status||500}));return sendJson(res,e.status||500,{error:e.status&&e.status<500?e.message:'booking_temporarily_unavailable'});}
 };

@@ -96,3 +96,21 @@ test('meeting producer failure is not converted to booking success',async()=>{
   h.request=async(p,o)=>{if(p==='/rpc/space_produce_calcom_meeting')throw Error('producer_failed');return base(p,o);};
   await assert.rejects(lib.reconcile({...h,uid:booking.uid}),/producer_failed/);
 });
+
+test('booking operations enforce scope, persist audit fields and are idempotent enough for double click', async()=>{
+  const rows=new Map();const id='33333333-3333-4333-8333-333333333333';rows.set(id,{id,calcom_booking_id:'booking-op',status:'pending',start_at:'2026-10-01T13:00:00Z',end_at:'2026-10-01T13:30:00Z',provider_updated_at:'2026-09-25T12:00:00Z',sdr_uid:'sdr-1',attendee_name:'Lead',attendee_phone:'+15551234567',context_payload:{}});
+  const writes=[];
+  const request=async(path,opt={})=>{writes.push({path,...opt}); if(path.startsWith('/commercial_bookings?id=eq.')){const rid=path.match(/id=eq\.([^&]+)/)[1];const row=rows.get(rid); if(opt.method==='PATCH'){Object.assign(row,opt.body); return {data:[row]};} return {data:row?[row]:[]};} if(path==='/commercial_booking_audit_events')return {data:[]}; if(path==='/rpc/space_produce_calcom_meeting')return {data:{}}; return {data:[]};};
+  await assert.rejects(()=>lib.confirm({request,user:{sub:'other'},isAdmin:false,body:{bookingId:id}}),/booking_not_found/);
+  const confirmed=await lib.confirm({request,user:{sub:'sdr-1'},isAdmin:false,body:{bookingId:id}});assert.equal(confirmed.status,'confirmed');assert.equal(confirmed.confirmedBy,'sdr-1');
+  const rescheduled=await lib.reschedule({request,user:{sub:'sdr-1'},isAdmin:false,body:{bookingId:id,startAt:'2026-10-02T14:00:00Z',durationMinutes:45}});assert.equal(rescheduled.status,'rescheduled');assert.equal(rescheduled.previousStartAt,'2026-10-01T13:00:00Z');
+  const cancelled=await lib.cancel({request,user:{sub:'sdr-1'},isAdmin:false,body:{bookingId:id,reason:'Lead solicitou cancelamento'}});assert.equal(cancelled.status,'cancelled');assert.equal(cancelled.cancellationReason,'Lead solicitou cancelamento');
+  assert.ok(writes.filter(w=>w.path==='/commercial_booking_audit_events').length>=3);
+});
+
+test('premeeting notification marks row once for the owner only', async()=>{
+  const id='44444444-4444-4444-8444-444444444444', start=new Date(Date.now()+4*60000).toISOString();let row={id,calcom_booking_id:'booking-notify',status:'confirmed',start_at:start,end_at:new Date(Date.now()+34*60000).toISOString(),provider_updated_at:new Date().toISOString(),sdr_uid:'sdr-1',attendee_name:'Lead',attendee_phone:'+15551234567',context_payload:{},notification_5min_sent_at:null};
+  const request=async(path,opt={})=>{if(path.startsWith('/commercial_bookings?id=eq.')){if(row.notification_5min_sent_at)return {data:[]}; row={...row,...opt.body}; return {data:[row]};} if(path.startsWith('/commercial_bookings?'))return {data:row.sdr_uid==='sdr-1'&&!row.notification_5min_sent_at?[row]:[]}; return {data:[]};};
+  const first=await lib.premeetingNotifications({request,user:{sub:'sdr-1'},isAdmin:false,now:new Date()});assert.equal(first.length,1);
+  const second=await lib.premeetingNotifications({request,user:{sub:'sdr-1'},isAdmin:false,now:new Date()});assert.equal(second.length,0);
+});
