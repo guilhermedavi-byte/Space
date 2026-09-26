@@ -662,3 +662,51 @@ test('Growth agendado exposes WhatsApp booking modal and saves external booking 
   assert.equal(writes[0].callId, 'call-book');
   assert.match(writes[0].sourceId, /^whatsapp_call-book_2026-09-28_15:30$/);
 });
+
+
+test('SDR module has one country prefix, formatted recents and structured audio popover/summary', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  dom.window.SpaceInternationalPhone = { formatPhoneForDisplay: v => String(v).replace('+19049097584+19049097584','+1 904 909 7584').replace('+19049097584','+1 904 909 7584').replace('+5534999569129','+55 34 99956-9129'), normalizePhoneToE164: raw => String(raw||'').startsWith('+') ? String(raw) : '+1' + String(raw||'').replace(/\D/g,'') };
+  dom.window.fetchWithAuth = async url => jsonResponse({ ok: true, scope:'self', analytics: { totalCalls:3, connectedCalls:2, scheduledCalls:1, averageTalkTimeSeconds:11, talkTimeSeconds:22 }, conversion:{attendance:{percent:66.7},answeredToBooking:{percent:50}}, calls: [], callbacks: [] });
+  await dom.window.SpacePhoneModule.open();
+  dom.window.SpacePhoneModule.state.recents = ['+19049097584+19049097584','+19049097584','+5534999569129'];
+  await dom.window.SpacePhoneModule.open();
+  const field = dom.window.document.querySelector('.sphone-phone-field');
+  assert.equal(field.querySelectorAll('.sphone-country-select').length,1);
+  assert.equal(field.querySelector('[data-phone-country]'),null);
+  assert.equal((field.textContent.match(/\+1/g)||[]).length,1);
+  const recentButtons = [...dom.window.document.querySelectorAll('[data-sp-fill]')];
+  assert.equal(recentButtons[0].dataset.spFill,'+19049097584');
+  const recentText = dom.window.document.querySelector('.sphone-list').textContent;
+  assert.match(recentText,/\+1 904 909 7584/);
+  assert.doesNotMatch(recentText,/\+19049097584\+19049097584/);
+  recentButtons[0].click();
+  assert.equal(dom.window.SpacePhoneModule.state.dial,'+19049097584');
+  assert.equal(dom.window.document.querySelectorAll('.sphone-summary-row span').length,4);
+  assert.match(dom.window.document.querySelector('.sphone-summary-row').textContent,/Talk médio/);
+  dom.window.document.querySelector('[data-sp-popover="audio"]').click();
+  const pop = dom.window.document.querySelector('.sphone-audio-pop');
+  assert.ok(pop);
+  assert.equal(pop.getAttribute('role'),'dialog');
+  assert.equal(pop.querySelectorAll('select.sphone-select').length,2);
+  assert.ok(pop.querySelector('.sphone-audio-status'));
+});
+
+test('Admin quick period and advanced period share one selected state', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  dom.window.__SPACE_SESSION__ = { role: 'admin', commercialRoles: [] };
+  dom.window.document.body.dataset.appRole='admin';
+  dom.window.fetchWithAuth = async url => jsonResponse({ ok: true, scope:'admin', selectedSdr:'all', sdrs:[], analytics:{}, calls:[], callbacks:[], conversion:{attendance:{},callToBooking:{},answeredToBooking:{},bookingToDone:{},ranking:[]} });
+  await dom.window.SpacePhoneModule.open();
+  dom.window.document.querySelector('[data-sp-period="last30"]').click();
+  await tick(30);
+  dom.window.document.querySelector('[data-sp-filter-toggle]').click();
+  assert.equal(dom.window.document.querySelector('#sphone-filter-panel select[data-sp-period]').value,'last30');
+  const select=dom.window.document.querySelector('#sphone-filter-panel select[data-sp-period]');
+  select.value='today';
+  select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
+  await tick(30);
+  assert.ok(dom.window.document.querySelector('[data-sp-period="today"]').classList.contains('primary'));
+});

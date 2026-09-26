@@ -33,3 +33,5 @@ create index if not exists commercial_booking_audit_booking_idx
 alter table public.commercial_booking_audit_events enable row level security;
 revoke all on public.commercial_booking_audit_events from anon,authenticated;
 grant select,insert on public.commercial_booking_audit_events to service_role;
+
+notify pgrst, 'reload schema';
