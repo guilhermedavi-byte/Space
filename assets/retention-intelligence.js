@@ -88,20 +88,46 @@ function trend(){const values=(S.data.trend||[]).slice().sort((a,b)=>a.date.loca
 function statList(values){return Object.keys(values).length?`<div class="ri-stat-list">${Object.entries(values).sort((a,b)=>b[1]-a[1]).map(([key,val])=>`<div><span>${esc(key)}</span><b>${number(val)}</b></div>`).join('')}</div>`:empty('Sem registros neste recorte.');}
 function analytics(rows){const a=S.data.analytics||{},cases=casesFor(rows),owners={};cases.forEach(c=>owners[c.owner_name||'Sem responsável']=(owners[c.owner_name||'Sem responsável']||0)+1);const durations=cases.map(c=>{const end=c.closed_at||c.saved_at||c.churned_at,start=c.cancellation_requested_at||c.created_at;return end&&start?(new Date(end)-new Date(start))/36e5:null;}).filter(v=>v!=null&&v>=0);return section('Performance',`<div class="ri-trends">${metric('Pedidos',number(a.requests_mtd))}${metric('Churn',number(a.churn_mtd))}${metric('Salvos',number(a.saved))}${metric('Save rate',pct(a.save_rate))}</div>${fold('Coorte e metodologia',`<p class="ri-note">${esc(a.methodology||'Métricas da base operacional no mês selecionado.')} · Base inicial ${number(a.base_start)} · Logo churn ${pct(a.logo_churn)} · Request rate ${pct(a.request_rate)}</p>`)}`,'Base operacional completa · '+S.month)+section('Conversão',`<div class="ri-trends">${metric('Pedido → Aviso',pct(a.request_to_notice))}${metric('Aviso → Churn',pct(a.notice_to_churn))}</div>`,'Coorte mensal da base operacional')+section('Motivos',statList(a.reasons||{}),'Churn no período · base operacional')+section('Produtividade operacional',`<div class="ri-trends">${metric('Primeiro contato',a.first_contact_hours==null?'—':number(a.first_contact_hours)+' h','Base operacional · cobertura '+pct(a.first_contact_coverage))}${metric('Tempo até resolução',durations.length?number(mean(durations))+' h':'—',`${durations.length} casos com datas válidas · recorte atual`)}</div>${fold('Volume por responsável',statList(owners))}`)+section('Comparativos temporais',trend());}
 function filters(){const rows=S.data?.rows||[];return `<form data-ri-filter-form><header><h2>Filtros</h2><button type="button" data-ri-close aria-label="Fechar filtros">×</button></header><div class="ri-actions"><button type="button" data-ri-clear>Limpar filtros</button><button type="submit">Aplicar filtros</button></div><div class="ri-filter-grid"><label>Período<input type="month" name="month" required value="${esc(S.month)}"></label>${fields.map(([key,label])=>{const values=[...new Set(rows.map(row=>valueOf(row,key)).filter(v=>typeof v==='string'&&v))].sort();return `<label>${label}<select name="${key}" ${values.length?'':'disabled'}><option value="">${values.length?'Todos':'Sem opções disponíveis'}</option>${values.map(v=>`<option value="${esc(v)}" ${S.filters[key]===v?'selected':''}>${esc(displayValue(key,v))}</option>`).join('')}</select></label>`;}).join('')}</div></form>`;}
-function draw(){
+const LOAD_ERROR='Não foi possível carregar a Retenção.';
+function drawError(){
  if(!S.root?.isConnected)return;
+ const status=S.root.querySelector('[data-ri-status]'),panel=S.root.querySelector('[data-ri-panel]');
+ if(status)status.textContent=LOAD_ERROR;
+ if(panel){panel.hidden=false;panel.innerHTML='<div class="ri-empty" role="alert">'+LOAD_ERROR+' <button type="button" class="ri-link" data-ri-refresh>Tentar novamente</button></div>';}
+}
+function draw(){
+ try{drawContent();}catch(error){S.error=LOAD_ERROR;console.error('[retention-ui] render_failed');drawError();}
+}
+function drawContent(){
+ if(!S.root?.isConnected)return;
+ if(S.error){drawError();return;}
  const panel=S.root.querySelector('[data-ri-panel]');
  S.root.querySelector('[data-ri-operation]').hidden=S.view!=='commands';
  panel.hidden=S.view==='commands';
- S.root.querySelector('[data-ri-status]').textContent=S.error||(!S.data?'Carregando retenção…':`Mês ${S.month} · Snapshot ${date(S.data.snapshot_date)}`);
+ S.root.querySelector('[data-ri-status]').textContent=S.error||(!S.data?'Carregando retenção…':`Mês ${S.month} · Snapshot ${date(S.data.snapshot_date)}${S.data.source_warnings?.length?" · Dados complementares temporariamente indisponíveis":""}`);
  if(!S.data){panel.innerHTML=empty(S.error||'Carregando…');return;}
  S.root.querySelector('[data-ri-chips]').innerHTML=fields.filter(([key])=>S.filters[key]).map(([key,label])=>`<button type="button" class="ri-chip" data-ri-remove="${key}" aria-label="Remover filtro ${label}">${label}: ${esc(displayValue(key,S.filters[key]))} ×</button>`).join('');
  const rows=filtered();panel.innerHTML=S.view==='cases'?allCases(rows):S.view==='analytics'?`<button class="ri-link" type="button" data-ri-go="cockpit">← Voltar à Retenção</button>${analytics(rows)}`:cockpit(rows);
 }
 async function load(force=false){
- if(S.pending)return S.pending;if(S.data&&!force)return S.data;S.error='';
- S.pending=(async()=>{try{const response=await S.bridge.fetch(`/api/retention-intelligence?month=${encodeURIComponent(S.month)}`,{method:'GET'});if(!response.ok)throw Error('Não foi possível carregar a retenção.');S.data=await response.json();return S.data;}catch(error){S.error=error.message;return null;}finally{S.pending=null;draw();}})();return S.pending;
+ if(S.pending)return S.pending;if(S.data&&!force&&!S.error)return S.data;
+ S.error='';
+ const controller=new AbortController();let timer;
+ // Bound authentication, network and JSON parsing, even if a bridge ignores abort.
+ const deadline=new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(Error('retention_timeout'));},30000);});
+ const request=Promise.resolve().then(async()=>{
+  const response=await S.bridge.fetch(`/api/retention-intelligence?month=${encodeURIComponent(S.month)}`,{method:'GET',signal:controller.signal});
+  if(!response.ok)throw Error('retention_http_'+response.status);
+  const data=await response.json();
+  if(!data||!Array.isArray(data.rows))throw Error('retention_invalid_response');
+  return data;
+ });
+ S.pending=Promise.race([request,deadline]).then(data=>{S.data=data;return data;}).catch(()=>{S.error=LOAD_ERROR;return null;}).finally(()=>{
+  clearTimeout(timer);S.pending=null;draw();
+ });
+ draw();return S.pending;
 }
+
 function mount(el,bridge){
  S.root=el;S.bridge=bridge;S.view='cockpit';
  const operation=document.createElement('div');operation.dataset.riOperation='';operation.hidden=true;

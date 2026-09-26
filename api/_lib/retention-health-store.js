@@ -3,10 +3,10 @@ const { supabaseFetch } = require('./supabase-rest');
 const { listCollectionAsAdmin } = require('./firestore-admin');
 const H = require('./retention-health-engine');
 const {applyLifecycleHealth,operationalLifecycle}=require('./retention-health-lifecycle');
-async function all(table, query = '', order = 'id') {
+async function all(table, query = '', order = 'id', options = {}) {
   const rows = [];
   for (let offset=0;offset<100000;offset+=1000) {
-    const {data} = await supabaseFetch(`/${table}?select=*&${query}&order=${order}&limit=1000&offset=${offset}`);
+    const {data} = await supabaseFetch(`/${table}?select=*&${query}&order=${order}&limit=1000&offset=${offset}`,options);
     if (!Array.isArray(data)) throw Error(`invalid_${table}_response`);
     rows.push(...data); if(data.length<1000) return rows;
   }
@@ -104,16 +104,25 @@ async function runHealthSnapshot() {
   return {...data,summary:result.population,automation};
 }
 async function readIntelligence(month) {
+  // Keep transport fallback, with a shorter budget for this interactive read.
+  const read=(table,query='',order='id')=>all(table,query,order,{timeoutMs:2500});
+  const unavailable=[];
+  const optional=async(name,work,fallback)=>{
+    let timer;
+    try{return await Promise.race([Promise.resolve().then(work),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('optional_timeout')),5000);})]);}
+    catch{unavailable.push(name);return fallback;}
+    finally{clearTimeout(timer);}
+  };
   const day=H.dateKey(new Date());
-  const populations=await all('retention_population_snapshots',`snapshot_date=gte.${H.addDays(day,-400)}`,'snapshot_date.desc');
+  const populations=await read('retention_population_snapshots',`snapshot_date=gte.${H.addDays(day,-400)}`,'snapshot_date.desc');
   const latest=populations[0];
   if(!latest) return {rows:[],alerts:[],events:[],trend:[],summary:null,snapshot_date:null,analytics:{},missing:['Snapshot inicial ainda não disponível']};
   const [daily,history,alerts,events,cases,openingRows,riskCases,occurrences,pulses,settings,riskActions,lifecycleEvents,subscriptions,currentActivities]=await Promise.all([
-    all('student_health_daily',`snapshot_date=eq.${latest.snapshot_date}`,'student_id'),
-    all('student_health_daily',`snapshot_date=in.(${H.addDays(latest.snapshot_date,-7)},${H.addDays(latest.snapshot_date,-14)})`,'snapshot_date,student_id'),
-    all('retention_alerts'),all('retention_health_events',`snapshot_date=gte.${H.addDays(day,-90)}`),all('retention_cases'),
-    all('student_health_daily',`snapshot_date=eq.${month}-01`,'student_id'),
-    all('retention_risk_cases'),all('student_occurrences'),all('student_quality_pulses'),all('retention_health_settings'),all('retention_risk_actions'),all('student_health_lifecycle_events'),all('subscriptions'),listCollectionAsAdmin('activities',{decorate:false}).catch(()=>null),
+    read('student_health_daily',`snapshot_date=eq.${latest.snapshot_date}`,'student_id'),
+    optional('Histórico de Health',()=>read('student_health_daily',`snapshot_date=in.(${H.addDays(latest.snapshot_date,-7)},${H.addDays(latest.snapshot_date,-14)})`,'snapshot_date,student_id'),[]),
+    read('retention_alerts'),read('retention_health_events',`snapshot_date=gte.${H.addDays(day,-90)}`),read('retention_cases'),
+    read('student_health_daily',`snapshot_date=eq.${month}-01`,'student_id'),
+    read('retention_risk_cases'),read('student_occurrences'),optional('Quality Pulse',()=>read('student_quality_pulses'),[]),optional('Configurações',()=>read('retention_health_settings'),[]),read('retention_risk_actions'),read('student_health_lifecycle_events'),read('subscriptions'),optional('Atividades atuais (usando snapshot)',()=>listCollectionAsAdmin('activities',{decorate:false}),null),
   ]);
   const rows=daily.map(row=>{
     const base=row.data;
@@ -151,7 +160,7 @@ async function readIntelligence(month) {
     request_to_notice:requested.length?100*notices.length/requested.length:null,notice_to_churn:resolvedNotices.length?100*resolvedNotices.filter(row=>row.churned_at).length/resolvedNotices.length:null,
     first_contact_hours:firstContacts.length?firstContacts.reduce((a,b)=>a+b,0)/firstContacts.length:null,first_contact_coverage:requested.length?100*firstContacts.length/requested.length:0,
     grr:null,nrr:null,revenue_churn:null,revenue_saved:null,reasons:byReason,methodology:'Casos da cohort de pedido no mês; Save Rate sobre desfechos conhecidos. Base inicial somente snapshot do dia 1.'};
-  return {rows,alerts,events,settings:settings[0]||{},summary:{...latest.data,...H.executive(rows)},snapshot_date:latest.snapshot_date,computed_at:latest.updated_at,trend:populations.map(row=>({date:row.snapshot_date,...row.data})).reverse(),analytics,cases:operationalCases,
-    missing:['Teacher Pulse: Não disponível neste modelo.','Admin V0: expert-informed; não é um modelo preditivo comprovado','MRR, tenure e survival dependem de contratos confiáveis','NRR/GRR dependem de base MRR e movimentos de receita','Financeiro só pontua após reconciliação completa nas últimas 48h']};
+  return {source_warnings:unavailable,rows,alerts,events,settings:settings[0]||{},summary:{...latest.data,...H.executive(rows)},snapshot_date:latest.snapshot_date,computed_at:latest.updated_at,trend:populations.map(row=>({date:row.snapshot_date,...row.data})).reverse(),analytics,cases:operationalCases,
+    missing:[...unavailable.map(name=>`${name}: temporariamente indisponível`),'Teacher Pulse: Não disponível neste modelo.','Admin V0: expert-informed; não é um modelo preditivo comprovado','MRR, tenure e survival dependem de contratos confiáveis','NRR/GRR dependem de base MRR e movimentos de receita','Financeiro só pontua após reconciliação completa nas últimas 48h']};
 }
 module.exports={all,collectHealth,runHealthSnapshot,readIntelligence};

@@ -11,7 +11,14 @@ module.exports=async(req,res)=>{
   if(req.method==='GET') {
    const month=new URL(req.url,'https://space.invalid').searchParams.get('month')||require('../assets/student-lifecycle').dateKey(new Date()).slice(0,7);
    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return sendJson(res,400,{error:'invalid_month'});
-   return sendJson(res,200,await require('./_lib/retention-health-store').readIntelligence(month));
+   let timer;
+   try{
+    const data=await Promise.race([
+     require('./_lib/retention-health-store').readIntelligence(month),
+     new Promise((_,reject)=>{timer=setTimeout(()=>reject(Object.assign(Error('retention_read_timeout'),{code:'retention_read_timeout'})),25000);}),
+    ]);
+    return sendJson(res,200,data);
+   }finally{clearTimeout(timer);}
   }
   if(req.method==='PATCH') {
    const actionGuard=await requireResolvedAdminPermission(auth,'pedagogico.retention.update');
@@ -34,5 +41,5 @@ module.exports=async(req,res)=>{
    return sendJson(res,200,{alert:data?.[0]||null});
   }
   return sendJson(res,405,{error:'method_not_allowed'});
- }catch(error){ console.error('[retention-health]',{code:error.code||'read_failed'});return sendJson(res,500,{error:'retention_intelligence_unavailable'}); }
+ }catch(error){ console.error('[retention-health]',{code:error.code||'read_failed'});return sendJson(res,error.code==='retention_read_timeout'?504:500,{error:'retention_intelligence_unavailable'}); }
 };

@@ -8,7 +8,7 @@ test('4 Alerta deduplica e preserva descarte manual',()=>{assert.match(migration
 test('5 Condição sumiu resolve; fonte ausente não resolve silenciosamente',()=>{assert.match(migration,/not\(deduplication_key=any\(seen\)\)/);assert.match(migration,/monitored_alert_types/);assert.match(migration,/condition_active=false,status=case when status in \('open','acknowledged'\) then 'resolved'/);});
 test('6 Health não altera lifecycle nem fontes',()=>{const input={financial_status:'overdue',days_overdue:45};const before=JSON.stringify(input);H.scoreHealth(input);assert.equal(JSON.stringify(input),before);assert.doesNotMatch(migration,/update\s+(?:public\.)?(subscriptions|students|retention_cases|retention_events)\s/i);const job=fs.readFileSync(require.resolve('../api/retention-health-job'),'utf8');assert.doesNotMatch(job,/runScheduledRetentionChurn|applyRetentionCommand/);});
 test('7 Base real intersecta IDs e MRR não duplica aluno',()=>{const rows=H.activePopulation([{id:'a',tipo:'student'},{id:'a',tipo:'student'},{id:'staff',tipo:'admin'}],[{id:'ca',firestore_student_id:'a'},{id:'old',firestore_student_id:'deleted'}],[{student_id:'ca',lifecycle_status:'active',mrr_brl:200},{student_id:'old',lifecycle_status:'active',mrr_brl:900}],'2026-09-23').map(r=>({...r,...H.scoreHealth({financial_status:'overdue',days_overdue:45})}));const total=H.executive([...rows,...rows]);assert.equal(total.active_students,1);assert.equal(total.mrr_at_risk,200);assert.equal(H.executive([{...rows[0],mrr:null}]).mrr_at_risk,null);});
-function ui(){
+function ui(runtime={}){
  const dom=new JSDOM('<main id="root"><button id="old-action">Iniciar aviso</button></main><section id="sheet"><div data-retention-health-student="a"></div></section><div id="directory"><span data-ri-directory-lifecycle="healthy"></span><span data-ri-directory-health="healthy"></span><span data-ri-directory-health="a"></span></div>',{url:'https://space.test'});
  dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
  const row={student_id:'a',nome:'Aluno teste',is_active:true,lifecycle:'active',mrr:null,...H.scoreHealth({financial_status:'overdue',days_overdue:15})};
@@ -16,9 +16,9 @@ function ui(){
  const notice={...healthy,student_id:'notice',nome:'Aluno em aviso',lifecycle:'notice_period',health_score:10,health_tier:'critical',operational_priority:0};
  const overdue={...healthy,student_id:'late',nome:'Atividade atrasada',signals:{overdue_activities:1}};
  const data={rows:[healthy,row,notice,overdue],cases:[],alerts:[{id:'alert',student_id:'a',type:'overdue_payment',severity:'critical',status:'open',reason:'Cobrança vencida',opened_at:'2026-09-23'}],events:[],analytics:{},trend:[],snapshot_date:'2026-09-23'};
- const ctx=vm.createContext({document:dom.window.document,globalThis:{},console,Date});vm.runInContext(fs.readFileSync(require.resolve('../assets/retention-intelligence'),'utf8'),ctx);
+ const ctx=vm.createContext({document:dom.window.document,globalThis:{},console,Date,AbortController,setTimeout,clearTimeout,...runtime});vm.runInContext(fs.readFileSync(require.resolve('../assets/retention-intelligence'),'utf8'),ctx);
  const bridge={calls:[],fetch:async(url,options)=>{bridge.calls.push({url,options});return{ok:true,json:async()=>data};},openStudent:id=>{bridge.opened=id;},openActivity:async draft=>{bridge.draft=draft;}};
- return{dom,api:ctx.globalThis.SpaceRetentionIntelligence,bridge};
+ return{dom,api:ctx.globalThis.SpaceRetentionIntelligence,bridge,data};
 }
 const ready=()=>new Promise(r=>setImmediate(r));
 test('8 Cockpit único tem cinco KPIs e somente acompanhamento em ordem operacional',async()=>{const{dom,api,bridge}=ui(),d=dom.window.document;api.mount(d.querySelector('#root'),bridge);await ready();assert.equal(d.querySelectorAll('[role=tab]').length,0);assert.equal(d.querySelectorAll('.ri-kpi-strip>.ri-metric').length,5);assert.equal(d.querySelector('[data-ri-case]').dataset.riCase,'notice');assert.equal(d.querySelectorAll('[data-ri-case]').length,3);assert.equal(d.querySelector('[data-ri-case="healthy"]'),null);assert.match(d.body.textContent,/Prioridades de hoje/);assert.match(d.body.textContent,/Observabilidade ainda limitada/);});
@@ -27,3 +27,34 @@ test('10 Comandos preservam nós e eventos; Analytics é view secundária',async
 test('11 Filtros, status strip, busca e view de casos permanecem read-only',async()=>{const{dom,api,bridge}=ui(),d=dom.window.document;api.mount(d.querySelector('#root'),bridge);await ready();d.querySelector('[data-ri-open-filters]').click();const form=d.querySelector('[data-ri-filter-form]');form.elements.health_tier.value='critical';assert.equal(d.querySelectorAll('[data-ri-remove]').length,0);form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));assert.equal(d.querySelector('[data-ri-filters-dialog]').open,false);assert.equal(d.querySelectorAll('[data-ri-remove]').length,1);d.querySelector('[data-ri-remove]').click();d.querySelector('[data-ri-queue=notice]').click();assert.equal(d.querySelectorAll('[data-ri-case]').length,1);d.querySelector('[data-ri-go=cases]').click();const select=d.querySelector('[data-ri-case-view]');select.value='all';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));assert.equal(d.querySelectorAll('[data-ri-case]').length,3);const search=d.querySelector('[data-ri-case-search]');search.value='inexistente';search.dispatchEvent(new dom.window.Event('input',{bubbles:true}));assert.equal(d.querySelectorAll('[data-ri-case]').length,0);assert.ok(bridge.calls.every(c=>c.options.method==='GET'));});
 test('12 Diretório canônico mostra Health parcial sem ocultar Critical',async()=>{const{dom,api,bridge}=ui(),d=dom.window.document;await api.hydrateDirectory(d.querySelector('#directory'),bridge.fetch);assert.equal(d.querySelector('[data-ri-directory-lifecycle=healthy]').textContent,'Ativo');assert.match(d.querySelector('[data-ri-directory-health=healthy]').textContent,/100 · Parcial/);assert.match(d.querySelector('[data-ri-directory-health=a]').textContent,/Critical/);assert.match(d.querySelector('[data-ri-directory-health=healthy] [title]').title,/25%/);});
 test('13 Criar atividade usa o editor existente e fecha preview',async()=>{const{dom,api,bridge}=ui(),d=dom.window.document;api.mount(d.querySelector('#root'),bridge);await ready();d.querySelector('[data-ri-case="a"]').click();d.querySelector('[data-ri-case-dialog] [data-ri-new-activity]').click();await ready();assert.equal(bridge.draft.studentId,'a');assert.equal(bridge.draft.tipo,'Retenção');assert.equal(d.querySelector('[data-ri-case-dialog]').open,false);assert.ok(bridge.calls.every(c=>c.options.method==='GET'));});
+
+test('14 HTTP failure, invalid JSON and invalid payload show retry; pending clears',async()=>{
+ for(const response of [{ok:false,status:500},{ok:true,json:async()=>{throw Error('bad json');}},{ok:true,json:async()=>({rows:null})}]){
+  const{dom,api,bridge}=ui(),d=dom.window.document,success=bridge.fetch;
+  bridge.fetch=async()=>response;api.mount(d.querySelector('#root'),bridge);await ready();
+  assert.match(d.body.textContent,/Não foi possível carregar a Retenção/);assert.doesNotMatch(d.body.textContent,/Carregando/);
+  bridge.fetch=success;d.querySelector('[data-ri-panel] [data-ri-refresh]').click();await ready();
+  assert.equal(d.querySelectorAll('.ri-kpi-strip>.ri-metric').length,5);
+ }
+});
+test('15 Timeout covers bridge and body; aborts and ignores late responses',async()=>{
+ for(const bodyPending of [false,true]){
+  let timeout,resolveLate,signal;
+  const{dom,api,bridge}=ui({setTimeout:fn=>{timeout=fn;return 1;},clearTimeout:()=>{}}),d=dom.window.document,success=bridge.fetch;
+  const late=new Promise(resolve=>{resolveLate=resolve;});
+  bridge.fetch=async(url,options)=>{signal=options.signal;return bodyPending?{ok:true,json:()=>late}:late;};
+  api.mount(d.querySelector('#root'),bridge);await ready();timeout();await ready();
+  assert.equal(signal.aborted,true);assert.match(d.body.textContent,/Não foi possível carregar a Retenção/);
+  bridge.fetch=success;d.querySelector('[data-ri-panel] [data-ri-refresh]').click();await ready();
+  assert.equal(d.querySelectorAll('.ri-metric').length,5);
+  resolveLate(bodyPending?{rows:[]}:{ok:true,json:async()=>({rows:[]})});await ready();
+  assert.equal(d.querySelectorAll('[data-ri-case]').length,3);
+ }
+});
+test('16 Render exception has independent error UI and successful retry',async()=>{
+ const{dom,api,bridge,data}=ui(),d=dom.window.document;
+ data.rows.push(null);api.mount(d.querySelector('#root'),bridge);await ready();
+ assert.match(d.body.textContent,/Não foi possível carregar a Retenção/);assert.doesNotMatch(d.body.textContent,/Carregando/);
+ data.rows.pop();d.querySelector('[data-ri-panel] [data-ri-refresh]').click();await ready();
+ assert.equal(d.querySelectorAll('.ri-metric').length,5);
+});
