@@ -502,6 +502,28 @@ test('callback quick schedule, countdown, navigation alert, snooze and one-click
  dom.window.dispatchEvent(new dom.window.Event('online'));await tick(30);assert.equal(dom.window.document.querySelectorAll('#space-callback-alert').length,1);
 });
 
+
+
+test('post-call callback schedule uses ended call id even when stale detail is open', async t => {
+  const dom = createModuleDom(); t.after(() => dom.window.close());
+  const writes = [];
+  dom.window.fetchWithAuth = async (url, opts = {}) => {
+    if (opts.method === 'PATCH') { writes.push(JSON.parse(opts.body)); return jsonResponse({ ok: true }); }
+    return jsonResponse({ ok: true, scope: 'self', analytics: {}, calls: [], callbacks: [] });
+  };
+  await dom.window.SpacePhoneModule.open();
+  const state = dom.window.SpacePhoneModule.state;
+  state.detail = { call: { id: 'stale-detail-call', outcome: 'retornar_depois' } };
+  state.call = { ...state.call, id: 'fresh-ended-call', status: 'ended' };
+  state.postCall = { ...state.postCall, id: 'fresh-ended-call', savedOutcome: 'retornar_depois', call: { id: 'fresh-ended-call' } };
+  dom.window.__spacePhoneTest.emit({ status: 'ended', callRecord: { id: 'fresh-ended-call' } });
+  await tick(20);
+  dom.window.document.querySelector('.sphone-pane [data-callback-schedule="15"]').click();
+  await tick(30);
+  assert.equal(writes[0].id, 'fresh-ended-call');
+  assert.equal(writes[0].action, 'callback_schedule');
+  assert.notEqual(writes[0].id, 'stale-detail-call');
+});
 test('conversion updates partially on outcome and booking events without stealing focus',async t=>{
  const dom=createModuleDom();t.after(()=>dom.window.close());let scheduled=0,reads=0;
  const rate=(n,d)=>({numerator:n,denominator:d,percent:d?n/d*100:null});
