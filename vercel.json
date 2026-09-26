@@ -37,8 +37,12 @@
     }
   ],
   "functions": {
-    "api/webhooks/calcom.js": {"maxDuration": 120},
-    "api/commercial-bookings.js": {"maxDuration": 120},
+    "api/webhooks/calcom.js": {
+      "maxDuration": 120
+    },
+    "api/commercial-bookings.js": {
+      "maxDuration": 120
+    },
     "api/attendance/meta/process.js": {
       "maxDuration": 120
     },
@@ -95,6 +99,15 @@
     },
     "api/integrations/n8n/commercial-action.js": {
       "maxDuration": 120
+    },
+    "api/meet-addon-side-panel.js": {
+      "maxDuration": 60
+    },
+    "api/meet-addon-context.js": {
+      "maxDuration": 60
+    },
+    "api/sales-presentation.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -128,16 +141,16 @@
           "value": "nosniff"
         },
         {
-          "key": "X-Frame-Options",
-          "value": "SAMEORIGIN"
-        },
-        {
           "key": "Referrer-Policy",
           "value": "strict-origin-when-cross-origin"
         },
         {
           "key": "Permissions-Policy",
           "value": "geolocation=(), payment=(), usb=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self' https://meet.google.com"
         }
       ]
     },
@@ -199,6 +212,14 @@
     {
       "source": "/api/attendance-connections/:connection([0-9a-fA-F-]{36})",
       "destination": "/api/attendance-connections?connection=:connection"
+    },
+    {
+      "source": "/meet-addon/side-panel",
+      "destination": "/api/meet-addon-side-panel"
+    },
+    {
+      "source": "/sales-presentation",
+      "destination": "/api/sales-presentation"
     },
     {
       "source": "/api/(.*)",
