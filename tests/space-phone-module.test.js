@@ -137,9 +137,8 @@ test('SDR module controls call the public SpacePhone adapter methods', async (t)
   await tick(10);
   dom.window.document.querySelector('[data-sp-hold]').click();
   await tick(10);
-  dom.window.document.querySelector('[data-sp-dtmf-toggle]').click();
-  dom.window.document.querySelector('[data-sp-dtmf="5"]').click();
-  await tick(10);
+  assert.equal(dom.window.document.querySelector('[data-sp-dtmf-toggle]'), null);
+  assert.ok(dom.window.document.querySelector('a[title="Teclado"]'));
   dom.window.document.querySelector('[data-sp-hangup]').click();
   await tick(10);
   const methods = dom.window.SpacePhone.calls.map(item => item.method);
@@ -147,10 +146,24 @@ test('SDR module controls call the public SpacePhone adapter methods', async (t)
   assert.ok(methods.includes('unmute'));
   assert.ok(methods.includes('hold'));
   assert.ok(methods.includes('unhold'));
-  assert.ok(dom.window.SpacePhone.calls.some(item => item.method === 'dtmf' && item.digit === '5'));
   assert.ok(methods.includes('hangup'));
 });
 
+
+
+test('Teclado route sends DTMF when a call is active', async (t) => {
+  const dom = createModuleDom();
+  t.after(() => dom.window.close());
+  dom.reconfigure({ url: 'https://space.test/app/growth/comercial/pre-vendas/ligacoes/teclado' });
+  await dom.window.SpacePhoneModule.open();
+  dom.window.SpacePhoneModule.state.call = { ...dom.window.SpacePhoneModule.state.call, status: 'active', number: '+16177942141', id: 'call-1' };
+  await dom.window.SpacePhoneModule.open();
+  await tick(20);
+  assert.ok(dom.window.document.querySelector('.sphone-keypad-page'));
+  dom.window.document.querySelector('[data-sp-dtmf="5"]').click();
+  await tick(10);
+  assert.ok(dom.window.SpacePhone.calls.some(item => item.method === 'dtmf' && item.digit === '5'));
+});
 
 test('Space Phone V2 hides outcome during active call and shows it after hangup', async (t) => {
   const dom = createModuleDom();
@@ -186,7 +199,7 @@ test('Space Phone V2 renders AI processing and ready states without live transcr
   assert.ok(dom.window.document.body.textContent.includes('SDR: Olá'));
 });
 
-test('Space Phone V2 anchors audio and keypad popovers and closes them outside/Escape', async (t) => {
+test('Space Phone V2 keeps audio popover anchored and exposes Teclado as a new-tab route', async (t) => {
   const dom = createModuleDom();
   t.after(() => dom.window.close());
   await dom.window.SpacePhoneModule.open();
@@ -194,9 +207,10 @@ test('Space Phone V2 anchors audio and keypad popovers and closes them outside/E
   assert.ok(dom.window.document.querySelector('.sphone-control-wrap .sphone-audio-pop'));
   dom.window.document.body.click();
   assert.equal(dom.window.document.querySelector('.sphone-audio-pop'), null);
-  dom.window.document.querySelector('[data-sp-popover="dialpad"]').click();
-  assert.ok(dom.window.document.querySelector('.sphone-control-wrap .sphone-keypad-pop'));
-  dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  const keypad = dom.window.document.querySelector('a[title="Abrir Teclado em nova guia"]');
+  assert.ok(keypad);
+  assert.equal(keypad.getAttribute('target'), '_blank');
+  assert.match(keypad.getAttribute('href'), /\/pre-vendas\/ligacoes\/teclado$/);
   assert.equal(dom.window.document.querySelector('.sphone-keypad-pop'), null);
 });
 

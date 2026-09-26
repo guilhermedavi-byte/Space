@@ -210,7 +210,7 @@ const buildAppHtml = ({ sessionJson, registryJson, role, roleSlug, templateHtml,
     <script src="script.js?v=9"></script>
     <script src="/assets/space-phone.bundle.js?v=5"></script>
     <script src="space-agenda.js?v=4"></script>
-    <script src="space-phone.js?v=21"></script>
+    <script src="space-phone.js?v=22"></script>
     <script src="admin-sdr.js?v=7"></script>
     <script src="pedagogico-n8n-ui.js"></script>
     <script src="space-office.js"></script>
